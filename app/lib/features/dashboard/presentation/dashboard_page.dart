@@ -1,13 +1,348 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
+import 'package:mycomicbrain/features/dashboard/application/dashboard_providers.dart';
 
-class DashboardPage extends StatelessWidget {
+const _mesiItaliani = [
+  'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+  'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
+];
+
+/// Testata (§4.1) — etichetta, totale, griglia KPI e CTA di scansione,
+/// su dati reali da [dashboardKpisProvider]. Regole di stato vuoto da #8:
+/// a collezione zero l'intera schermata collassa a intestazione + CTA
+/// ingrandita, niente griglia.
+class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final kpisAsync = ref.watch(dashboardKpisProvider);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard')),
-      body: const Center(child: Text('Dashboard')),
+      body: SafeArea(
+        child: kpisAsync.when(
+          data: (kpis) => kpis.totaleCopie == 0
+              ? const _EmptyCollection()
+              : _Collection(kpis: kpis),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Text(
+                'Non è stato possibile caricare la collezione.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textTertiary),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
+}
+
+class _Collection extends StatelessWidget {
+  const _Collection({required this.kpis});
+
+  final DashboardKpis kpis;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.xxl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Header(content: _CollectionTotal(total: kpis.totaleCopie)),
+          const SizedBox(height: AppSpacing.lg),
+          _KpiGrid(kpis: kpis),
+          const SizedBox(height: AppSpacing.md),
+          const _ScanCta(),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyCollection extends StatelessWidget {
+  const _EmptyCollection();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.xxl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Header(content: _EmptyCollectionMessage()),
+          SizedBox(height: AppSpacing.xxl),
+          _ScanCta(emphasized: true),
+        ],
+      ),
+    );
+  }
+}
+
+/// Etichetta "LA TUA COLLEZIONE" + [content] (totale o messaggio a
+/// seconda dello stato) a sinistra, pulsante AI a destra.
+class _Header extends StatelessWidget {
+  const _Header({required this.content});
+
+  final Widget content;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionHeader(label: 'la tua collezione'),
+              const SizedBox(height: AppSpacing.xs),
+              content,
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        _AiButton(onTap: () => context.push('/assistente')),
+      ],
+    );
+  }
+}
+
+class _CollectionTotal extends StatelessWidget {
+  const _CollectionTotal({required this.total});
+
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(_formatItalianInt(total), style: AppTypography.heroNumber.copyWith(color: AppColors.textPrimary)),
+        const SizedBox(width: AppSpacing.xs),
+        Text('fumetti', style: AppTypography.bodyLarge.copyWith(color: AppColors.textTertiary)),
+      ],
+    );
+  }
+}
+
+class _EmptyCollectionMessage extends StatelessWidget {
+  const _EmptyCollectionMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xxs),
+      child: Text(
+        'È vuota — comincia dalla prima copertina',
+        style: AppTypography.bodyLarge.copyWith(color: AppColors.textTertiary),
+      ),
+    );
+  }
+}
+
+class _AiButton extends StatelessWidget {
+  const _AiButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadii.mdRadius,
+        child: Container(
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.borderDefault),
+            borderRadius: AppRadii.mdRadius,
+          ),
+          child: Text('AI', style: AppTypography.monoLabel.copyWith(color: AppColors.accent)),
+        ),
+      ),
+    );
+  }
+}
+
+/// Griglia 3×2 sempre fissa a 6 celle (decisione #8) — ordine e rotte dal
+/// prototipo (`kpiDef`, righe 810-819): serie/serie complete/numeri
+/// mancanti → `/serie`, duplicati → `/duplicati`, speso finora →
+/// `/statistiche`, aggiunti nel mese → `/collezione`.
+class _KpiGrid extends StatelessWidget {
+  const _KpiGrid({required this.kpis});
+
+  final DashboardKpis kpis;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 3,
+      mainAxisSpacing: AppSpacing.xs,
+      crossAxisSpacing: AppSpacing.xs,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 1.1,
+      children: _kpiCards(context, kpis),
+    );
+  }
+}
+
+List<Widget> _kpiCards(BuildContext context, DashboardKpis kpis) {
+  final meseCorrente = _mesiItaliani[DateTime.now().month - 1];
+  final spesoZero = kpis.spesoFinora == 0;
+
+  return [
+    _kpiCard(
+      value: kpis.numeroSerie,
+      label: 'serie',
+      tone: _KpiTone.neutral,
+      onTap: () => context.push('/serie'),
+    ),
+    _kpiCard(
+      value: kpis.serieComplete,
+      label: 'serie complete',
+      tone: _KpiTone.neutral,
+      onTap: () => context.push('/serie'),
+    ),
+    _kpiCard(
+      value: kpis.duplicati,
+      label: 'duplicati',
+      tone: _KpiTone.alert,
+      onTap: () => context.push('/duplicati'),
+    ),
+    _kpiCard(
+      value: kpis.numeriMancanti,
+      label: 'numeri mancanti',
+      tone: _KpiTone.alert,
+      onTap: () => context.push('/serie'),
+    ),
+    KpiCard(
+      value: spesoZero ? '—' : '€${_formatItalianInt(kpis.spesoFinora.round())}',
+      label: 'speso finora',
+      valueColor: _kpiColor(_KpiTone.neutral, spesoZero),
+      onTap: () => context.go('/statistiche'),
+    ),
+    _kpiCard(
+      value: kpis.aggiuntiMeseCorrente,
+      label: 'aggiunti a $meseCorrente',
+      tone: _KpiTone.accent,
+      onTap: () => context.go('/collezione'),
+    ),
+  ];
+}
+
+Widget _kpiCard({
+  required int value,
+  required String label,
+  required _KpiTone tone,
+  required VoidCallback onTap,
+}) {
+  final isZero = value == 0;
+  return KpiCard(
+    value: isZero ? '—' : _formatItalianInt(value),
+    label: label,
+    valueColor: _kpiColor(tone, isZero),
+    onTap: onTap,
+  );
+}
+
+enum _KpiTone { neutral, alert, accent }
+
+/// A zero il colore è sempre muto (decisione #8) — anche per le celle
+/// non-di-allerta — indipendentemente dal tono che avrebbe a valore reale.
+Color _kpiColor(_KpiTone tone, bool isZero) {
+  if (isZero) return AppColors.textMuted;
+  return switch (tone) {
+    _KpiTone.neutral => AppColors.textPrimary,
+    _KpiTone.alert => AppColors.amber,
+    _KpiTone.accent => AppColors.accent,
+  };
+}
+
+/// L'invito alla prima scansione (righe 104-111 del prototipo).
+/// [emphasized] ingrandisce icona e tipografia per lo stato a zero,
+/// dove è l'unica azione disponibile sulla Dashboard.
+class _ScanCta extends StatelessWidget {
+  const _ScanCta({this.emphasized = false});
+
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final iconSize = emphasized ? 52.0 : 44.0;
+
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () => context.go('/scansione'),
+        borderRadius: AppRadii.xlRadius,
+        child: Container(
+          padding: EdgeInsets.all(emphasized ? AppSpacing.lg : AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: AppRadii.xlRadius,
+            border: Border.all(color: AppColors.accentAlpha(0.28)),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.accentAlpha(0.16), AppColors.accentAlpha(0.04)],
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: iconSize,
+                height: iconSize,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: AppColors.accent, borderRadius: AppRadii.lgRadius),
+                child: Icon(Icons.camera_alt_outlined, color: AppColors.onAccent, size: emphasized ? 26 : 22),
+              ),
+              const SizedBox(width: AppSpacing.sm + 2),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      emphasized ? 'Scansiona la prima cover' : 'Scansiona una cover',
+                      style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Fotografa → riconosci → conferma',
+                      style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: AppColors.textMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Migliaia separate da punto, stile italiano (`1248` → `"1.248"`) — nessuna
+/// dipendenza `intl` per questo solo formato.
+String _formatItalianInt(int value) {
+  final digits = value.abs().toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
+    buffer.write(digits[i]);
+  }
+  return (value < 0 ? '-' : '') + buffer.toString();
 }

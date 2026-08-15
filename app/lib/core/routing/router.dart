@@ -95,6 +95,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SchedaPage(),
       ),
       GoRoute(
+        path: '/serie',
+        builder: (context, state) => const SeriePage(),
+      ),
+      GoRoute(
         path: '/serie/:id',
         builder: (context, state) => const SeriePage(),
       ),
