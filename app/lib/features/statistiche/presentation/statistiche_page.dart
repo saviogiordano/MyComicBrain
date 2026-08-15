@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:mycomicbrain/core/design_system/design_system.dart';
 
 class StatistichePage extends StatelessWidget {
   const StatistichePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Statistiche')),
-      body: const Center(child: Text('Statistiche')),
-    );
+    return const PlaceholderScreen(title: 'Statistiche', icon: Icons.bar_chart_outlined);
   }
 }

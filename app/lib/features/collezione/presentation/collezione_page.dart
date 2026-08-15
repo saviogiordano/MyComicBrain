@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:mycomicbrain/core/design_system/design_system.dart';
 
 class CollezionePage extends StatelessWidget {
   const CollezionePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Collezione')),
-      body: const Center(child: Text('Collezione')),
-    );
+    return const PlaceholderScreen(title: 'Collezione', icon: Icons.collections_bookmark_outlined);
   }
 }

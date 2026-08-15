@@ -89,23 +89,6 @@ abstract final class AppTheme {
           side: const BorderSide(color: AppColors.borderDefault),
         ),
       ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.surfaceBase,
-        surfaceTintColor: Colors.transparent,
-        indicatorColor: AppColors.accentAlpha(0.14),
-        elevation: 0,
-        height: 64,
-        labelTextStyle: WidgetStateProperty.resolveWith(
-          (states) => AppTypography.bodySmall.copyWith(
-            color: states.contains(WidgetState.selected) ? AppColors.accent : AppColors.textMuted,
-          ),
-        ),
-        iconTheme: WidgetStateProperty.resolveWith(
-          (states) => IconThemeData(
-            color: states.contains(WidgetState.selected) ? AppColors.accent : AppColors.textMuted,
-          ),
-        ),
-      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.overlayCard,

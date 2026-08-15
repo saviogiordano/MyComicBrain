@@ -7,17 +7,17 @@ void main() {
   runApp(const ProviderScope(child: MyComicBrainApp()));
 }
 
-class MyComicBrainApp extends StatelessWidget {
+class MyComicBrainApp extends ConsumerWidget {
   const MyComicBrainApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
       title: 'MyComicBrain',
       theme: AppTheme.dark,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
-      routerConfig: router,
+      routerConfig: ref.watch(routerProvider),
     );
   }
 }
