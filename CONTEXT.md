@@ -34,3 +34,11 @@ Una serie il cui campo facoltativo "numeri totali" è compilato e per cui ogni n
 
 **Numero mancante**:
 Per una serie con "numeri totali" noto: un intero fra 1 e il totale per cui nessuna edizione posseduta lo copre. La numerazione conta solo interi; variant, speciali e allegati non generano un proprio buco, ma una variant del numero N copre il buco del numero N se posseduta.
+
+**Scansione**:
+Una fotografia di una cover, acquisita e confermata dall'utente (dopo eventuale ritaglio/rotazione), non ancora processata dal riconoscimento AI. È l'unità persistita dall'acquisizione — distinta da Opera/Edizione/Copia, che nascono solo quando il riconoscimento (fuori scope qui) la collega a un'edizione. Stato iniziale: in sospeso.
+_Avoid_: Scan (usare il termine italiano nel dominio; ok come nome di classe/tabella nel codice), foto, cover (ambiguo con l'immagine di un'edizione già catalogata)
+
+**Sessione di acquisizione**:
+Un raggruppamento temporaneo, non persistito, di più Scansioni prodotte consecutivamente (fotocamera e/o galleria) prima che l'utente termini con "Fine". Esiste solo come stato della UI: non sopravvive a un riavvio e non ha una propria riga nel database — solo le Scansioni che produce vengono salvate.
+_Avoid_: Batch (ok in prosa tecnica, non come termine di dominio)
