@@ -278,4 +278,68 @@ void main() {
       expect(kpis.aggiuntiMeseCorrente, 1);
     });
   });
+
+  group('aggiunti di recente', () {
+    test('nessuna copia posseduta: lista vuota', () async {
+      expect(await repo.watchAggiuntiDiRecente().first, isEmpty);
+    });
+
+    test('conta posseduta e prestata, non venduta o persa', () async {
+      for (final status in StatoCopia.values) {
+        await edizioneConCopia(titolo: status.name, status: status);
+      }
+
+      final recenti = await repo.watchAggiuntiDiRecente().first;
+      expect(recenti.map((c) => c.titolo), unorderedEquals([
+        StatoCopia.posseduta.name,
+        StatoCopia.prestata.name,
+      ]));
+    });
+
+    test('ordina per data di aggiunta, più recente prima', () async {
+      await edizioneConCopia(
+        titolo: 'Meno recente',
+        status: StatoCopia.posseduta,
+        createdAt: DateTime(2025),
+      );
+      await edizioneConCopia(
+        titolo: 'Più recente',
+        status: StatoCopia.posseduta,
+        createdAt: DateTime(2026),
+      );
+
+      final recenti = await repo.watchAggiuntiDiRecente().first;
+      expect(recenti.map((c) => c.titolo), ['Più recente', 'Meno recente']);
+    });
+
+    test('porta titolo, editore e numero da opera/edizione', () async {
+      final operaId = await repo.aggiungiOpera(title: 'Notturno');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        publisher: 'Kodama Manga',
+        issueNumber: 4,
+      );
+      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+
+      final recente = (await repo.watchAggiuntiDiRecente().first).single;
+      expect(recente.edizioneId, edizioneId);
+      expect(recente.titolo, 'Notturno');
+      expect(recente.editore, 'Kodama Manga');
+      expect(recente.numero, 4);
+      expect(recente.numeroVisualizzato, '#4');
+    });
+
+    test('numero testuale ("4 Variant") ha priorità sul numero intero in visualizzazione', () async {
+      final operaId = await repo.aggiungiOpera(title: 'Notturno');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumber: 4,
+        issueNumberLabel: '4 Variant',
+      );
+      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+
+      final recente = (await repo.watchAggiuntiDiRecente().first).single;
+      expect(recente.numeroVisualizzato, '#4 Variant');
+    });
+  });
 }

@@ -221,4 +221,33 @@ ORDER BY s.name, ns.n
           ];
         });
   }
+
+  /// Quante copie mostrare nel carosello "Aggiunti di recente" — oltre lo
+  /// scroll orizzontale di una Dashboard non aggiunge informazione utile.
+  static const _limiteAggiuntiDiRecente = 12;
+
+  /// Le ultime copie possedute aggiunte al catalogo (§4.1, carosello
+  /// "Aggiunti di recente"), le più recenti per prime.
+  Stream<List<ComicRecente>> watchAggiuntiDiRecente() {
+    final query = _db.select(_db.copie).join([
+      innerJoin(_db.edizioni, _db.edizioni.id.equalsExp(_db.copie.edizioneId)),
+      innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+    ])
+      ..where(_db.copie.status.isInValues(const [StatoCopia.posseduta, StatoCopia.prestata]))
+      ..orderBy([OrderingTerm.desc(_db.copie.createdAt), OrderingTerm.desc(_db.copie.id)])
+      ..limit(_limiteAggiuntiDiRecente);
+
+    return query.watch().map(
+      (rows) => [
+        for (final row in rows)
+          ComicRecente(
+            edizioneId: row.readTable(_db.edizioni).id,
+            titolo: row.readTable(_db.opere).title,
+            numero: row.readTable(_db.edizioni).issueNumber,
+            numeroLabel: row.readTable(_db.edizioni).issueNumberLabel,
+            editore: row.readTable(_db.edizioni).publisher,
+          ),
+      ],
+    );
+  }
 }

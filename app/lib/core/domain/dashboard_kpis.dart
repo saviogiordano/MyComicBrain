@@ -60,3 +60,35 @@ class SerieIncompleta {
 
   double get percentualeCompletamento => numeriPosseduti / numeriTotali;
 }
+
+/// Una copia posseduta aggiunta di recente al catalogo, per il carosello
+/// "Aggiunti di recente" (§4.1). Nessuna cover reale in questa mappa: la
+/// copertina in UI è generata proceduralmente da [titolo] e [numero].
+class ComicRecente {
+  const ComicRecente({
+    required this.edizioneId,
+    required this.titolo,
+    this.numero,
+    this.numeroLabel,
+    this.editore,
+  });
+
+  final int edizioneId;
+  final String titolo;
+
+  /// Numero come intero — seme della copertina procedurale. Null se non noto.
+  final int? numero;
+
+  /// Numero testuale da mostrare ("4 Variant", "Annual 1"); ricade su
+  /// [numero] se assente, come da convenzione a due colonne (#6).
+  final String? numeroLabel;
+
+  final String? editore;
+
+  /// Etichetta mostrata sulla copertina e sotto il titolo, es. "#4".
+  /// Stringa vuota se non è noto alcun numero.
+  String get numeroVisualizzato {
+    final label = numeroLabel ?? numero?.toString();
+    return label == null ? '' : '#$label';
+  }
+}

@@ -65,4 +65,81 @@ void main() {
       expect(find.text('—'), findsNWidgets(2));
     },
   );
+
+  testWidgets(
+    '"Serie incomplete" nascosta se non ci sono serie valutabili, "Aggiunti di recente" mostrata (regola #8)',
+    (tester) async {
+      // Copia posseduta senza serie: "Aggiunti di recente" ha materiale,
+      // "Serie incomplete" no (nessuna serie con "numeri totali" noto).
+      final operaId = await repo.aggiungiOpera(title: 'Il Corvo');
+      final edizioneId = await repo.aggiungiEdizione(operaId: operaId, issueNumber: 1);
+      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+
+      await pumpDashboard(tester);
+
+      expect(find.text('AGGIUNTI DI RECENTE'), findsOneWidget);
+      expect(find.text('SERIE INCOMPLETE'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'carosello "Aggiunti di recente" mostra le copie possedute, più recenti per prime',
+    (tester) async {
+      final operaVecchia = await repo.aggiungiOpera(title: 'Il Corvo');
+      final edizioneVecchia = await repo.aggiungiEdizione(
+        operaId: operaVecchia,
+        issueNumber: 1,
+        publisher: 'Edizioni Meridiano',
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneVecchia,
+        status: StatoCopia.posseduta,
+        createdAt: DateTime(2026),
+      );
+
+      final operaRecente = await repo.aggiungiOpera(title: 'Notturno');
+      final edizioneRecente = await repo.aggiungiEdizione(operaId: operaRecente, issueNumber: 4);
+      await repo.aggiungiCopia(
+        edizioneId: edizioneRecente,
+        status: StatoCopia.posseduta,
+        createdAt: DateTime(2026, 6),
+      );
+
+      await pumpDashboard(tester);
+
+      expect(find.text('AGGIUNTI DI RECENTE'), findsOneWidget);
+      // Il titolo compare due volte per card: sulla copertina procedurale e
+      // nell'etichetta sotto.
+      expect(find.text('Notturno'), findsNWidgets(2));
+      expect(find.text('Il Corvo'), findsNWidgets(2));
+      expect(find.text('Edizioni Meridiano'), findsOneWidget);
+
+      final xNotturno = tester.getTopLeft(find.text('Notturno').first).dx;
+      final xCorvo = tester.getTopLeft(find.text('Il Corvo').first).dx;
+      expect(xNotturno, lessThan(xCorvo));
+    },
+  );
+
+  testWidgets(
+    'sezione "Serie incomplete" mostra frazione, barra e numeri mancanti troncati oltre 3',
+    (tester) async {
+      // Titolo dell'opera diverso dal nome della serie, per non collidere
+      // con il carosello "Aggiunti di recente" nelle asserzioni sotto.
+      final opera = await repo.aggiungiOpera(title: 'Storia Sconosciuta');
+      final serieId = await repo.aggiungiSerie(name: 'Kaiju Bianco', totalIssues: 5);
+      for (final n in [1, 2, 3]) {
+        final edizioneId = await repo.aggiungiEdizione(operaId: opera, serieId: serieId, issueNumber: n);
+        await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+      }
+      // Mancano #4 e #5: sotto la soglia di troncamento (3), elencati per intero.
+
+      await pumpDashboard(tester);
+
+      expect(find.text('SERIE INCOMPLETE'), findsOneWidget);
+      expect(find.text('Kaiju Bianco'), findsOneWidget);
+      expect(find.text('3/5'), findsOneWidget);
+      expect(find.text('Mancano #4, #5'), findsOneWidget);
+      expect(find.byType(AppProgressBar), findsOneWidget);
+    },
+  );
 }

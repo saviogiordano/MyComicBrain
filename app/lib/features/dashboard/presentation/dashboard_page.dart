@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,13 +46,19 @@ class DashboardPage extends ConsumerWidget {
   }
 }
 
-class _Collection extends StatelessWidget {
+class _Collection extends ConsumerWidget {
   const _Collection({required this.kpis});
 
   final DashboardKpis kpis;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Errore o caricamento delle due sezioni secondarie non blocca il resto
+    // della Dashboard, già renderizzata dai KPI: si comportano come vuote
+    // (nascoste, regola #8) finché non arriva un dato.
+    final recenti = ref.watch(aggiuntiDiRecenteProvider).valueOrNull ?? const [];
+    final serieIncomplete = ref.watch(serieIncompleteProvider).valueOrNull ?? const [];
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.xxl),
       child: Column(
@@ -61,6 +69,14 @@ class _Collection extends StatelessWidget {
           _KpiGrid(kpis: kpis),
           const SizedBox(height: AppSpacing.md),
           const _ScanCta(),
+          if (recenti.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _AggiuntiRecenteSection(items: recenti),
+          ],
+          if (serieIncomplete.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _SerieIncompleteSection(items: serieIncomplete),
+          ],
         ],
       ),
     );
@@ -333,6 +349,243 @@ class _ScanCta extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Carosello orizzontale delle ultime copie possedute aggiunte al catalogo
+/// (§4.1, righe 129-141 del prototipo). Copertine procedurali — nessuna
+/// immagine reale in questa mappa (#14): colore e forma derivano da titolo
+/// e numero, vedi [_CoverProcedurale]. Nascosta del tutto se vuota (#8).
+class _AggiuntiRecenteSection extends StatelessWidget {
+  const _AggiuntiRecenteSection({required this.items});
+
+  final List<ComicRecente> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          label: 'aggiunti di recente',
+          trailing: GestureDetector(
+            onTap: () => context.go('/collezione'),
+            child: Text('Tutti', style: AppTypography.bodyMedium.copyWith(color: AppColors.accent)),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                if (i > 0) const SizedBox(width: AppSpacing.xs + 2),
+                _RecentCard(item: items[i]),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentCard extends StatelessWidget {
+  const _RecentCard({required this.item});
+
+  final ComicRecente item;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push('/scheda/${item.edizioneId}'),
+      child: SizedBox(
+        width: 96,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 96,
+              height: 128,
+              child: _CoverProcedurale(titolo: item.titolo, numero: item.numero ?? 0, etichetta: item.numeroVisualizzato),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              item.titolo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.labelMedium.copyWith(color: AppColors.textPrimary),
+            ),
+            // Editore assente: riga omessa, non "—" — quel simbolo è la
+            // convenzione per "valore zero" (#8), un significato diverso da
+            // "campo non compilato".
+            if (item.editore != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                item.editore!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Copertina segnaposto generata dal titolo e dal numero, finché non
+/// esistono immagini reali (prototipo `cover()`/`shape`, righe 730-736):
+/// colore di sfondo scelto da `(titolo.length + numero) % palette`, forma
+/// (cerchio/quadrato arrotondato) dalla parità del numero, rotazione dal
+/// resto modulo 3.
+class _CoverProcedurale extends StatelessWidget {
+  const _CoverProcedurale({required this.titolo, required this.numero, required this.etichetta});
+
+  final String titolo;
+  final int numero;
+  final String etichetta;
+
+  static const List<({Color bg, Color ink})> _palette = [
+    (bg: Color(0xFF1B3A4B), ink: Color(0xFFEFE7D6)),
+    (bg: Color(0xFFB23A2E), ink: Color(0xFFF7E4C8)),
+    (bg: Color(0xFF2E2A4F), ink: Color(0xFFE6E2F2)),
+    (bg: Color(0xFF0F5C4A), ink: Color(0xFFEAF3E5)),
+    (bg: Color(0xFFC4771B), ink: Color(0xFF22160C)),
+    (bg: Color(0xFF3A3A3C), ink: Color(0xFFF0F0F2)),
+    (bg: Color(0xFF7A2E4E), ink: Color(0xFFF6E1EA)),
+    (bg: Color(0xFF1E4620), ink: Color(0xFFE8F0DE)),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colori = _palette[(titolo.length + numero) % _palette.length];
+    final circolare = numero.isOdd;
+    final rotazione = ((numero % 3) * 9 - 9) * (math.pi / 180);
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(color: colori.bg, borderRadius: AppRadii.xsRadius),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -13,
+            bottom: -18,
+            child: Transform.rotate(
+              angle: rotazione,
+              child: Container(
+                width: 71,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: colori.ink.withValues(alpha: 0.22),
+                  shape: circolare ? BoxShape.circle : BoxShape.rectangle,
+                  borderRadius: circolare ? null : BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.xs),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titolo,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelMedium.copyWith(color: colori.ink, height: 1.15),
+                ),
+                const Spacer(),
+                if (etichetta.isNotEmpty)
+                  Text(etichetta, style: AppTypography.monoLabel.copyWith(color: colori.ink)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Righe delle serie incomplete (§17, righe 143-163 del prototipo): nome,
+/// frazione posseduti/totale, barra di completamento, riepilogo dei numeri
+/// mancanti. Nascosta del tutto se vuota (#8).
+class _SerieIncompleteSection extends StatelessWidget {
+  const _SerieIncompleteSection({required this.items});
+
+  final List<SerieIncompleta> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(label: 'serie incomplete'),
+        const SizedBox(height: AppSpacing.sm),
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.xs),
+          _SerieIncompletaRow(item: items[i]),
+        ],
+      ],
+    );
+  }
+}
+
+class _SerieIncompletaRow extends StatelessWidget {
+  const _SerieIncompletaRow({required this.item});
+
+  final SerieIncompleta item;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      onTap: () => context.push('/serie/${item.serieId}'),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm + 2, vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(
+                child: Text(
+                  item.nome,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                '${item.numeriPosseduti}/${item.numeriTotali}',
+                style: AppTypography.monoLabel.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs + 1),
+          AppProgressBar(value: item.percentualeCompletamento),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Mancano ${_missingLabel(item.numeriMancanti)}',
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Elenca fino a 3 numeri mancanti; oltre, tronca con "e altri N". Il
+/// prototipo non definisce una regola (dati statici) — decisa qui in
+/// risoluzione di #14.
+String _missingLabel(List<int> numeri) {
+  const soglia = 3;
+  final visibili = numeri.take(soglia).map((n) => '#$n').join(', ');
+  if (numeri.length <= soglia) return visibili;
+  return '$visibili e altri ${numeri.length - soglia}';
 }
 
 /// Migliaia separate da punto, stile italiano (`1248` → `"1.248"`) — nessuna

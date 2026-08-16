@@ -9,3 +9,7 @@ final dashboardKpisProvider = StreamProvider<DashboardKpis>((ref) {
 final serieIncompleteProvider = StreamProvider<List<SerieIncompleta>>((ref) {
   return ref.watch(comicsRepositoryProvider).watchSerieIncomplete();
 });
+
+final aggiuntiDiRecenteProvider = StreamProvider<List<ComicRecente>>((ref) {
+  return ref.watch(comicsRepositoryProvider).watchAggiuntiDiRecente();
+});
