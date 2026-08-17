@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/routing/app_bottom_nav.dart';
 import 'package:mycomicbrain/core/routing/session.dart';
 import 'package:mycomicbrain/features/assistente/presentation/assistente_page.dart';
@@ -93,6 +94,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/scheda/:id',
         builder: (context, state) => const SchedaPage(),
+      ),
+      // Schermate definite in #20 (Mappa #15), non ancora implementate —
+      // vedi ticket #24. Lo scanner (#23) ci naviga già come stub.
+      GoRoute(
+        path: '/scansione/revisione',
+        builder: (context, state) =>
+            const PlaceholderScreen(title: 'Revisione', icon: Icons.crop_rotate_outlined),
+      ),
+      GoRoute(
+        path: '/scansione/riepilogo',
+        builder: (context, state) =>
+            const PlaceholderScreen(title: 'Riepilogo', icon: Icons.checklist_outlined),
       ),
       GoRoute(
         path: '/serie',
