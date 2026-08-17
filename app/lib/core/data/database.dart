@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
+import 'package:mycomicbrain/core/domain/scansione.dart';
 import 'package:path_provider/path_provider.dart';
 
 part 'database.g.dart';
@@ -67,7 +68,24 @@ class Copie extends Table {
   DateTimeColumn get updatedAt => dateTime()();
 }
 
-@DriftDatabase(tables: [Opere, SerieTable, Edizioni, Copie])
+/// `Scansione`: una fotografia di cover acquisita e confermata, non ancora
+/// processata dal riconoscimento AI (§6, fuori scope in questa mappa — vedi
+/// `CONTEXT.md`). `userId`, `ocrText` e `confidence` sono placeholder per il
+/// riconoscimento futuro.
+class Scansioni extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get userId => integer().nullable()();
+
+  /// Percorso filesystem dell'immagine salvata (vedi `ScansioneStorage`).
+  TextColumn get image => text()();
+  TextColumn get ocrText => text().nullable()();
+  TextColumn get recognitionStatus => textEnum<StatoRiconoscimento>()
+      .withDefault(Constant(StatoRiconoscimento.inSospeso.name))();
+  RealColumn get confidence => real().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
+@DriftDatabase(tables: [Opere, SerieTable, Edizioni, Copie, Scansioni])
 class AppDatabase extends _$AppDatabase {
   /// Il costruttore che accetta un [QueryExecutor] opzionale è necessario
   /// per i test in memoria (vedi `test/core/data/comics_repository_test.dart`).
