@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/features/scansione/presentation/revisione_page.dart';
+import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/scansione_page.dart';
 
 void main() {
@@ -33,12 +36,12 @@ void main() {
         GoRoute(
           path: '/scansione/revisione',
           builder: (context, state) =>
-              const PlaceholderScreen(title: 'Revisione', icon: Icons.crop_rotate_outlined),
+              RevisionePage(percorsiGrezzi: state.extra! as List<String>),
         ),
         GoRoute(
           path: '/scansione/riepilogo',
           builder: (context, state) =>
-              const PlaceholderScreen(title: 'Riepilogo', icon: Icons.checklist_outlined),
+              RiepilogoPage(scansioni: state.extra! as List<XFile>),
         ),
       ],
     );
@@ -67,13 +70,13 @@ void main() {
     expect(find.text('2/5'), findsOneWidget);
   });
 
-  testWidgets('"Fine" naviga allo stub del riepilogo di fine batch', (tester) async {
+  testWidgets('"Fine" naviga al riepilogo di fine batch (vuoto, nessuna Scansione confermata)', (tester) async {
     await pumpScanner(tester);
 
     await tester.tap(find.text('Fine'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Riepilogo'), findsOneWidget);
-    expect(find.text('In arrivo'), findsOneWidget);
+    expect(find.text('Riepilogo batch'), findsOneWidget);
+    expect(find.text('0 scansioni pronte per il riconoscimento AI'), findsOneWidget);
   });
 }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/core/domain/scansione.dart';
 
 /// I 5 suggerimenti statici (deciso su #22): ordine per fasi logiche
 /// (distanza → allineamento → illuminazione → riflessi → messa a fuoco),
@@ -29,9 +30,9 @@ const _guideHints = <_GuideHint>[
 /// decisa su #19): fotocamera live con overlay a 4 angoli, pillola di
 /// suggerimento, filmstrip del batch in corso, Galleria e "Fine".
 ///
-/// Al tocco su una foto scattata/selezionata naviga alla revisione
-/// ritaglio/rotazione; "Fine" naviga al riepilogo di fine batch — entrambe
-/// definite su #20 ma non ancora implementate (stub, vedi #24).
+/// Ogni scatto/selezione da galleria apre la revisione ritaglio/rotazione
+/// (#24): solo le foto confermate lì entrano nel filmstrip. "Fine" apre il
+/// riepilogo di fine batch (#24) col batch confermato finora.
 class ScansionePage extends StatefulWidget {
   const ScansionePage({super.key});
 
@@ -113,8 +114,7 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
     try {
       final foto = await controller.takePicture();
       if (!mounted) return;
-      setState(() => _captures.add(foto));
-      unawaited(context.push('/scansione/revisione'));
+      await _apriRevisione([foto.path]);
     } on CameraException {
       // Gestione errori di scatto: fuori scope (vedi "Not yet specified" su #15).
     } finally {
@@ -125,13 +125,20 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
   Future<void> _aggiungiDaGalleria() async {
     final foto = await ImagePicker().pickMultiImage();
     if (foto.isEmpty || !mounted) return;
-    setState(() => _captures.addAll(foto));
-    unawaited(context.push('/scansione/revisione'));
+    await _apriRevisione([for (final f in foto) f.path]);
+  }
+
+  /// Apre la revisione (#24) sui percorsi grezzi appena acquisiti; solo le
+  /// foto confermate (non "Riscatta") tornano ed entrano nel batch.
+  Future<void> _apriRevisione(List<String> percorsiGrezzi) async {
+    final confermate = await context.push<List<XFile>>('/scansione/revisione', extra: percorsiGrezzi);
+    if (confermate == null || confermate.isEmpty || !mounted) return;
+    setState(() => _captures.addAll(confermate));
   }
 
   void _prossimoSuggerimento() => setState(() => _hintIndex = (_hintIndex + 1) % _guideHints.length);
 
-  void _fine() => context.push('/scansione/riepilogo');
+  void _fine() => context.push('/scansione/riepilogo', extra: List<XFile>.of(_captures));
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +151,7 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
           if (_controller != null)
             const Center(
               child: AspectRatio(
-                aspectRatio: 0.68,
+                aspectRatio: coverAspectRatio,
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
                   child: CustomPaint(painter: _CornerBracketsPainter()),

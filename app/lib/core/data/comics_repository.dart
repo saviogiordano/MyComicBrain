@@ -93,6 +93,20 @@ class ComicsRepository {
         );
   }
 
+  /// Persiste una Scansione confermata (revisione ritaglio/rotazione, #24):
+  /// `recognitionStatus` resta al default `inSospeso` (nessun riconoscimento
+  /// AI in questa mappa, vedi `CONTEXT.md`).
+  Future<int> aggiungiScansione({required String image, DateTime? createdAt}) {
+    return _db
+        .into(_db.scansioni)
+        .insert(
+          ScansioniCompanion.insert(
+            image: image,
+            createdAt: createdAt ?? DateTime.now(),
+          ),
+        );
+  }
+
   // --- KPI della Dashboard (§4.1, regole fissate su #2). ---
 
   /// I numeri riassuntivi della Dashboard. Un'unica query: tutti i KPI di
