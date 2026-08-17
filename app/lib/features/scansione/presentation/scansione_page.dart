@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/scansione.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 /// I 5 suggerimenti statici (deciso su #22): ordine per fasi logiche
 /// (distanza → allineamento → illuminazione → riflessi → messa a fuoco),
@@ -26,6 +27,12 @@ const _guideHints = <_GuideHint>[
   _GuideHint(Icons.center_focus_strong_outlined, 'Tieni ferma la fotocamera'),
 ];
 
+/// Stato di errore della fotocamera (deciso su #25): "riprovabile" copre
+/// l'assenza di hardware e i dinieghi risolvibili con un nuovo tentativo;
+/// "permanente" copre i dinieghi che richiedono di passare dalle Impostazioni
+/// di sistema.
+enum _ErroreFotocamera { riprovabile, permanente }
+
 /// Schermata `/scansione` (requisito 5.1, Variante B — Corner brackets,
 /// decisa su #19): fotocamera live con overlay a 4 angoli, pillola di
 /// suggerimento, filmstrip del batch in corso, Galleria e "Fine".
@@ -42,7 +49,7 @@ class ScansionePage extends StatefulWidget {
 
 class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserver {
   CameraController? _controller;
-  bool _cameraNonDisponibile = false;
+  _ErroreFotocamera? _erroreFotocamera;
   bool _scattando = false;
   int _hintIndex = 0;
   final _captures = <XFile>[];
@@ -75,11 +82,22 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
   }
 
   Future<void> _initCamera() async {
+    if (mounted) setState(() => _erroreFotocamera = null);
+
+    // Check anticipato (deciso su #25): un diniego permanente non deve
+    // arrivare a `CameraController.initialize()`, che su Android non lo
+    // distingue da un diniego "riprovabile".
+    final status = await Permission.camera.status;
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      if (mounted) setState(() => _erroreFotocamera = _ErroreFotocamera.permanente);
+      return;
+    }
+
     final cameras = await availableCameras();
     // Nessuna fotocamera (es. iOS Simulator, vedi docs/research/camera-package-flutter.md
     // §6): mostra un fallback statico invece di bloccare la schermata.
     if (cameras.isEmpty) {
-      if (mounted) setState(() => _cameraNonDisponibile = true);
+      if (mounted) setState(() => _erroreFotocamera = _ErroreFotocamera.riprovabile);
       return;
     }
 
@@ -91,8 +109,8 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
 
     try {
       await controller.initialize();
-    } on CameraException {
-      if (mounted) setState(() => _cameraNonDisponibile = true);
+    } on CameraException catch (e) {
+      if (mounted) setState(() => _erroreFotocamera = _erroreDaEccezione(e));
       return;
     }
 
@@ -102,9 +120,24 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
     }
     setState(() {
       _controller = controller;
-      _cameraNonDisponibile = false;
+      _erroreFotocamera = null;
     });
   }
+
+  // Diniego iOS senza prompt (mai chiesto) o restrizione: equivale a un
+  // diniego permanente. Tutto il resto (nessun hardware residuo, errori
+  // sconosciuti, fotocamera occupata da un'altra app) è "riprovabile".
+  _ErroreFotocamera _erroreDaEccezione(CameraException e) {
+    switch (e.code) {
+      case 'CameraAccessDeniedWithoutPrompt':
+      case 'CameraAccessRestricted':
+        return _ErroreFotocamera.permanente;
+      default:
+        return _ErroreFotocamera.riprovabile;
+    }
+  }
+
+  Future<void> _apriImpostazioni() => openAppSettings();
 
   Future<void> _scatta() async {
     final controller = _controller;
@@ -116,7 +149,10 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
       if (!mounted) return;
       await _apriRevisione([foto.path]);
     } on CameraException {
-      // Gestione errori di scatto: fuori scope (vedi "Not yet specified" su #15).
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Scatto non riuscito, riprova')),
+      );
     } finally {
       if (mounted) setState(() => _scattando = false);
     }
@@ -147,7 +183,12 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
       body: Stack(
         fit: StackFit.expand,
         children: [
-          _CameraBackground(controller: _controller, nonDisponibile: _cameraNonDisponibile),
+          _CameraBackground(
+            controller: _controller,
+            errore: _erroreFotocamera,
+            onRiprova: _initCamera,
+            onApriImpostazioni: _apriImpostazioni,
+          ),
           if (_controller != null)
             const Center(
               child: AspectRatio(
@@ -182,10 +223,17 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
 }
 
 class _CameraBackground extends StatelessWidget {
-  const _CameraBackground({required this.controller, required this.nonDisponibile});
+  const _CameraBackground({
+    required this.controller,
+    required this.errore,
+    required this.onRiprova,
+    required this.onApriImpostazioni,
+  });
 
   final CameraController? controller;
-  final bool nonDisponibile;
+  final _ErroreFotocamera? errore;
+  final VoidCallback onRiprova;
+  final VoidCallback onApriImpostazioni;
 
   @override
   Widget build(BuildContext context) {
@@ -194,6 +242,7 @@ class _CameraBackground extends StatelessWidget {
       return ColoredBox(color: Colors.black, child: Center(child: CameraPreview(controller)));
     }
 
+    final errore = this.errore;
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: RadialGradient(
@@ -201,21 +250,59 @@ class _CameraBackground extends StatelessWidget {
           colors: [AppColors.surfaceRaised, AppColors.surfaceDeepest],
         ),
       ),
-      child: nonDisponibile
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.videocam_off_outlined, size: 32, color: AppColors.textDisabled),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Fotocamera non disponibile',
-                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
-                  ),
-                ],
+      child: errore == null
+          ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
+          : Center(
+              child: _CameraErrorMessage(
+                errore: errore,
+                onRiprova: onRiprova,
+                onApriImpostazioni: onApriImpostazioni,
               ),
-            )
-          : const Center(child: CircularProgressIndicator(color: AppColors.accent)),
+            ),
+    );
+  }
+}
+
+class _CameraErrorMessage extends StatelessWidget {
+  const _CameraErrorMessage({
+    required this.errore,
+    required this.onRiprova,
+    required this.onApriImpostazioni,
+  });
+
+  final _ErroreFotocamera errore;
+  final VoidCallback onRiprova;
+  final VoidCallback onApriImpostazioni;
+
+  @override
+  Widget build(BuildContext context) {
+    final permanente = errore == _ErroreFotocamera.permanente;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.videocam_off_outlined, size: 32, color: AppColors.textDisabled),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            permanente ? 'Permesso fotocamera negato' : 'Fotocamera non disponibile',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            permanente
+                ? 'Attivalo dalle Impostazioni, oppure usa la Galleria'
+                : 'Puoi riprovare o usare la Galleria',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          FilledButton(
+            onPressed: permanente ? onApriImpostazioni : onRiprova,
+            child: Text(permanente ? 'Apri Impostazioni' : 'Riprova'),
+          ),
+        ],
+      ),
     );
   }
 }
