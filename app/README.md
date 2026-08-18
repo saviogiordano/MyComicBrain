@@ -25,6 +25,19 @@ Il codice generato da Drift (`lib/core/data/database.g.dart`) è già committato
 dart run build_runner build --delete-conflicting-outputs
 ```
 
+## Configurare la chiave API Claude
+
+L'analisi AI della copertina (OCR, requisito §6.1) chiama l'API di Anthropic direttamente dal client. La chiave non va mai committata: viene incorporata a build-time via `--dart-define-from-file`.
+
+1. Copia il template: `cp dart_define.example.json dart_define.json` (dalla cartella `app/`).
+2. Apri `dart_define.json` e imposta `ANTHROPIC_API_KEY` con la tua chiave Anthropic. Il file è in `.gitignore`, resta locale.
+3. Passa il file a ogni comando `flutter run` / `flutter build`:
+   ```bash
+   flutter run --dart-define-from-file=dart_define.json -d "iPhone 16"
+   ```
+
+Senza questo passaggio `ClaudeApiConfig.apiKey` resta vuota e `ClaudeApiConfig.isConfigured` è `false`.
+
 ## Eseguire su iOS Simulator
 
 Avvia un simulatore (uno a scelta fra quelli disponibili):
