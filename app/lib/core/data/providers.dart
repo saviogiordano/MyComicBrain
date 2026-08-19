@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mycomicbrain/core/data/analisi_ocr_pipeline.dart';
+import 'package:mycomicbrain/core/data/claude_ocr_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/image_crop_service.dart';
@@ -17,3 +19,14 @@ final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
 final imageCropServiceProvider = Provider<ImageCropService>((ref) => ImageCropService());
 
 final scansioneStorageProvider = Provider<ScansioneStorage>((ref) => ScansioneStorage());
+
+final claudeOcrClientProvider = Provider<ClaudeOcrClient>((ref) => ClaudeOcrClient());
+
+/// Pipeline di analisi OCR di fine batch (§6.1, #32), triggerata da "Fine"
+/// nel riepilogo.
+final analisiOcrPipelineProvider = Provider<AnalisiOcrPipeline>((ref) {
+  return AnalisiOcrPipeline(
+    repository: ref.watch(comicsRepositoryProvider),
+    client: ref.watch(claudeOcrClientProvider),
+  );
+});

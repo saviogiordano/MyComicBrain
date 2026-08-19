@@ -1,23 +1,35 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 
 /// Schermata `/scansione/riepilogo` (S-B — Lista con stato, deciso su #20):
 /// una riga per Scansione appena confermata, con thumbnail e chip "In
-/// sospeso" esplicito su ognuna (il riconoscimento AI è fuori scope di
-/// questa mappa, vedi `CONTEXT.md`). Schermata a sé, due azioni: "Aggiungi
-/// altre" torna allo scanner con il batch preservato (pop, nessun valore);
-/// "Fine" naviga davvero a `/dashboard`, non un placeholder.
-class RiepilogoPage extends StatelessWidget {
+/// sospeso" esplicito su ognuna (il riconoscimento AI, §6.3, è fuori scope
+/// di questa mappa, vedi `CONTEXT.md`). Schermata a sé, due azioni:
+/// "Aggiungi altre" torna allo scanner con il batch preservato (pop, nessun
+/// valore); "Fine" avvia la pipeline di analisi OCR (§6.1, #32) per l'intero
+/// batch — senza attendere il risultato, vedi `AnalisiOcrPipeline` — e
+/// naviga davvero a `/dashboard`, non un placeholder.
+class RiepilogoPage extends ConsumerWidget {
   const RiepilogoPage({required this.scansioni, super.key});
 
   final List<XFile> scansioni;
 
+  void _fine(BuildContext context, WidgetRef ref) {
+    unawaited(
+      ref.read(analisiOcrPipelineProvider).avviaBatch([for (final s in scansioni) s.path]),
+    );
+    context.go('/dashboard');
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
       body: SafeArea(
@@ -59,7 +71,7 @@ class RiepilogoPage extends StatelessWidget {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: FilledButton(
-                      onPressed: () => context.go('/dashboard'),
+                      onPressed: () => _fine(context, ref),
                       child: const Text('Fine'),
                     ),
                   ),

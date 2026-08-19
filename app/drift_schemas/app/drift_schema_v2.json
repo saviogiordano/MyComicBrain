@@ -457,8 +457,76 @@
             "dsl_features": []
           },
           {
-            "name": "ocr_text",
-            "getter_name": "ocrText",
+            "name": "created_at",
+            "getter_name": "createdAt",
+            "moor_type": "dateTime",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": []
+      }
+    },
+    {
+      "id": 5,
+      "references": [
+        4
+      ],
+      "type": "table",
+      "data": {
+        "name": "analisi_ocr",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "id",
+            "getter_name": "id",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "PRIMARY KEY AUTOINCREMENT",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "PRIMARY KEY AUTOINCREMENT"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              "auto-increment"
+            ]
+          },
+          {
+            "name": "scansione_id",
+            "getter_name": "scansioneId",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "REFERENCES scansioni (id)",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "REFERENCES scansioni (id)"
+            },
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "foreign_key": {
+                  "to": {
+                    "table": "scansioni",
+                    "column": "id"
+                  },
+                  "initially_deferred": false,
+                  "on_update": null,
+                  "on_delete": null
+                }
+              }
+            ]
+          },
+          {
+            "name": "title",
+            "getter_name": "title",
             "moor_type": "string",
             "nullable": true,
             "customConstraints": null,
@@ -467,23 +535,103 @@
             "dsl_features": []
           },
           {
-            "name": "recognition_status",
-            "getter_name": "recognitionStatus",
+            "name": "issue_number_label",
+            "getter_name": "issueNumberLabel",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "publisher",
+            "getter_name": "publisher",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "series_name",
+            "getter_name": "seriesName",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "isbn",
+            "getter_name": "isbn",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "barcode",
+            "getter_name": "barcode",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "price",
+            "getter_name": "price",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "raw_response",
+            "getter_name": "rawResponse",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "status",
+            "getter_name": "status",
             "moor_type": "string",
             "nullable": false,
             "customConstraints": null,
-            "default_dart": "const CustomExpression('\\'inSospeso\\'')",
+            "default_dart": "const CustomExpression('\\'pending\\'')",
             "default_client_dart": null,
             "dsl_features": [],
             "type_converter": {
-              "dart_expr": "const EnumNameConverter<StatoRiconoscimento>(StatoRiconoscimento.values)",
-              "dart_type_name": "StatoRiconoscimento"
+              "dart_expr": "const EnumNameConverter<StatoAnalisiOcr>(StatoAnalisiOcr.values)",
+              "dart_type_name": "StatoAnalisiOcr"
             }
           },
           {
-            "name": "confidence",
-            "getter_name": "confidence",
-            "moor_type": "double",
+            "name": "error_message",
+            "getter_name": "errorMessage",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "completed_at",
+            "getter_name": "completedAt",
+            "moor_type": "dateTime",
             "nullable": true,
             "customConstraints": null,
             "default_dart": null,
@@ -549,7 +697,16 @@
       "sql": [
         {
           "dialect": "sqlite",
-          "sql": "CREATE TABLE IF NOT EXISTS \"scansioni\" (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, \"user_id\" INTEGER NULL, \"image\" TEXT NOT NULL, \"ocr_text\" TEXT NULL, \"recognition_status\" TEXT NOT NULL DEFAULT 'inSospeso', \"confidence\" REAL NULL, \"created_at\" TEXT NOT NULL);"
+          "sql": "CREATE TABLE IF NOT EXISTS \"scansioni\" (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, \"user_id\" INTEGER NULL, \"image\" TEXT NOT NULL, \"created_at\" TEXT NOT NULL);"
+        }
+      ]
+    },
+    {
+      "name": "analisi_ocr",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"analisi_ocr\" (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, \"scansione_id\" INTEGER NOT NULL REFERENCES scansioni (id), \"title\" TEXT NULL, \"issue_number_label\" TEXT NULL, \"publisher\" TEXT NULL, \"series_name\" TEXT NULL, \"isbn\" TEXT NULL, \"barcode\" TEXT NULL, \"price\" TEXT NULL, \"raw_response\" TEXT NULL, \"status\" TEXT NOT NULL DEFAULT 'pending', \"error_message\" TEXT NULL, \"completed_at\" TEXT NULL, \"created_at\" TEXT NOT NULL);"
         }
       ]
     }

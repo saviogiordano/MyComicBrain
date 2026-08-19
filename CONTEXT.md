@@ -39,6 +39,10 @@ Per una serie con "numeri totali" noto: un intero fra 1 e il totale per cui ness
 Una fotografia di una cover, acquisita e confermata dall'utente (dopo eventuale ritaglio/rotazione), non ancora processata dal riconoscimento AI. È l'unità persistita dall'acquisizione — distinta da Opera/Edizione/Copia, che nascono solo quando il riconoscimento (fuori scope qui) la collega a un'edizione. Stato iniziale: in sospeso.
 _Avoid_: Scan (usare il termine italiano nel dominio; ok come nome di classe/tabella nel codice), foto, cover (ambiguo con l'immagine di un'edizione già catalogata)
 
+**Analisi OCR**:
+Il risultato dell'estrazione automatica (via Claude, §6.1) dei campi leggibili sulla cover di una Scansione — titolo, numero (come letto, non parsato), editore, nome collana (come letto — non è ancora un legame con una Serie catalogata), autori, ISBN, barcode, prezzo, codici identificativi. Una lettura grezza, non verificata: non diventa un'Edizione finché il riconoscimento (§6.3, fuori scope qui) non la conferma. Relazione 1:1 con la Scansione che l'ha generata; stato pending/in corso/completata/fallita, nessun retry automatico.
+_Avoid_: OCR da solo come nome di entità (ok in prosa tecnica) — usare "Analisi OCR" per il record persistito; "collana"/nome campo `serie` per il valore letto — collide con l'entità Serie già catalogata, che è un concetto diverso
+
 **Sessione di acquisizione**:
 Un raggruppamento temporaneo, non persistito, di più Scansioni prodotte consecutivamente (fotocamera e/o galleria) prima che l'utente termini con "Fine". Esiste solo come stato della UI: non sopravvive a un riavvio e non ha una propria riga nel database — solo le Scansioni che produce vengono salvate.
 _Avoid_: Batch (ok in prosa tecnica, non come termine di dominio)

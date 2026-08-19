@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/domain/analisi_ocr.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
 
@@ -93,9 +94,10 @@ class ComicsRepository {
         );
   }
 
-  /// Persiste una Scansione confermata (revisione ritaglio/rotazione, #24):
-  /// `recognitionStatus` resta al default `inSospeso` (nessun riconoscimento
-  /// AI in questa mappa, vedi `CONTEXT.md`).
+  /// Persiste una Scansione confermata (revisione ritaglio/rotazione, #24).
+  /// Il riconoscimento (§6.3, collegamento a un'edizione) resta fuori scope
+  /// di questa mappa — l'Analisi OCR (§6.1) parte separatamente, vedi
+  /// [idScansionePerImmagine]/[avviaAnalisiOcr].
   Future<int> aggiungiScansione({required String image, DateTime? createdAt}) {
     return _db
         .into(_db.scansioni)
@@ -105,6 +107,79 @@ class ComicsRepository {
             createdAt: createdAt ?? DateTime.now(),
           ),
         );
+  }
+
+  /// L'id della Scansione salvata con questo percorso immagine — usato dalla
+  /// pipeline di analisi OCR (#32) per collegare il batch di file in uscita
+  /// dal riepilogo alla riga già persistita in `Scansioni` da [aggiungiScansione].
+  Future<int> idScansionePerImmagine(String image) async {
+    final riga = await (_db.select(
+      _db.scansioni,
+    )..where((s) => s.image.equals(image))).getSingle();
+    return riga.id;
+  }
+
+  /// Crea la riga `AnalisiOcr` di una Scansione, in stato `inCorso` — la
+  /// pipeline (#32) la crea appena prende in carico la Scansione, prima di
+  /// chiamare Claude.
+  Future<int> avviaAnalisiOcr({required int scansioneId, DateTime? createdAt}) {
+    return _db
+        .into(_db.analisiOcrTable)
+        .insert(
+          AnalisiOcrTableCompanion.insert(
+            scansioneId: scansioneId,
+            status: const Value(StatoAnalisiOcr.inCorso),
+            createdAt: createdAt ?? DateTime.now(),
+          ),
+        );
+  }
+
+  /// Registra il risultato di un'Analisi OCR completata con successo — campi
+  /// grezzi e non parsati (#31), `rawResponse` preserva l'intera risposta
+  /// strutturata di Claude.
+  Future<void> completaAnalisiOcr({
+    required int id,
+    required String rawResponse,
+    String? title,
+    String? issueNumberLabel,
+    String? publisher,
+    String? seriesName,
+    String? isbn,
+    String? barcode,
+    String? price,
+    DateTime? completedAt,
+  }) {
+    return (_db.update(_db.analisiOcrTable)..where((a) => a.id.equals(id))).write(
+      AnalisiOcrTableCompanion(
+        title: Value(title),
+        issueNumberLabel: Value(issueNumberLabel),
+        publisher: Value(publisher),
+        seriesName: Value(seriesName),
+        isbn: Value(isbn),
+        barcode: Value(barcode),
+        price: Value(price),
+        rawResponse: Value(rawResponse),
+        status: const Value(StatoAnalisiOcr.completata),
+        completedAt: Value(completedAt ?? DateTime.now()),
+      ),
+    );
+  }
+
+  /// Registra un fallimento dell'Analisi OCR — nessun retry automatico
+  /// (destinazione della mappa #27): lo stato resta `fallita`, `errorMessage`
+  /// cattura il motivo per capirlo a posteriori.
+  Future<void> fallisciAnalisiOcr({
+    required int id,
+    required String errorMessage,
+    DateTime? completedAt,
+  }) {
+    return (_db.update(_db.analisiOcrTable)..where((a) => a.id.equals(id))).write(
+      AnalisiOcrTableCompanion(
+        status: const Value(StatoAnalisiOcr.fallita),
+        errorMessage: Value(errorMessage),
+        completedAt: Value(completedAt ?? DateTime.now()),
+      ),
+    );
   }
 
   // --- KPI della Dashboard (§4.1, regole fissate su #2). ---

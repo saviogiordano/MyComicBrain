@@ -1,12 +1,26 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mycomicbrain/core/data/analisi_ocr_pipeline.dart';
+import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
 import 'package:path/path.dart' as p;
+
+/// Sostituisce la pipeline reale (rete/DB) nei test: registra i batch
+/// ricevuti da "Fine" invece di chiamare Claude davvero.
+class _FakeAnalisiOcrPipeline implements AnalisiOcrPipeline {
+  final batchRicevuti = <List<String>>[];
+
+  @override
+  Future<void> avviaBatch(Iterable<String> percorsiImmagine) async {
+    batchRicevuti.add(percorsiImmagine.toList());
+  }
+}
 
 // PNG 1x1 valido: basta a far decodere `Image.file` senza errori nei test.
 const _pngMinimo = <int>[
@@ -31,7 +45,11 @@ void main() {
       XFile((File(p.join(tempDir.path, 'scan_$i.jpg'))..writeAsBytesSync(_pngMinimo)).path),
   ];
 
-  Future<GoRouter> pumpRiepilogo(WidgetTester tester, List<XFile> scansioni) async {
+  Future<GoRouter> pumpRiepilogo(
+    WidgetTester tester,
+    List<XFile> scansioni, {
+    AnalisiOcrPipeline? pipeline,
+  }) async {
     final router = GoRouter(
       initialLocation: '/scansione',
       routes: [
@@ -56,7 +74,14 @@ void main() {
         ),
       ],
     );
-    await tester.pumpWidget(MaterialApp.router(theme: AppTheme.dark, routerConfig: router));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          if (pipeline != null) analisiOcrPipelineProvider.overrideWithValue(pipeline),
+        ],
+        child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
+      ),
+    );
     await tester.tap(find.text('vai al riepilogo'));
     await tester.pumpAndSettle();
     return router;
@@ -82,12 +107,25 @@ void main() {
   });
 
   testWidgets('"Fine" naviga davvero a /dashboard', (tester) async {
-    await pumpRiepilogo(tester, scansioniFinte(1));
+    await pumpRiepilogo(tester, scansioniFinte(1), pipeline: _FakeAnalisiOcrPipeline());
 
     await tester.tap(find.text('Fine'));
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('Riepilogo batch'), findsNothing);
+  });
+
+  testWidgets("'Fine' avvia la pipeline di analisi OCR sull'intero batch", (tester) async {
+    final pipeline = _FakeAnalisiOcrPipeline();
+    final scansioni = scansioniFinte(2);
+
+    await pumpRiepilogo(tester, scansioni, pipeline: pipeline);
+    await tester.tap(find.text('Fine'));
+    await tester.pumpAndSettle();
+
+    expect(pipeline.batchRicevuti, [
+      [for (final s in scansioni) s.path],
+    ]);
   });
 }
