@@ -77,7 +77,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('senza fotocamera mostra il fallback riprovabile e il primo suggerimento (1/5)', (tester) async {
+  testWidgets('senza fotocamera mostra il fallback riprovabile e il primo suggerimento (1/6)', (tester) async {
     await pumpScanner(tester);
 
     expect(find.text('Fotocamera non disponibile'), findsOneWidget);
@@ -85,7 +85,7 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Riprova'), findsOneWidget);
     expect(find.text('Nessuna scansione ancora'), findsOneWidget);
     expect(find.text('Inquadra tutta la copertina'), findsOneWidget);
-    expect(find.text('1/5'), findsOneWidget);
+    expect(find.text('1/6'), findsOneWidget);
   });
 
   testWidgets('"Riprova" ricontrolla il permesso e reinizializza la fotocamera', (tester) async {
@@ -119,7 +119,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Allinea la copertina dritta'), findsOneWidget);
-    expect(find.text('2/5'), findsOneWidget);
+    expect(find.text('2/6'), findsOneWidget);
   });
 
   testWidgets('"Fine" naviga al riepilogo di fine batch (vuoto, nessuna Scansione confermata)', (tester) async {

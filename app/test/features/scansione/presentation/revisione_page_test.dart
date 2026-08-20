@@ -44,6 +44,10 @@ void main() {
     WidgetTester tester, {
     required List<String> percorsiGrezzi,
     required ImageCropService cropService,
+    ScansioneStorage? storageOverride,
+    // Se non-null, appena compare lo stato di errore (#36) preme questo
+    // pulsante ('Riprova' o 'Salta questa foto') esattamente una volta.
+    String? tastoErroreDaPremere,
   }) async {
     List<XFile>? risultato;
     final router = GoRouter(
@@ -74,7 +78,9 @@ void main() {
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
           imageCropServiceProvider.overrideWithValue(cropService),
-          scansioneStorageProvider.overrideWithValue(ScansioneStorage(baseDirectory: () async => tempDir)),
+          scansioneStorageProvider.overrideWithValue(
+            storageOverride ?? ScansioneStorage(baseDirectory: () async => tempDir),
+          ),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
@@ -86,11 +92,19 @@ void main() {
     // non arriva.
     await tester.runAsync(() async {
       await tester.tap(find.text('avvia'));
+      var erroreGestito = false;
       for (var i = 0; i < 50 && risultato == null; i++) {
         // Il delay reale (non solo `pump`) lascia drenare l'event loop vero
         // così le callback di I/O reale (file, drift nativo) arrivano.
         await Future<void>.delayed(const Duration(milliseconds: 20));
         await tester.pump(const Duration(milliseconds: 20));
+
+        if (tastoErroreDaPremere != null &&
+            !erroreGestito &&
+            find.text(tastoErroreDaPremere).evaluate().isNotEmpty) {
+          erroreGestito = true;
+          await tester.tap(find.text(tastoErroreDaPremere));
+        }
       }
     });
 
@@ -149,5 +163,57 @@ void main() {
     expect(percorsiVisti, [grezzo1.path, grezzo2.path]);
     expect(risultato, hasLength(1));
     expect(await db.select(db.scansioni).get(), hasLength(1));
+  });
+
+  testWidgets(
+    '#36 errore nel ritaglio: mostra lo stato di errore invece di restare bloccata, '
+    '"Salta questa foto" passa alla successiva',
+    (tester) async {
+      final grezzo1 = scriviFinta('grezzo1.jpg');
+      final grezzo2 = scriviFinta('grezzo2.jpg');
+      final ritagliato2 = scriviFinta('ritagliato2.jpg');
+
+      final risultato = await pumpEAvvia(
+        tester,
+        percorsiGrezzi: [grezzo1.path, grezzo2.path],
+        cropService: ImageCropService(
+          ritaglia: (path) async {
+            if (path == grezzo1.path) throw Exception('editor di ritaglio non risponde (simulato)');
+            return ritagliato2.path;
+          },
+        ),
+        tastoErroreDaPremere: 'Salta questa foto',
+      );
+
+      expect(risultato, hasLength(1), reason: 'solo la seconda foto, saltando la prima in errore');
+      expect(grezzo1.existsSync(), isFalse, reason: 'saltare pulisce comunque il grezzo in errore');
+    },
+  );
+
+  testWidgets('#36 errore nel salvataggio: "Riprova" rielabora la stessa foto e completa', (tester) async {
+    final grezzo = scriviFinta('grezzo.jpg');
+    final ritagliato = scriviFinta('ritagliato.jpg');
+
+    var tentativiSalvataggio = 0;
+    final storage = ScansioneStorage(
+      baseDirectory: () async {
+        tentativiSalvataggio++;
+        if (tentativiSalvataggio == 1) {
+          throw const FileSystemException('disco pieno (simulato)');
+        }
+        return tempDir;
+      },
+    );
+
+    final risultato = await pumpEAvvia(
+      tester,
+      percorsiGrezzi: [grezzo.path],
+      cropService: ImageCropService(ritaglia: (_) async => ritagliato.path),
+      storageOverride: storage,
+      tastoErroreDaPremere: 'Riprova',
+    );
+
+    expect(risultato, hasLength(1));
+    expect(tentativiSalvataggio, greaterThanOrEqualTo(2));
   });
 }
