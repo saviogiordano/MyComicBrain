@@ -9,7 +9,7 @@ import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/scansione.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// I 5 suggerimenti statici (deciso su #22): ordine per fasi logiche
+/// I 6 suggerimenti statici (deciso su #22): ordine per fasi logiche
 /// (distanza → allineamento → illuminazione → riflessi → messa a fuoco),
 /// nessun feedback in tempo reale — solo testo fisso, avanzamento al tocco.
 class _GuideHint {
@@ -25,6 +25,9 @@ const _guideHints = <_GuideHint>[
   _GuideHint(Icons.wb_sunny_outlined, 'Cerca più luce'),
   _GuideHint(Icons.flare_outlined, 'Evita i riflessi'),
   _GuideHint(Icons.center_focus_strong_outlined, 'Tieni ferma la fotocamera'),
+  // Distanza minima di messa a fuoco (#35): sotto i ~10cm l'autofocus non
+  // riesce a convergere su molti device e il tap-to-focus non ha effetto.
+  _GuideHint(Icons.zoom_out, "Allontana un po' se è sfocata"),
 ];
 
 /// Stato di errore della fotocamera (deciso su #25): "riprovabile" copre
@@ -190,12 +193,18 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
             onApriImpostazioni: _apriImpostazioni,
           ),
           if (_controller != null)
-            const Center(
-              child: AspectRatio(
-                aspectRatio: coverAspectRatio,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
-                  child: CustomPaint(painter: _CornerBracketsPainter()),
+            const IgnorePointer(
+              // Puro overlay decorativo: senza IgnorePointer, CustomPaint
+              // assorbe ogni tocco nel suo riquadro (RenderCustomPaint.hitTestSelf
+              // è true di default senza un hitTest custom), bloccando il
+              // tap-to-focus (#35) proprio al centro dello schermo.
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: coverAspectRatio,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
+                    child: CustomPaint(painter: _CornerBracketsPainter()),
+                  ),
                 ),
               ),
             ),
