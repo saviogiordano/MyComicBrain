@@ -222,7 +222,7 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
   }
 }
 
-class _CameraBackground extends StatelessWidget {
+class _CameraBackground extends StatefulWidget {
   const _CameraBackground({
     required this.controller,
     required this.errore,
@@ -236,13 +236,65 @@ class _CameraBackground extends StatelessWidget {
   final VoidCallback onApriImpostazioni;
 
   @override
-  Widget build(BuildContext context) {
-    final controller = this.controller;
-    if (controller != null && controller.value.isInitialized) {
-      return ColoredBox(color: Colors.black, child: Center(child: CameraPreview(controller)));
+  State<_CameraBackground> createState() => _CameraBackgroundState();
+}
+
+class _CameraBackgroundState extends State<_CameraBackground> {
+  Offset? _puntoFocus;
+
+  /// Tap-to-focus (#35): normalizza il tocco alle coordinate (0,0)-(1,1)
+  /// richieste dall'API `camera`, usando le dimensioni reali del riquadro
+  /// di preview (ottenute tramite lo slot `child` di `CameraPreview`, non
+  /// dello schermo intero) per restare precisi anche col letterboxing.
+  Future<void> _gestisciTocco(TapUpDetails details, Size areaPreview) async {
+    final controller = widget.controller;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    final locale = details.localPosition;
+    setState(() => _puntoFocus = locale);
+
+    final normalizzato = Offset(
+      (locale.dx / areaPreview.width).clamp(0.0, 1.0),
+      (locale.dy / areaPreview.height).clamp(0.0, 1.0),
+    );
+    try {
+      await controller.setExposurePoint(normalizzato);
+      await controller.setFocusPoint(normalizzato);
+    } on CameraException {
+      // Alcuni device non supportano il focus manuale: nessun errore da mostrare.
     }
 
-    final errore = this.errore;
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (mounted && _puntoFocus == locale) setState(() => _puntoFocus = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    if (controller != null && controller.value.isInitialized) {
+      return ColoredBox(
+        color: Colors.black,
+        child: Center(
+          child: CameraPreview(
+            controller,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final areaPreview = constraints.biggest;
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (details) => _gestisciTocco(details, areaPreview),
+                  child: Stack(
+                    children: [if (_puntoFocus != null) _ReticoloFocus(centro: _puntoFocus!)],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    final errore = widget.errore;
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: RadialGradient(
@@ -255,10 +307,40 @@ class _CameraBackground extends StatelessWidget {
           : Center(
               child: _CameraErrorMessage(
                 errore: errore,
-                onRiprova: onRiprova,
-                onApriImpostazioni: onApriImpostazioni,
+                onRiprova: widget.onRiprova,
+                onApriImpostazioni: widget.onApriImpostazioni,
               ),
             ),
+    );
+  }
+}
+
+/// Reticolo che compare brevemente nel punto toccato per il tap-to-focus (#35).
+class _ReticoloFocus extends StatelessWidget {
+  const _ReticoloFocus({required this.centro});
+
+  final Offset centro;
+
+  static const _lato = 64.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: centro.dx - _lato / 2,
+      top: centro.dy - _lato / 2,
+      child: IgnorePointer(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 1, end: 0),
+          duration: const Duration(milliseconds: 700),
+          curve: Curves.easeOut,
+          builder: (context, opacity, child) => Opacity(opacity: opacity, child: child),
+          child: Container(
+            width: _lato,
+            height: _lato,
+            decoration: BoxDecoration(border: Border.all(color: AppColors.accent, width: 2), borderRadius: AppRadii.smRadius),
+          ),
+        ),
+      ),
     );
   }
 }
