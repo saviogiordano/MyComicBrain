@@ -31,12 +31,16 @@ L'analisi AI della copertina (OCR, requisito §6.1) chiama l'API di Anthropic di
 
 1. Copia il template: `cp dart_define.example.json dart_define.json` (dalla cartella `app/`).
 2. Apri `dart_define.json` e imposta `ANTHROPIC_API_KEY` con la tua chiave Anthropic. Il file è in `.gitignore`, resta locale.
-3. Passa il file a ogni comando `flutter run` / `flutter build`:
+3. Usa `scripts/flutter.sh` al posto di `flutter` per i comandi `run` e `build`: rileva `dart_define.json` e aggiunge automaticamente `--dart-define-from-file`, così i comandi restano quelli standard senza ripeterlo ogni volta:
+   ```bash
+   scripts/flutter.sh run -d "iPhone 16"
+   ```
+   Equivalente manuale, se preferisci non usare lo script:
    ```bash
    flutter run --dart-define-from-file=dart_define.json -d "iPhone 16"
    ```
 
-Senza questo passaggio `ClaudeApiConfig.apiKey` resta vuota e `ClaudeApiConfig.isConfigured` è `false`.
+Senza `dart_define.json` (o senza passare il flag manualmente) `ClaudeApiConfig.apiKey` resta vuota e `ClaudeApiConfig.isConfigured` è `false`.
 
 ## Eseguire su iOS Simulator
 
@@ -52,7 +56,7 @@ Poi lancia l'app:
 
 ```bash
 flutter devices                       # conferma che il simulatore compaia in lista
-flutter run -d "iPhone 16"            # o l'id del device mostrato da `flutter devices`
+scripts/flutter.sh run -d "iPhone 16" # o l'id del device mostrato da `flutter devices`
 ```
 
 ## Eseguire su Android emulator
@@ -68,10 +72,10 @@ Poi lancia l'app:
 
 ```bash
 flutter devices                       # conferma che l'emulatore compaia in lista
-flutter run -d emulator-5554          # o l'id mostrato da `flutter devices`
+scripts/flutter.sh run -d emulator-5554  # o l'id mostrato da `flutter devices`
 ```
 
-In alternativa, con un device fisico Android collegato via USB (debug USB attivo), `flutter devices` lo elenca allo stesso modo e puoi lanciarlo con `flutter run -d <id-device>`.
+In alternativa, con un device fisico Android collegato via USB (debug USB attivo), `flutter devices` lo elenca allo stesso modo e puoi lanciarlo con `scripts/flutter.sh run -d <id-device>`.
 
 ## Eseguire su device fisico
 
@@ -88,9 +92,9 @@ Utile in particolare per testare lo scanner (fotocamera reale, permessi, prestaz
    ```
 5. Lancia l'app:
    ```bash
-   flutter run -d <id-device>          # es. l'UDID o il nome mostrato da flutter devices
+   scripts/flutter.sh run -d <id-device>  # es. l'UDID o il nome mostrato da flutter devices
    ```
-6. **Primo avvio: "Untrusted Developer"** — se l'app non parte e su iPhone appare un errore, vai su *Impostazioni → Generali → VPN e gestione dispositivo*, seleziona il tuo Apple ID/profilo sviluppatore e tocca *Trust*. Poi riavvia l'app dalla home o rilancia `flutter run`.
+6. **Primo avvio: "Untrusted Developer"** — se l'app non parte e su iPhone appare un errore, vai su *Impostazioni → Generali → VPN e gestione dispositivo*, seleziona il tuo Apple ID/profilo sviluppatore e tocca *Trust*. Poi riavvia l'app dalla home o rilancia `scripts/flutter.sh run`.
 7. **Permesso fotocamera** — al primo utilizzo dello scanner iOS mostra il prompt di sistema (testo da `NSCameraUsageDescription` in `ios/Runner/Info.plist`); se negato per errore, va riabilitato da *Impostazioni → Privacy e sicurezza → Fotocamera → MyComicBrain*.
 
 ### Android (device fisico)
@@ -105,7 +109,7 @@ Utile in particolare per testare lo scanner (fotocamera reale, permessi, prestaz
    ```
 5. Lancia l'app:
    ```bash
-   flutter run -d <id-device>
+   scripts/flutter.sh run -d <id-device>
    ```
 6. **Debug via Wi-Fi (opzionale, senza cavo dopo il pairing iniziale)**:
    ```bash
