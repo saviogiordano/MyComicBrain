@@ -57,6 +57,17 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
   int _hintIndex = 0;
   final _captures = <XFile>[];
 
+  // #36: distingue "l'abbiamo appena sospesa noi per inactive" da "non
+  // l'abbiamo mai inizializzata / errore permanente" (dove il resume non
+  // deve riprovare da solo, serve "Riprova"). Senza questo flag il solo
+  // controllo "controller == null" al resume era sempre vero anche subito
+  // dopo averlo azzerato noi nel ramo inactive, quindi il ramo resumed non
+  // veniva mai raggiunto e la fotocamera restava bloccata sullo spinner per
+  // sempre — capitava già solo aprendo l'editor di ritaglio nativo di #17,
+  // che su iOS fa risultare l'app momentaneamente inactive/resumed pur
+  // restando nella stessa app.
+  bool _fotocameraSospesa = false;
+
   @override
   void initState() {
     super.initState();
@@ -66,13 +77,14 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) return;
-
     if (state == AppLifecycleState.inactive) {
+      final controller = _controller;
+      if (controller == null || !controller.value.isInitialized) return;
       unawaited(controller.dispose());
       _controller = null;
-    } else if (state == AppLifecycleState.resumed) {
+      _fotocameraSospesa = true;
+    } else if (state == AppLifecycleState.resumed && _fotocameraSospesa) {
+      _fotocameraSospesa = false;
       unawaited(_initCamera());
     }
   }
