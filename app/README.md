@@ -25,13 +25,14 @@ Il codice generato da Drift (`lib/core/data/database.g.dart`) è già committato
 dart run build_runner build --delete-conflicting-outputs
 ```
 
-## Configurare la chiave API Claude
+## Configurare le chiavi API dei provider AI
 
-L'analisi AI della copertina (OCR, requisito §6.1) chiama l'API di Anthropic direttamente dal client. La chiave non va mai committata: viene incorporata a build-time via `--dart-define-from-file`.
+L'analisi AI della copertina (OCR §6.1 + computer vision §6.2) chiama l'API di un provider AI direttamente dal client — Claude di default, OpenAI come alternativa selezionabile (vedi `CoverAnalysisProviderConfig`). Le chiavi non vanno mai committate: vengono incorporate a build-time via `--dart-define-from-file`.
 
 1. Copia il template: `cp dart_define.example.json dart_define.json` (dalla cartella `app/`).
-2. Apri `dart_define.json` e imposta `ANTHROPIC_API_KEY` con la tua chiave Anthropic. Il file è in `.gitignore`, resta locale.
-3. Usa `scripts/flutter.sh` al posto di `flutter` per i comandi `run` e `build`: rileva `dart_define.json` e aggiunge automaticamente `--dart-define-from-file`, così i comandi restano quelli standard senza ripeterlo ogni volta:
+2. Apri `dart_define.json` e imposta `ANTHROPIC_API_KEY` con la tua chiave Anthropic (obbligatoria col provider di default). Il file è in `.gitignore`, resta locale.
+3. Se vuoi usare OpenAI invece di Claude: imposta `OPENAI_API_KEY` con la tua chiave OpenAI e `COVER_ANALYSIS_PROVIDER` a `"openai"` (default `"claude"`, nessuna UI per la scelta).
+4. Usa `scripts/flutter.sh` al posto di `flutter` per i comandi `run` e `build`: rileva `dart_define.json` e aggiunge automaticamente `--dart-define-from-file`, così i comandi restano quelli standard senza ripeterlo ogni volta:
    ```bash
    scripts/flutter.sh run -d "iPhone 16"
    ```
@@ -40,7 +41,7 @@ L'analisi AI della copertina (OCR, requisito §6.1) chiama l'API di Anthropic di
    flutter run --dart-define-from-file=dart_define.json -d "iPhone 16"
    ```
 
-Senza `dart_define.json` (o senza passare il flag manualmente) `ClaudeApiConfig.apiKey` resta vuota e `ClaudeApiConfig.isConfigured` è `false`.
+Senza `dart_define.json` (o senza passare il flag manualmente) `ClaudeApiConfig.apiKey`/`OpenAiApiConfig.apiKey` restano vuote e `isConfigured` è `false`.
 
 ## Eseguire su iOS Simulator
 

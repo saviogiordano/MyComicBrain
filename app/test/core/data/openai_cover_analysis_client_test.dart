@@ -3,8 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
+import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
 
 /// `http.Client` finto: risponde con [risposta]/[statusCode] fissi e
 /// registra l'ultima richiesta inviata, senza rete reale.
@@ -22,9 +22,27 @@ class _FakeHttpClient extends http.BaseClient {
   }
 }
 
-String _rispostaClaude(Map<String, dynamic> campi) => jsonEncode({
-  'content': [
-    {'type': 'text', 'text': jsonEncode(campi)},
+String _rispostaOpenAi(Map<String, dynamic> campi) => jsonEncode({
+  'output': [
+    {
+      'type': 'message',
+      'role': 'assistant',
+      'content': [
+        {'type': 'output_text', 'text': jsonEncode(campi)},
+      ],
+    },
+  ],
+});
+
+String _rispostaRifiuto(String motivo) => jsonEncode({
+  'output': [
+    {
+      'type': 'message',
+      'role': 'assistant',
+      'content': [
+        {'type': 'refusal', 'refusal': motivo},
+      ],
+    },
   ],
 });
 
@@ -48,8 +66,8 @@ const Map<String, dynamic> _campiCompleti = {
 
 void main() {
   test('estrae i campi grezzi da una risposta 200 conforme allo schema', () async {
-    final client = ClaudeCoverAnalysisClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaClaude(_campiCompleti)),
+    final client = OpenAiCoverAnalysisClient(
+      httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaOpenAi(_campiCompleti)),
     );
 
     final risultato = await client.estraiCopertina(Uint8List(0));
@@ -69,12 +87,12 @@ void main() {
     expect(risultato.recognizedSeriesLogo, isNull);
   });
 
-  test("un campo non trovato da Claude resta null, non genera un'eccezione", () async {
+  test("un campo non trovato resta null, non genera un'eccezione", () async {
     final campi = Map<String, dynamic>.from(_campiCompleti)
       ..['title'] = null
       ..['publisher'] = null;
-    final client = ClaudeCoverAnalysisClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaClaude(campi)),
+    final client = OpenAiCoverAnalysisClient(
+      httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaOpenAi(campi)),
     );
 
     final risultato = await client.estraiCopertina(Uint8List(0));
@@ -84,31 +102,30 @@ void main() {
   });
 
   test(
-    'un elemento di computer vision non riconosciuto resta lista vuota/null, non genera '
-    "un'eccezione",
+    'un rifiuto del modello (blocco refusal) solleva CoverAnalysisException con il motivo',
     () async {
-      final campi = Map<String, dynamic>.from(_campiCompleti)
-        ..['characters'] = <String>[]
-        ..['coverStyleTags'] = <String>[]
-        ..['visualElementTags'] = <String>[]
-        ..['recognizedPublisherLogo'] = null
-        ..['recognizedSeriesLogo'] = null;
-      final client = ClaudeCoverAnalysisClient(
-        httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaClaude(campi)),
+      final client = OpenAiCoverAnalysisClient(
+        httpClient: _FakeHttpClient(
+          statusCode: 200,
+          risposta: _rispostaRifiuto('non posso identificare persone reali in una foto'),
+        ),
       );
 
-      final risultato = await client.estraiCopertina(Uint8List(0));
-
-      expect(risultato.characters, isEmpty);
-      expect(risultato.coverStyleTags, isEmpty);
-      expect(risultato.visualElementTags, isEmpty);
-      expect(risultato.recognizedPublisherLogo, isNull);
-      expect(risultato.recognizedSeriesLogo, isNull);
+      await expectLater(
+        () => client.estraiCopertina(Uint8List(0)),
+        throwsA(
+          isA<CoverAnalysisException>().having(
+            (e) => e.message,
+            'message',
+            contains('non posso identificare persone reali'),
+          ),
+        ),
+      );
     },
   );
 
   test('una risposta HTTP non-2xx solleva CoverAnalysisException', () async {
-    final client = ClaudeCoverAnalysisClient(
+    final client = OpenAiCoverAnalysisClient(
       httpClient: _FakeHttpClient(statusCode: 500, risposta: 'errore interno'),
     );
 
@@ -118,9 +135,9 @@ void main() {
     );
   });
 
-  test('una risposta senza contenuto testuale solleva CoverAnalysisException', () async {
-    final client = ClaudeCoverAnalysisClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: jsonEncode({'content': <dynamic>[]})),
+  test('una risposta senza messaggio in output solleva CoverAnalysisException', () async {
+    final client = OpenAiCoverAnalysisClient(
+      httpClient: _FakeHttpClient(statusCode: 200, risposta: jsonEncode({'output': <dynamic>[]})),
     );
 
     await expectLater(

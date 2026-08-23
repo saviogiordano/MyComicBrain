@@ -3,22 +3,24 @@ import 'dart:io';
 
 import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
+import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 
 /// Pipeline di analisi copertina di fine batch (§6.1 OCR + §6.2 computer
 /// vision, deciso su #27/#32, esteso su #49): per ogni Scansione appena
-/// confermata, chiama Claude, fa il parsing della risposta secondo lo schema
-/// deciso (#31, #47) e persiste il risultato — completata o fallita, nessun
-/// retry automatico. Le Scansioni del batch sono processate in sequenza: un
-/// batch di fine sessione non ha requisiti di concorrenza, e restare
-/// sequenziali evita di sommare più chiamate in parallelo contro il rate
-/// limit (vedi ricerca #28).
+/// confermata, chiama il provider AI configurato (Claude di default, vedi
+/// `CoverAnalysisProviderConfig`), fa il parsing della risposta secondo lo
+/// schema deciso (#31, #47) e persiste il risultato — completata o fallita,
+/// nessun retry automatico. Le Scansioni del batch sono processate in
+/// sequenza: un batch di fine sessione non ha requisiti di concorrenza, e
+/// restare sequenziali evita di sommare più chiamate in parallelo contro il
+/// rate limit (vedi ricerca #28).
 class AnalisiCopertinaPipeline {
-  AnalisiCopertinaPipeline({required ComicsRepository repository, ClaudeCoverAnalysisClient? client})
+  AnalisiCopertinaPipeline({required ComicsRepository repository, CoverAnalysisClient? client})
     : _repository = repository,
       _client = client ?? ClaudeCoverAnalysisClient();
 
   final ComicsRepository _repository;
-  final ClaudeCoverAnalysisClient _client;
+  final CoverAnalysisClient _client;
 
   /// Avvia l'analisi per ogni Scansione del batch, identificata dal
   /// percorso immagine già persistito (#21). Ogni Scansione è indipendente:

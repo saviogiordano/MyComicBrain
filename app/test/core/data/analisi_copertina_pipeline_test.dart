@@ -4,30 +4,30 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
-import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
+import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:path/path.dart' as p;
 
-/// [ClaudeCoverAnalysisClient] finto: restituisce [risultato] o solleva
+/// [CoverAnalysisClient] finto: restituisce [risultato] o solleva
 /// [eccezione] senza mai chiamare la rete — usato per isolare la pipeline
-/// dall'API.
-class _FakeClaudeCoverAnalysisClient implements ClaudeCoverAnalysisClient {
-  _FakeClaudeCoverAnalysisClient({this.risultato, this.eccezione});
+/// dal provider AI reale (Claude/OpenAI).
+class _FakeCoverAnalysisClient implements CoverAnalysisClient {
+  _FakeCoverAnalysisClient({this.risultato, this.eccezione});
 
-  final ClaudeCoverAnalysisResult? risultato;
+  final CoverAnalysisResult? risultato;
   final Exception? eccezione;
 
   @override
-  Future<ClaudeCoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
+  Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
     final eccezione = this.eccezione;
     if (eccezione != null) throw eccezione;
     return risultato!;
   }
 }
 
-const _risultatoCompleto = ClaudeCoverAnalysisResult(
+const _risultatoCompleto = CoverAnalysisResult(
   title: 'Amazing Spider-Man',
   issueNumberLabel: '300',
   publisher: 'Marvel',
@@ -73,7 +73,7 @@ void main() {
     final path = await scansioneConImmagine('cover.jpg');
     final pipeline = AnalisiCopertinaPipeline(
       repository: repo,
-      client: _FakeClaudeCoverAnalysisClient(risultato: _risultatoCompleto),
+      client: _FakeCoverAnalysisClient(risultato: _risultatoCompleto),
     );
 
     await pipeline.avviaBatch([path]);
@@ -101,9 +101,7 @@ void main() {
     final path = await scansioneConImmagine('cover.jpg');
     final pipeline = AnalisiCopertinaPipeline(
       repository: repo,
-      client: _FakeClaudeCoverAnalysisClient(
-        eccezione: ClaudeCoverAnalysisException('rete assente'),
-      ),
+      client: _FakeCoverAnalysisClient(eccezione: CoverAnalysisException('rete assente')),
     );
 
     await pipeline.avviaBatch([path]);
@@ -119,9 +117,9 @@ void main() {
     final ok = await scansioneConImmagine('ok.jpg');
     final path1 = await scansioneConImmagine('ko.jpg');
     var chiamate = 0;
-    final client = _ClaudeCoverAnalysisClientAlternante(
+    final client = _CoverAnalysisClientAlternante(
       risposte: [
-        () => throw ClaudeCoverAnalysisException('fallita'),
+        () => throw CoverAnalysisException('fallita'),
         () => _risultatoCompleto,
       ],
       onChiamata: () => chiamate++,
@@ -140,15 +138,15 @@ void main() {
   });
 }
 
-class _ClaudeCoverAnalysisClientAlternante implements ClaudeCoverAnalysisClient {
-  _ClaudeCoverAnalysisClientAlternante({required this.risposte, required this.onChiamata});
+class _CoverAnalysisClientAlternante implements CoverAnalysisClient {
+  _CoverAnalysisClientAlternante({required this.risposte, required this.onChiamata});
 
-  final List<ClaudeCoverAnalysisResult Function()> risposte;
+  final List<CoverAnalysisResult Function()> risposte;
   final void Function() onChiamata;
   var _indice = 0;
 
   @override
-  Future<ClaudeCoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
+  Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
     onChiamata();
     return risposte[_indice++]();
   }
