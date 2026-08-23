@@ -4,11 +4,31 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
+import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/identificazione_pipeline.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
+import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:path/path.dart' as p;
+
+/// [ComicVineClient] finto per l'Identificazione agganciata a fine pipeline:
+/// nessuna chiamata di rete, registra solo se interpellato.
+class _FakeComicVineClient implements ComicVineClient {
+  bool chiamato = false;
+
+  @override
+  Future<List<ComicVineIssueMatch>> cercaIssue({
+    required String? title,
+    required String? seriesName,
+    required String? issueNumberLabel,
+    required String? publisher,
+  }) async {
+    chiamato = true;
+    return const [];
+  }
+}
 
 /// [CoverAnalysisClient] finto: restituisce [risultato] o solleva
 /// [eccezione] senza mai chiamare la rete — usato per isolare la pipeline
@@ -40,7 +60,9 @@ const _risultatoCompleto = CoverAnalysisResult(
   visualElementTags: ['sfondo con esplosione'],
   recognizedPublisherLogo: 'Marvel',
   recognizedSeriesLogo: null,
-  raw: {'authors': ['David Michelinie']},
+  raw: {
+    'authors': ['David Michelinie'],
+  },
 );
 
 void main() {
@@ -49,8 +71,15 @@ void main() {
   late ComicsRepository repo;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('analisi_copertina_pipeline_test_');
-    db = AppDatabase(DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true));
+    tempDir = await Directory.systemTemp.createTemp(
+      'analisi_copertina_pipeline_test_',
+    );
+    db = AppDatabase(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
     repo = ComicsRepository(db);
   });
 
@@ -97,27 +126,34 @@ void main() {
     expect(analisi.completedAt, isNotNull);
   });
 
-  test('fallimento: nessuna eccezione propagata, stato fallita con errorMessage', () async {
-    final path = await scansioneConImmagine('cover.jpg');
-    final pipeline = AnalisiCopertinaPipeline(
-      repository: repo,
-      client: _FakeCoverAnalysisClient(eccezione: CoverAnalysisException('rete assente')),
-    );
+  test(
+    'fallimento: nessuna eccezione propagata, stato fallita con errorMessage',
+    () async {
+      final path = await scansioneConImmagine('cover.jpg');
+      final pipeline = AnalisiCopertinaPipeline(
+        repository: repo,
+        client: _FakeCoverAnalysisClient(
+          eccezione: CoverAnalysisException('rete assente'),
+        ),
+      );
 
-    await pipeline.avviaBatch([path]);
+      await pipeline.avviaBatch([path]);
 
-    final analisi = await unicaAnalisi();
-    expect(analisi.status, StatoAnalisiCopertina.fallita);
-    expect(analisi.errorMessage, contains('rete assente'));
-    expect(analisi.title, isNull);
-    expect(analisi.characters, isEmpty);
-  });
+      final analisi = await unicaAnalisi();
+      expect(analisi.status, StatoAnalisiCopertina.fallita);
+      expect(analisi.errorMessage, contains('rete assente'));
+      expect(analisi.title, isNull);
+      expect(analisi.characters, isEmpty);
+    },
+  );
 
   test('riprova: riusa la riga esistente e la porta a completata', () async {
     final path = await scansioneConImmagine('cover.jpg');
     final pipelineFallita = AnalisiCopertinaPipeline(
       repository: repo,
-      client: _FakeCoverAnalysisClient(eccezione: CoverAnalysisException('timeout')),
+      client: _FakeCoverAnalysisClient(
+        eccezione: CoverAnalysisException('timeout'),
+      ),
     );
     await pipelineFallita.avviaBatch([path]);
     final analisiFallita = await unicaAnalisi();
@@ -130,57 +166,151 @@ void main() {
     await pipelineRiprova.riprova(path);
 
     final righe = await db.select(db.analisiCopertinaTable).get();
-    expect(righe, hasLength(1), reason: 'il retry non deve creare una seconda riga');
+    expect(
+      righe,
+      hasLength(1),
+      reason: 'il retry non deve creare una seconda riga',
+    );
     expect(righe.single.id, analisiFallita.id);
     expect(righe.single.status, StatoAnalisiCopertina.completata);
     expect(righe.single.errorMessage, isNull);
     expect(righe.single.title, 'Amazing Spider-Man');
   });
 
-  test('riprova: un secondo fallimento aggiorna errorMessage sulla stessa riga', () async {
+  test(
+    'riprova: un secondo fallimento aggiorna errorMessage sulla stessa riga',
+    () async {
+      final path = await scansioneConImmagine('cover.jpg');
+      final pipeline = AnalisiCopertinaPipeline(
+        repository: repo,
+        client: _FakeCoverAnalysisClient(
+          eccezione: CoverAnalysisException('timeout'),
+        ),
+      );
+      await pipeline.avviaBatch([path]);
+      final primoId = (await unicaAnalisi()).id;
+
+      await pipeline.riprova(path);
+
+      final analisi = await unicaAnalisi();
+      expect(analisi.id, primoId);
+      expect(analisi.status, StatoAnalisiCopertina.fallita);
+      expect(analisi.errorMessage, contains('timeout'));
+    },
+  );
+
+  test(
+    "successo: aggancia subito l'Identificazione della stessa Scansione",
+    () async {
+      final path = await scansioneConImmagine('cover.jpg');
+      final comicVine = _FakeComicVineClient();
+      final pipeline = AnalisiCopertinaPipeline(
+        repository: repo,
+        client: _FakeCoverAnalysisClient(risultato: _risultatoCompleto),
+        identificazionePipeline: IdentificazionePipeline(
+          repository: repo,
+          comicVineClient: comicVine,
+        ),
+      );
+
+      await pipeline.avviaBatch([path]);
+
+      expect(comicVine.chiamato, isTrue);
+      final identificazione = await db
+          .select(db.identificazioneTable)
+          .getSingle();
+      expect(identificazione.status, StatoIdentificazione.completata);
+    },
+  );
+
+  test('fallimento: nessuna Identificazione viene avviata', () async {
     final path = await scansioneConImmagine('cover.jpg');
+    final comicVine = _FakeComicVineClient();
     final pipeline = AnalisiCopertinaPipeline(
       repository: repo,
-      client: _FakeCoverAnalysisClient(eccezione: CoverAnalysisException('timeout')),
+      client: _FakeCoverAnalysisClient(
+        eccezione: CoverAnalysisException('rete assente'),
+      ),
+      identificazionePipeline: IdentificazionePipeline(
+        repository: repo,
+        comicVineClient: comicVine,
+      ),
     );
+
     await pipeline.avviaBatch([path]);
-    final primoId = (await unicaAnalisi()).id;
 
-    await pipeline.riprova(path);
-
-    final analisi = await unicaAnalisi();
-    expect(analisi.id, primoId);
-    expect(analisi.status, StatoAnalisiCopertina.fallita);
-    expect(analisi.errorMessage, contains('timeout'));
+    expect(comicVine.chiamato, isFalse);
+    final righe = await db.select(db.identificazioneTable).get();
+    expect(righe, isEmpty);
   });
 
-  test('il fallimento di una Scansione non blocca le successive del batch', () async {
-    final ok = await scansioneConImmagine('ok.jpg');
-    final path1 = await scansioneConImmagine('ko.jpg');
-    var chiamate = 0;
-    final client = _CoverAnalysisClientAlternante(
-      risposte: [
-        () => throw CoverAnalysisException('fallita'),
-        () => _risultatoCompleto,
-      ],
-      onChiamata: () => chiamate++,
-    );
-    final pipeline = AnalisiCopertinaPipeline(repository: repo, client: client);
+  test(
+    "riprova andato a buon fine: aggancia anche lì l'Identificazione",
+    () async {
+      final path = await scansioneConImmagine('cover.jpg');
+      final pipelineFallita = AnalisiCopertinaPipeline(
+        repository: repo,
+        client: _FakeCoverAnalysisClient(
+          eccezione: CoverAnalysisException('timeout'),
+        ),
+      );
+      await pipelineFallita.avviaBatch([path]);
 
-    await pipeline.avviaBatch([path1, ok]);
+      final comicVine = _FakeComicVineClient();
+      final pipelineRiprova = AnalisiCopertinaPipeline(
+        repository: repo,
+        client: _FakeCoverAnalysisClient(risultato: _risultatoCompleto),
+        identificazionePipeline: IdentificazionePipeline(
+          repository: repo,
+          comicVineClient: comicVine,
+        ),
+      );
+      await pipelineRiprova.riprova(path);
 
-    expect(chiamate, 2);
-    final analisi = await (db.select(db.analisiCopertinaTable)
-          ..orderBy([(a) => OrderingTerm.asc(a.id)]))
-        .get();
-    expect(analisi, hasLength(2));
-    expect(analisi[0].status, StatoAnalisiCopertina.fallita);
-    expect(analisi[1].status, StatoAnalisiCopertina.completata);
-  });
+      expect(comicVine.chiamato, isTrue);
+      final identificazione = await db
+          .select(db.identificazioneTable)
+          .getSingle();
+      expect(identificazione.status, StatoIdentificazione.completata);
+    },
+  );
+
+  test(
+    'il fallimento di una Scansione non blocca le successive del batch',
+    () async {
+      final ok = await scansioneConImmagine('ok.jpg');
+      final path1 = await scansioneConImmagine('ko.jpg');
+      var chiamate = 0;
+      final client = _CoverAnalysisClientAlternante(
+        risposte: [
+          () => throw CoverAnalysisException('fallita'),
+          () => _risultatoCompleto,
+        ],
+        onChiamata: () => chiamate++,
+      );
+      final pipeline = AnalisiCopertinaPipeline(
+        repository: repo,
+        client: client,
+      );
+
+      await pipeline.avviaBatch([path1, ok]);
+
+      expect(chiamate, 2);
+      final analisi = await (db.select(
+        db.analisiCopertinaTable,
+      )..orderBy([(a) => OrderingTerm.asc(a.id)])).get();
+      expect(analisi, hasLength(2));
+      expect(analisi[0].status, StatoAnalisiCopertina.fallita);
+      expect(analisi[1].status, StatoAnalisiCopertina.completata);
+    },
+  );
 }
 
 class _CoverAnalysisClientAlternante implements CoverAnalysisClient {
-  _CoverAnalysisClientAlternante({required this.risposte, required this.onChiamata});
+  _CoverAnalysisClientAlternante({
+    required this.risposte,
+    required this.onChiamata,
+  });
 
   final List<CoverAnalysisResult Function()> risposte;
   final void Function() onChiamata;

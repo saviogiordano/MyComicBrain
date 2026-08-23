@@ -7,10 +7,10 @@ import 'package:mycomicbrain/core/data/matching_engine.dart';
 /// Candidati col motore di matching (#52/#57) — prima sul catalogo interno,
 /// poi, solo se nessun candidato interno supera la soglia, su ComicVine — e
 /// li persiste uno per uno. Stesso pattern a stati/nessun-retry di
-/// `AnalisiCopertinaPipeline`. L'aggancio automatico a fine pipeline di
-/// Analisi Copertina (il trigger) è fuori scope di questo ticket — vedi
-/// [Agganciare l'Identificazione automatica a fine pipeline di Analisi
-/// Copertina](https://github.com/saviogiordano/MyComicBrain/issues/58).
+/// `AnalisiCopertinaPipeline`. Il trigger automatico a fine pipeline di
+/// Analisi Copertina vive in `AnalisiCopertinaPipeline` (deciso su #58), non
+/// qui: questa classe si limita a fare l'Identificazione di una Scansione
+/// già `completata`, senza sapere chi la invoca.
 class IdentificazionePipeline {
   IdentificazionePipeline({
     required ComicsRepository repository,
@@ -30,7 +30,9 @@ class IdentificazionePipeline {
   /// retry automatico, come `AnalisiCopertinaPipeline`.
   Future<void> identifica({required int scansioneId}) async {
     final analisi = await _repository.analisiCopertinaPerScansione(scansioneId);
-    final identificazioneId = await _repository.avviaIdentificazione(scansioneId: scansioneId);
+    final identificazioneId = await _repository.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
 
     try {
       final catalogo = await _repository.catalogoPerMatching();
@@ -73,7 +75,10 @@ class IdentificazionePipeline {
 
       await _repository.completaIdentificazione(id: identificazioneId);
     } on ComicVineException catch (e) {
-      await _repository.fallisciIdentificazione(id: identificazioneId, errorMessage: e.toString());
+      await _repository.fallisciIdentificazione(
+        id: identificazioneId,
+        errorMessage: e.toString(),
+      );
     }
   }
 }
