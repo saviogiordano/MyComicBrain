@@ -3,6 +3,7 @@ import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
+import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 
 /// Espone il dominio del catalogo (opera/edizione/copia, §36) all'UI senza
@@ -324,6 +325,66 @@ class ComicsRepository {
     return (_db.update(_db.candidatiTable)..where((c) => c.id.equals(id))).write(
       const CandidatiTableCompanion(scelto: Value(true)),
     );
+  }
+
+  /// La riga `AnalisiCopertina` completata di questa Scansione — letta dal
+  /// motore di matching (#52/#57) per generare i Candidati di
+  /// un'Identificazione. Presuppone che l'Analisi Copertina sia già
+  /// `completata`: la pipeline (§6.3) avvia l'Identificazione solo dopo,
+  /// stesso ordine del requisito.
+  Future<AnalisiCopertinaTableData> analisiCopertinaPerScansione(int scansioneId) {
+    return (_db.select(
+      _db.analisiCopertinaTable,
+    )..where((a) => a.scansioneId.equals(scansioneId))).getSingle();
+  }
+
+  /// Il catalogo interno (Opere/Serie/Edizioni) con Opera/Serie già risolte
+  /// via join, pronto per il motore di matching (#52/#57) — nessun filtro:
+  /// ogni Edizione è un candidato interno potenziale a prescindere da quante
+  /// Copie possiede.
+  Future<List<EdizioneCatalogo>> catalogoPerMatching() {
+    final query = _db.select(_db.edizioni).join([
+      innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+      leftOuterJoin(_db.serieTable, _db.serieTable.id.equalsExp(_db.edizioni.serieId)),
+    ]);
+    return query.get().then(
+      (rows) => [
+        for (final row in rows)
+          EdizioneCatalogo(
+            edizioneId: row.readTable(_db.edizioni).id,
+            title: row.readTable(_db.opere).title,
+            serieId: row.readTableOrNull(_db.serieTable)?.id,
+            seriesName: row.readTableOrNull(_db.serieTable)?.name,
+            publisher: row.readTable(_db.edizioni).publisher,
+            issueNumber: row.readTable(_db.edizioni).issueNumber,
+            issueNumberLabel: row.readTable(_db.edizioni).issueNumberLabel,
+            coverImage: row.readTable(_db.edizioni).coverImage,
+          ),
+      ],
+    );
+  }
+
+  /// I numeri posseduti per Serie — stesso filtro "posseduto" del resto del
+  /// catalogo (`status IN (posseduta, prestata)`, vedi `watchDashboardKpis`)
+  /// — usati dal bonus di contesto del motore di matching (Livello 5,
+  /// #52/#57): il numero di una Serie senza `issueNumber` non è comparabile
+  /// e viene escluso.
+  Future<Map<int, Set<int>>> numeriPossedutiPerSerie() {
+    final query = _db.select(_db.copie).join([
+      innerJoin(_db.edizioni, _db.edizioni.id.equalsExp(_db.copie.edizioneId)),
+    ])..where(_db.copie.status.isInValues(const [StatoCopia.posseduta, StatoCopia.prestata]));
+
+    return query.get().then((rows) {
+      final risultato = <int, Set<int>>{};
+      for (final row in rows) {
+        final edizione = row.readTable(_db.edizioni);
+        final serieId = edizione.serieId;
+        final numero = edizione.issueNumber;
+        if (serieId == null || numero == null) continue;
+        risultato.putIfAbsent(serieId, () => {}).add(numero);
+      }
+      return risultato;
+    });
   }
 
   // --- KPI della Dashboard (§4.1, regole fissate su #2). ---

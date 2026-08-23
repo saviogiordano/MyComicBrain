@@ -145,6 +145,85 @@ void main() {
     expect(rigaAltro.scelto, isFalse);
   });
 
+  test('analisiCopertinaPerScansione legge la riga completata della Scansione', () async {
+    final scansioneId = await scansione();
+    final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+    await repo.completaAnalisiCopertina(
+      id: analisiId,
+      rawResponse: '{}',
+      title: 'Batman',
+      seriesName: 'Batman',
+    );
+
+    final analisi = await repo.analisiCopertinaPerScansione(scansioneId);
+
+    expect(analisi.id, analisiId);
+    expect(analisi.title, 'Batman');
+    expect(analisi.seriesName, 'Batman');
+  });
+
+  test('catalogoPerMatching risolve Opera/Serie via join, Serie nullable quando assente', () async {
+    final operaId = await repo.aggiungiOpera(title: 'Batman');
+    final serieId = await repo.aggiungiSerie(name: 'Batman (1940)');
+    final edizioneConSerie = await repo.aggiungiEdizione(
+      operaId: operaId,
+      serieId: serieId,
+      publisher: 'DC Comics',
+      issueNumber: 42,
+      issueNumberLabel: '42',
+      coverImage: 'https://example/42.jpg',
+    );
+    final operaSenzaSerie = await repo.aggiungiOpera(title: 'One shot');
+    final edizioneSenzaSerie = await repo.aggiungiEdizione(operaId: operaSenzaSerie);
+
+    final catalogo = await repo.catalogoPerMatching();
+
+    expect(catalogo, hasLength(2));
+    final conSerie = catalogo.firstWhere((e) => e.edizioneId == edizioneConSerie);
+    expect(conSerie.title, 'Batman');
+    expect(conSerie.serieId, serieId);
+    expect(conSerie.seriesName, 'Batman (1940)');
+    expect(conSerie.publisher, 'DC Comics');
+    expect(conSerie.issueNumber, 42);
+    expect(conSerie.issueNumberLabel, '42');
+    expect(conSerie.coverImage, 'https://example/42.jpg');
+    final senzaSerie = catalogo.firstWhere((e) => e.edizioneId == edizioneSenzaSerie);
+    expect(senzaSerie.serieId, isNull);
+    expect(senzaSerie.seriesName, isNull);
+  });
+
+  test(
+    'numeriPossedutiPerSerie raggruppa solo le Copie possedute/prestate con numero',
+    () async {
+      final serieId = await repo.aggiungiSerie(name: 'Spider-Man');
+      final operaId = await repo.aggiungiOpera(title: 'Spider-Man');
+      final edizione1 = await repo.aggiungiEdizione(
+        operaId: operaId,
+        serieId: serieId,
+        issueNumber: 1,
+      );
+      final edizione2 = await repo.aggiungiEdizione(
+        operaId: operaId,
+        serieId: serieId,
+        issueNumber: 2,
+      );
+      final edizioneVenduta = await repo.aggiungiEdizione(
+        operaId: operaId,
+        serieId: serieId,
+        issueNumber: 3,
+      );
+      final edizioneSenzaNumero = await repo.aggiungiEdizione(operaId: operaId, serieId: serieId);
+      await repo.aggiungiCopia(edizioneId: edizione1, status: StatoCopia.posseduta);
+      await repo.aggiungiCopia(edizioneId: edizione2, status: StatoCopia.prestata);
+      await repo.aggiungiCopia(edizioneId: edizioneVenduta, status: StatoCopia.venduta);
+      await repo.aggiungiCopia(edizioneId: edizioneSenzaNumero, status: StatoCopia.posseduta);
+
+      final numeri = await repo.numeriPossedutiPerSerie();
+
+      expect(numeri[serieId], {1, 2});
+    },
+  );
+
   test('aggiungiCopia con scansioneId collega la Copia alla Scansione di origine', () async {
     final scansioneId = await scansione();
     final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
