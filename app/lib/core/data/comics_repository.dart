@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
@@ -10,9 +11,11 @@ import 'package:mycomicbrain/core/domain/identificazione.dart';
 /// farle vedere Drift: prende e restituisce tipi di dominio, mai i tipi
 /// generati (`OpereData`, `CopieData`, ...).
 class ComicsRepository {
-  ComicsRepository(this._db);
+  ComicsRepository(this._db, {CopertinaDownloader? copertinaDownloader})
+    : _copertinaDownloader = copertinaDownloader ?? CopertinaDownloader();
 
   final AppDatabase _db;
+  final CopertinaDownloader _copertinaDownloader;
 
   // --- Scrittura (usata dai test per costruire fixture; superficie minima
   // per il catalogo — nessuna schermata di questa mappa scrive dati). ---
@@ -455,8 +458,20 @@ class ComicsRepository {
           ? int.tryParse(candidato.issueNumberLabel!.trim())
           : null,
       issueNumberLabel: candidato.issueNumberLabel,
-      coverImage: candidato.coverImageUrl,
+      coverImage: await _coverImagePerCandidato(candidato),
     );
+  }
+
+  /// La cover da salvare sull'Edizione creata da un Candidato esterno: una
+  /// copia locale scaricata da ComicVine (vedi [CopertinaDownloader]) invece
+  /// dell'URL remoto, così il catalogo non dipende dalla disponibilità
+  /// futura di quell'URL. Se il download fallisce (rete, host irraggiungibile)
+  /// ricade sull'URL originale invece di lasciare l'Edizione senza cover —
+  /// nessun retry, la conferma del Candidato non deve fallire per questo.
+  Future<String?> _coverImagePerCandidato(Candidato candidato) async {
+    final url = candidato.coverImageUrl;
+    if (url == null) return null;
+    return await _copertinaDownloader.scarica(url) ?? url;
   }
 
   /// La riga `AnalisiCopertina` completata di questa Scansione — letta dal
@@ -700,6 +715,7 @@ ORDER BY s.name, ns.n
             numero: row.readTable(_db.edizioni).issueNumber,
             numeroLabel: row.readTable(_db.edizioni).issueNumberLabel,
             editore: row.readTable(_db.edizioni).publisher,
+            coverImage: row.readTable(_db.edizioni).coverImage,
           ),
       ],
     );

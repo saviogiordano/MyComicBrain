@@ -62,8 +62,8 @@ class SerieIncompleta {
 }
 
 /// Una copia posseduta aggiunta di recente al catalogo, per il carosello
-/// "Aggiunti di recente" (§4.1). Nessuna cover reale in questa mappa: la
-/// copertina in UI è generata proceduralmente da [titolo] e [numero].
+/// "Aggiunti di recente" (§4.1). Se [coverImage] è assente, la copertina in
+/// UI è generata proceduralmente da [titolo] e [numero].
 class ComicRecente {
   const ComicRecente({
     required this.edizioneId,
@@ -71,6 +71,7 @@ class ComicRecente {
     this.numero,
     this.numeroLabel,
     this.editore,
+    this.coverImage,
   });
 
   final int edizioneId;
@@ -84,6 +85,11 @@ class ComicRecente {
   final String? numeroLabel;
 
   final String? editore;
+
+  /// Percorso locale (o, in fallback, URL remoto) della cover dell'Edizione
+  /// — vedi `ComicsRepository._coverImagePerCandidato`. Null finché non è
+  /// stata identificata da ComicVine.
+  final String? coverImage;
 
   /// Etichetta mostrata sulla copertina e sotto il titolo, es. "#4".
   /// Stringa vuota se non è noto alcun numero.

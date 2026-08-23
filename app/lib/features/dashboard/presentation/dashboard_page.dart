@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -352,9 +353,9 @@ class _ScanCta extends StatelessWidget {
 }
 
 /// Carosello orizzontale delle ultime copie possedute aggiunte al catalogo
-/// (§4.1, righe 129-141 del prototipo). Copertine procedurali — nessuna
-/// immagine reale in questa mappa (#14): colore e forma derivano da titolo
-/// e numero, vedi [_CoverProcedurale]. Nascosta del tutto se vuota (#8).
+/// (§4.1, righe 129-141 del prototipo). Mostra la cover reale se nota, vedi
+/// [_Cover]; altrimenti una copertina procedurale generata da titolo e
+/// numero, vedi [_CoverProcedurale]. Nascosta del tutto se vuota (#8).
 class _AggiuntiRecenteSection extends StatelessWidget {
   const _AggiuntiRecenteSection({required this.items});
 
@@ -408,7 +409,7 @@ class _RecentCard extends StatelessWidget {
             SizedBox(
               width: 96,
               height: 128,
-              child: _CoverProcedurale(titolo: item.titolo, numero: item.numero ?? 0, etichetta: item.numeroVisualizzato),
+              child: _Cover(item: item),
             ),
             const SizedBox(height: 7),
             Text(
@@ -436,9 +437,48 @@ class _RecentCard extends StatelessWidget {
   }
 }
 
-/// Copertina segnaposto generata dal titolo e dal numero, finché non
-/// esistono immagini reali (prototipo `cover()`/`shape`, righe 730-736):
-/// colore di sfondo scelto da `(titolo.length + numero) % palette`, forma
+/// La cover reale dell'Edizione se nota (percorso locale scaricato da
+/// `CopertinaDownloader`, o in fallback l'URL remoto originale), altrimenti
+/// la copertina procedurale [_CoverProcedurale]. Un percorso locale ma
+/// ormai mancante su disco ricade sullo stesso segnaposto invece di un
+/// errore visibile.
+class _Cover extends StatelessWidget {
+  const _Cover({required this.item});
+
+  final ComicRecente item;
+
+  @override
+  Widget build(BuildContext context) {
+    final coverImage = item.coverImage;
+    final procedurale = _CoverProcedurale(
+      titolo: item.titolo,
+      numero: item.numero ?? 0,
+      etichetta: item.numeroVisualizzato,
+    );
+    if (coverImage == null) return procedurale;
+
+    final isRemote = coverImage.startsWith('http://') || coverImage.startsWith('https://');
+    final immagine = ClipRRect(
+      borderRadius: AppRadii.xsRadius,
+      child: isRemote
+          ? Image.network(
+              coverImage,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => procedurale,
+            )
+          : Image.file(
+              File(coverImage),
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => procedurale,
+            ),
+    );
+    return SizedBox.expand(child: immagine);
+  }
+}
+
+/// Copertina segnaposto generata dal titolo e dal numero, per le Edizioni
+/// senza cover nota (prototipo `cover()`/`shape`, righe 730-736): colore di
+/// sfondo scelto da `(titolo.length + numero) % palette`, forma
 /// (cerchio/quadrato arrotondato) dalla parità del numero, rotazione dal
 /// resto modulo 3.
 class _CoverProcedurale extends StatelessWidget {

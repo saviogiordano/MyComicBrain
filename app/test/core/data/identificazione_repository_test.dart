@@ -1,10 +1,31 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/comics_repository.dart';
+import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
+import 'package:path/path.dart' as p;
+
+/// `http.Client` finto per [CopertinaDownloader]: risponde con [bytes] fissi,
+/// oppure lancia se `null` (simula un host irraggiungibile) — stesso
+/// pattern di `comic_vine_client_test.dart`/`copertina_downloader_test.dart`.
+class _FakeCoverHttpClient extends http.BaseClient {
+  _FakeCoverHttpClient({this.bytes});
+
+  final List<int>? bytes;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final corpo = bytes;
+    if (corpo == null) throw const SocketException('host irraggiungibile');
+    return http.StreamedResponse(Stream.value(corpo), 200);
+  }
+}
 
 void main() {
   late AppDatabase db;
@@ -393,8 +414,20 @@ void main() {
   );
 
   test(
-    'confermaCandidato esterno crea Opera/Serie/Edizione/Copia da zero',
+    'confermaCandidato esterno crea Opera/Serie/Edizione/Copia da zero e scarica la cover in locale',
     () async {
+      final tempBase = await Directory.systemTemp.createTemp(
+        'confermaCandidato_esterno_test_',
+      );
+      addTearDown(() => tempBase.delete(recursive: true));
+      final repoConDownload = ComicsRepository(
+        db,
+        copertinaDownloader: CopertinaDownloader(
+          httpClient: _FakeCoverHttpClient(bytes: [1, 2, 3]),
+          baseDirectory: () async => tempBase,
+        ),
+      );
+
       final scansioneId = await scansione();
       final identificazioneId = await repo.avviaIdentificazione(
         scansioneId: scansioneId,
@@ -412,7 +445,7 @@ void main() {
       final candidato =
           (await repo.watchIdentificazione(scansioneId).first).candidati.single;
 
-      final copiaId = await repo.confermaCandidato(
+      final copiaId = await repoConDownload.confermaCandidato(
         candidato: candidato,
         scansioneId: scansioneId,
       );
@@ -428,7 +461,14 @@ void main() {
       expect(edizione.publisher, 'Marvel');
       expect(edizione.issueNumberLabel, '1');
       expect(edizione.issueNumber, 1);
-      expect(edizione.coverImage, 'https://comicvine.example/1.jpg');
+      // La cover è stata scaricata in locale (§6.3): non più l'URL remoto
+      // ma un file dentro la directory `copertine/`.
+      expect(edizione.coverImage, isNotNull);
+      expect(edizione.coverImage, isNot('https://comicvine.example/1.jpg'));
+      final fileCopertina = File(edizione.coverImage!);
+      expect(fileCopertina.existsSync(), isTrue);
+      expect(p.dirname(fileCopertina.path), p.join(tempBase.path, 'copertine'));
+      expect(fileCopertina.readAsBytesSync(), [1, 2, 3]);
       final opera = await (db.select(
         db.opere,
       )..where((o) => o.id.equals(edizione.operaId))).getSingle();
@@ -441,6 +481,45 @@ void main() {
         db.candidatiTable,
       )..where((c) => c.id.equals(candidatoId))).getSingle();
       expect(rigaCandidato.scelto, isTrue);
+    },
+  );
+
+  test(
+    "confermaCandidato esterno: download cover fallito ricade sull'URL remoto",
+    () async {
+      final repoDownloadFallito = ComicsRepository(
+        db,
+        copertinaDownloader: CopertinaDownloader(
+          httpClient: _FakeCoverHttpClient(),
+        ),
+      );
+
+      final scansioneId = await scansione();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'Amazing Spider-Man',
+        coverImageUrl: 'https://comicvine.example/1.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repoDownloadFallito.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(edizione.coverImage, 'https://comicvine.example/1.jpg');
     },
   );
 

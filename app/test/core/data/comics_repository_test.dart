@@ -341,5 +341,28 @@ void main() {
       final recente = (await repo.watchAggiuntiDiRecente().first).single;
       expect(recente.numeroVisualizzato, '#4 Variant');
     });
+
+    test("porta coverImage dall'edizione, null se assente", () async {
+      final operaId = await repo.aggiungiOpera(title: 'Con cover');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        coverImage: '/copertine/1.jpg',
+      );
+      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+
+      final senzaCoverOperaId = await repo.aggiungiOpera(title: 'Senza cover');
+      final senzaCoverEdizioneId = await repo.aggiungiEdizione(operaId: senzaCoverOperaId);
+      await repo.aggiungiCopia(edizioneId: senzaCoverEdizioneId, status: StatoCopia.posseduta);
+
+      final recenti = await repo.watchAggiuntiDiRecente().first;
+      expect(
+        recenti.firstWhere((c) => c.edizioneId == edizioneId).coverImage,
+        '/copertine/1.jpg',
+      );
+      expect(
+        recenti.firstWhere((c) => c.edizioneId == senzaCoverEdizioneId).coverImage,
+        null,
+      );
+    });
   });
 }

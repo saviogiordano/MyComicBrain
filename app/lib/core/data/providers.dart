@@ -3,6 +3,7 @@ import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
 import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
+import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_provider_config.dart';
 import 'package:mycomicbrain/core/data/database.dart';
@@ -19,8 +20,15 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
   return db;
 });
 
+final copertinaDownloaderProvider = Provider<CopertinaDownloader>(
+  (ref) => CopertinaDownloader(),
+);
+
 final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
-  return ComicsRepository(ref.watch(appDatabaseProvider));
+  return ComicsRepository(
+    ref.watch(appDatabaseProvider),
+    copertinaDownloader: ref.watch(copertinaDownloaderProvider),
+  );
 });
 
 final imageCropServiceProvider = Provider<ImageCropService>(

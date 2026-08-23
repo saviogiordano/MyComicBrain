@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -140,6 +143,50 @@ void main() {
       expect(find.text('3/5'), findsOneWidget);
       expect(find.text('Mancano #4, #5'), findsOneWidget);
       expect(find.byType(AppProgressBar), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'carosello "Aggiunti di recente" mostra la cover reale se nota, non la copertina procedurale',
+    (tester) async {
+      final coverFile = File(
+        '${Directory.systemTemp.path}/dashboard_cover_test_${DateTime.now().microsecondsSinceEpoch}.png',
+      );
+      addTearDown(coverFile.delete);
+
+      final operaId = await repo.aggiungiOpera(title: 'Con Cover');
+      final edizioneId = await repo.aggiungiEdizione(operaId: operaId, coverImage: coverFile.path);
+      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(db)],
+          child: MaterialApp(theme: AppTheme.dark, home: const DashboardPage()),
+        ),
+      );
+
+      // Scrivere il file e far decodificare `Image.file` sono I/O reali (file,
+      // isolate) — serve uscire dalla zona a tempo fittizio del test con
+      // `runAsync`, altrimenti la callback di completamento non arriva mai
+      // (si blocca indefinitamente), stesso problema di `revisione_page_test.dart`.
+      await tester.runAsync(() async {
+        // PNG 1x1 valido: basta perché Image.file lo decodifichi senza errore.
+        await coverFile.writeAsBytes(
+          base64Decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          ),
+        );
+        for (var i = 0; i < 20; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          await tester.pump(const Duration(milliseconds: 20));
+        }
+      });
+
+      // Con la cover reale il titolo compare una sola volta (etichetta sotto
+      // la copertina): niente testo "Con Cover" disegnato sulla copertina
+      // procedurale, sostituita da un'immagine.
+      expect(find.text('Con Cover'), findsOneWidget);
+      expect(find.byType(Image), findsOneWidget);
     },
   );
 }
