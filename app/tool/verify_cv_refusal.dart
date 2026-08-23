@@ -1,12 +1,15 @@
-// Script temporaneo per la verifica empirica del rischio di rifiuto di
-// Claude sul campo `characters` (fog item della mappa #46, vedi #49) — non
-// parte della suite, non pensato per essere committato.
+// Script per la verifica empirica del rischio di rifiuto sul campo
+// `characters` (fog item della mappa #46, vedi #49) — non parte della
+// suite. Usa il provider configurato in dart_define.json
+// (COVER_ANALYSIS_PROVIDER), coerente con providers.dart.
 //
-// Uso: dart run --dart-define-from-file=dart_define.json tool/verify_cv_refusal.dart <img1> <img2> ...
+// Uso: dart run --define=ANTHROPIC_API_KEY=... --define=OPENAI_API_KEY=... --define=COVER_ANALYSIS_PROVIDER=... tool/verify_cv_refusal.dart <img1> <img2> ...
 import 'dart:io';
 
 import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
+import 'package:mycomicbrain/core/data/cover_analysis_provider_config.dart';
+import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
 
 Future<void> main(List<String> args) async {
   if (args.isEmpty) {
@@ -14,7 +17,11 @@ Future<void> main(List<String> args) async {
     exit(1);
   }
 
-  final client = ClaudeCoverAnalysisClient();
+  final client = switch (CoverAnalysisProviderConfig.kind) {
+    CoverAnalysisProviderKind.openai => OpenAiCoverAnalysisClient(),
+    CoverAnalysisProviderKind.claude => ClaudeCoverAnalysisClient(),
+  };
+  print('Provider: ${CoverAnalysisProviderConfig.kind}');
 
   for (final path in args) {
     print('=== $path ===');
