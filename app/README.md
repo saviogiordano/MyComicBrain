@@ -32,7 +32,8 @@ L'analisi AI della copertina (OCR §6.1 + computer vision §6.2) chiama l'API di
 1. Copia il template: `cp dart_define.example.json dart_define.json` (dalla cartella `app/`).
 2. Apri `dart_define.json` e imposta `ANTHROPIC_API_KEY` con la tua chiave Anthropic (obbligatoria col provider di default). Il file è in `.gitignore`, resta locale.
 3. Se vuoi usare OpenAI invece di Claude: imposta `OPENAI_API_KEY` con la tua chiave OpenAI e `COVER_ANALYSIS_PROVIDER` a `"openai"` (default `"claude"`, nessuna UI per la scelta).
-4. Usa `scripts/flutter.sh` al posto di `flutter` per i comandi `run` e `build`: rileva `dart_define.json` e aggiunge automaticamente `--dart-define-from-file`, così i comandi restano quelli standard senza ripeterlo ogni volta:
+4. Per l'Identificazione del fumetto (§6.3), quando il catalogo interno non produce un match: imposta `COMIC_VINE_API_KEY` con una chiave [Comic Vine](https://comicvine.gamespot.com/api/) (self-service, gratuita per uso non commerciale).
+5. Usa `scripts/flutter.sh` al posto di `flutter` per i comandi `run` e `build`: rileva `dart_define.json` e aggiunge automaticamente `--dart-define-from-file`, così i comandi restano quelli standard senza ripeterlo ogni volta:
    ```bash
    scripts/flutter.sh run -d "iPhone 16"
    ```
