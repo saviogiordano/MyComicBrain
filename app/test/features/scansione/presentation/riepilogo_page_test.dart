@@ -34,11 +34,74 @@ class _FakeAnalisiCopertinaPipeline implements AnalisiCopertinaPipeline {
 
 // PNG 1x1 valido: basta a far decodere `Image.file` senza errori nei test.
 const _pngMinimo = <int>[
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0xB5, 0x1C, 0x0C,
-  0x02, 0x00, 0x00, 0x00, 0x0B, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x64, 0x00, 0x04, 0x00,
-  0x00, 0x06, 0x00, 0x02, 0x30, 0x81, 0xD0, 0x2F, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
-  0xAE, 0x42, 0x60, 0x82,
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x04,
+  0x00,
+  0x00,
+  0x00,
+  0xB5,
+  0x1C,
+  0x0C,
+  0x02,
+  0x00,
+  0x00,
+  0x00,
+  0x0B,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0x64,
+  0x00,
+  0x04,
+  0x00,
+  0x00,
+  0x06,
+  0x00,
+  0x02,
+  0x30,
+  0x81,
+  0xD0,
+  0x2F,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
 ];
 
 void main() {
@@ -52,7 +115,11 @@ void main() {
 
   List<XFile> scansioniFinte(int n) => [
     for (var i = 0; i < n; i++)
-      XFile((File(p.join(tempDir.path, 'scan_$i.jpg'))..writeAsBytesSync(_pngMinimo)).path),
+      XFile(
+        (File(
+          p.join(tempDir.path, 'scan_$i.jpg'),
+        )..writeAsBytesSync(_pngMinimo)).path,
+      ),
   ];
 
   Future<GoRouter> pumpRiepilogo(
@@ -69,7 +136,8 @@ void main() {
           builder: (context, state) => Scaffold(
             body: Center(
               child: ElevatedButton(
-                onPressed: () => context.push('/scansione/riepilogo', extra: scansioni),
+                onPressed: () =>
+                    context.push('/scansione/riepilogo', extra: scansioni),
                 child: const Text('vai al riepilogo'),
               ),
             ),
@@ -77,19 +145,31 @@ void main() {
         ),
         GoRoute(
           path: '/scansione/riepilogo',
-          builder: (context, state) => RiepilogoPage(scansioni: state.extra! as List<XFile>),
+          builder: (context, state) =>
+              RiepilogoPage(scansioni: state.extra! as List<XFile>),
         ),
         GoRoute(
           path: '/dashboard',
-          builder: (context, state) => const Scaffold(body: Center(child: Text('Dashboard'))),
+          builder: (context, state) =>
+              const Scaffold(body: Center(child: Text('Dashboard'))),
+        ),
+        GoRoute(
+          path: '/scansione/conferma-candidato',
+          builder: (context, state) => Scaffold(
+            body: Center(
+              child: Text('Conferma candidato · Scansione ${state.extra}'),
+            ),
+          ),
         ),
       ],
     );
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          if (pipeline != null) analisiCopertinaPipelineProvider.overrideWithValue(pipeline),
-          if (repository != null) comicsRepositoryProvider.overrideWithValue(repository),
+          if (pipeline != null)
+            analisiCopertinaPipelineProvider.overrideWithValue(pipeline),
+          if (repository != null)
+            comicsRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
@@ -99,16 +179,23 @@ void main() {
     return router;
   }
 
-  testWidgets('mostra una riga per Scansione con chip "In sospeso"', (tester) async {
+  testWidgets('mostra una riga per Scansione con chip "In sospeso"', (
+    tester,
+  ) async {
     await pumpRiepilogo(tester, scansioniFinte(2));
 
-    expect(find.text('2 scansioni pronte per il riconoscimento AI'), findsOneWidget);
+    expect(
+      find.text('2 scansioni pronte per il riconoscimento AI'),
+      findsOneWidget,
+    );
     expect(find.text('Scansione 1'), findsOneWidget);
     expect(find.text('Scansione 2'), findsOneWidget);
     expect(find.text('In sospeso'), findsNWidgets(2));
   });
 
-  testWidgets('"Aggiungi altre" torna allo scanner (batch preservato)', (tester) async {
+  testWidgets('"Aggiungi altre" torna allo scanner (batch preservato)', (
+    tester,
+  ) async {
     await pumpRiepilogo(tester, scansioniFinte(1));
 
     await tester.tap(find.text('Aggiungi altre'));
@@ -119,7 +206,11 @@ void main() {
   });
 
   testWidgets('"Fine" naviga davvero a /dashboard', (tester) async {
-    await pumpRiepilogo(tester, scansioniFinte(1), pipeline: _FakeAnalisiCopertinaPipeline());
+    await pumpRiepilogo(
+      tester,
+      scansioniFinte(1),
+      pipeline: _FakeAnalisiCopertinaPipeline(),
+    );
 
     await tester.tap(find.text('Fine'));
     await tester.pumpAndSettle();
@@ -128,43 +219,71 @@ void main() {
     expect(find.text('Riepilogo batch'), findsNothing);
   });
 
-  testWidgets('la chip riflette lo stato reale invece di restare "In sospeso"', (tester) async {
-    final db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
-    );
-    addTearDown(db.close);
-    final repository = ComicsRepository(db);
-    final scansioni = scansioniFinte(1);
-    await repository.aggiungiScansione(image: scansioni.single.path);
+  testWidgets(
+    'la chip riflette lo stato reale invece di restare "In sospeso"',
+    (tester) async {
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = ComicsRepository(db);
+      final scansioni = scansioniFinte(1);
+      await repository.aggiungiScansione(image: scansioni.single.path);
 
-    await pumpRiepilogo(tester, scansioni, repository: repository);
-    expect(find.text('In sospeso'), findsOneWidget);
+      await pumpRiepilogo(tester, scansioni, repository: repository);
+      expect(find.text('In sospeso'), findsOneWidget);
 
-    final scansioneId = await repository.idScansionePerImmagine(scansioni.single.path);
-    final analisiId = await repository.avviaAnalisiCopertina(scansioneId: scansioneId);
-    await tester.pumpAndSettle();
-    expect(find.text('In corso'), findsOneWidget);
-    expect(find.text('In sospeso'), findsNothing);
+      final scansioneId = await repository.idScansionePerImmagine(
+        scansioni.single.path,
+      );
+      final analisiId = await repository.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('In corso'), findsOneWidget);
+      expect(find.text('In sospeso'), findsNothing);
 
-    await repository.completaAnalisiCopertina(id: analisiId, rawResponse: '{}');
-    await tester.pumpAndSettle();
-    expect(find.text('Completata'), findsOneWidget);
-  });
+      await repository.completaAnalisiCopertina(
+        id: analisiId,
+        rawResponse: '{}',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Completata'), findsOneWidget);
+    },
+  );
 
   testWidgets('la chip "Fallita" è il tasto di retry manuale', (tester) async {
     final db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
     );
     addTearDown(db.close);
     final repository = ComicsRepository(db);
     final scansioni = scansioniFinte(1);
     await repository.aggiungiScansione(image: scansioni.single.path);
-    final scansioneId = await repository.idScansionePerImmagine(scansioni.single.path);
-    final analisiId = await repository.avviaAnalisiCopertina(scansioneId: scansioneId);
-    await repository.fallisciAnalisiCopertina(id: analisiId, errorMessage: 'timeout');
+    final scansioneId = await repository.idScansionePerImmagine(
+      scansioni.single.path,
+    );
+    final analisiId = await repository.avviaAnalisiCopertina(
+      scansioneId: scansioneId,
+    );
+    await repository.fallisciAnalisiCopertina(
+      id: analisiId,
+      errorMessage: 'timeout',
+    );
 
     final pipeline = _FakeAnalisiCopertinaPipeline();
-    await pumpRiepilogo(tester, scansioni, pipeline: pipeline, repository: repository);
+    await pumpRiepilogo(
+      tester,
+      scansioni,
+      pipeline: pipeline,
+      repository: repository,
+    );
 
     expect(find.textContaining('Fallita'), findsOneWidget);
 
@@ -174,16 +293,63 @@ void main() {
     expect(pipeline.riprovati, [scansioni.single.path]);
   });
 
-  testWidgets("'Fine' avvia la pipeline di analisi copertina sull'intero batch", (tester) async {
-    final pipeline = _FakeAnalisiCopertinaPipeline();
-    final scansioni = scansioniFinte(2);
+  testWidgets(
+    'una riga con Analisi Copertina completata apre la conferma candidato al tocco (#59)',
+    (tester) async {
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = ComicsRepository(db);
+      final scansioni = scansioniFinte(1);
+      await repository.aggiungiScansione(image: scansioni.single.path);
+      final scansioneId = await repository.idScansionePerImmagine(
+        scansioni.single.path,
+      );
+      final analisiId = await repository.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
 
-    await pumpRiepilogo(tester, scansioni, pipeline: pipeline);
-    await tester.tap(find.text('Fine'));
-    await tester.pumpAndSettle();
+      await pumpRiepilogo(tester, scansioni, repository: repository);
+      await tester.tap(find.byType(AppCard));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Riepilogo batch'),
+        findsOneWidget,
+        reason: 'ancora non completata: nessuna navigazione',
+      );
 
-    expect(pipeline.batchRicevuti, [
-      [for (final s in scansioni) s.path],
-    ]);
-  });
+      await repository.completaAnalisiCopertina(
+        id: analisiId,
+        rawResponse: '{}',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(AppCard));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Conferma candidato · Scansione $scansioneId'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    "'Fine' avvia la pipeline di analisi copertina sull'intero batch",
+    (tester) async {
+      final pipeline = _FakeAnalisiCopertinaPipeline();
+      final scansioni = scansioniFinte(2);
+
+      await pumpRiepilogo(tester, scansioni, pipeline: pipeline);
+      await tester.tap(find.text('Fine'));
+      await tester.pumpAndSettle();
+
+      expect(pipeline.batchRicevuti, [
+        [for (final s in scansioni) s.path],
+      ]);
+    },
+  );
 }

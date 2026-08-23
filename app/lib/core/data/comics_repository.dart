@@ -126,7 +126,10 @@ class ComicsRepository {
   /// Crea la riga `AnalisiCopertina` di una Scansione, in stato `inCorso` —
   /// la pipeline (#32) la crea appena prende in carico la Scansione, prima
   /// di chiamare Claude.
-  Future<int> avviaAnalisiCopertina({required int scansioneId, DateTime? createdAt}) {
+  Future<int> avviaAnalisiCopertina({
+    required int scansioneId,
+    DateTime? createdAt,
+  }) {
     return _db
         .into(_db.analisiCopertinaTable)
         .insert(
@@ -158,7 +161,9 @@ class ComicsRepository {
     String? recognizedSeriesLogo,
     DateTime? completedAt,
   }) {
-    return (_db.update(_db.analisiCopertinaTable)..where((a) => a.id.equals(id))).write(
+    return (_db.update(
+      _db.analisiCopertinaTable,
+    )..where((a) => a.id.equals(id))).write(
       AnalisiCopertinaTableCompanion(
         title: Value(title),
         issueNumberLabel: Value(issueNumberLabel),
@@ -187,7 +192,9 @@ class ComicsRepository {
     required String errorMessage,
     DateTime? completedAt,
   }) {
-    return (_db.update(_db.analisiCopertinaTable)..where((a) => a.id.equals(id))).write(
+    return (_db.update(
+      _db.analisiCopertinaTable,
+    )..where((a) => a.id.equals(id))).write(
       AnalisiCopertinaTableCompanion(
         status: const Value(StatoAnalisiCopertina.fallita),
         errorMessage: Value(errorMessage),
@@ -211,7 +218,9 @@ class ComicsRepository {
   /// tentativo — retry manuale dall'utente (nessun retry automatico, #27):
   /// azzera `errorMessage`/`completedAt` della riga esistente.
   Future<void> riavviaAnalisiCopertina({required int id}) {
-    return (_db.update(_db.analisiCopertinaTable)..where((a) => a.id.equals(id))).write(
+    return (_db.update(
+      _db.analisiCopertinaTable,
+    )..where((a) => a.id.equals(id))).write(
       const AnalisiCopertinaTableCompanion(
         status: Value(StatoAnalisiCopertina.inCorso),
         errorMessage: Value(null),
@@ -245,7 +254,10 @@ class ComicsRepository {
   /// la pipeline (§6.3, deciso su #53) la crea appena prende in carico la
   /// Scansione dopo il completamento dell'Analisi Copertina, sul modello di
   /// [avviaAnalisiCopertina].
-  Future<int> avviaIdentificazione({required int scansioneId, DateTime? createdAt}) {
+  Future<int> avviaIdentificazione({
+    required int scansioneId,
+    DateTime? createdAt,
+  }) {
     return _db
         .into(_db.identificazioneTable)
         .insert(
@@ -293,8 +305,13 @@ class ComicsRepository {
   /// Conclude un'Identificazione con successo — anche col caso "zero
   /// Candidati trovati" (nessuno stato speciale, deciso su #53): la tabella
   /// `Candidati` resta semplicemente senza righe per questa Identificazione.
-  Future<void> completaIdentificazione({required int id, DateTime? completedAt}) {
-    return (_db.update(_db.identificazioneTable)..where((i) => i.id.equals(id))).write(
+  Future<void> completaIdentificazione({
+    required int id,
+    DateTime? completedAt,
+  }) {
+    return (_db.update(
+      _db.identificazioneTable,
+    )..where((i) => i.id.equals(id))).write(
       IdentificazioneTableCompanion(
         status: const Value(StatoIdentificazione.completata),
         completedAt: Value(completedAt ?? DateTime.now()),
@@ -310,7 +327,9 @@ class ComicsRepository {
     required String errorMessage,
     DateTime? completedAt,
   }) {
-    return (_db.update(_db.identificazioneTable)..where((i) => i.id.equals(id))).write(
+    return (_db.update(
+      _db.identificazioneTable,
+    )..where((i) => i.id.equals(id))).write(
       IdentificazioneTableCompanion(
         status: const Value(StatoIdentificazione.fallita),
         errorMessage: Value(errorMessage),
@@ -322,8 +341,112 @@ class ComicsRepository {
   /// Marca il Candidato confermato dall'utente (schermo di conferma, #54) —
   /// la riga scelta fra quelle proposte per la stessa Identificazione.
   Future<void> marcaCandidatoScelto({required int id}) {
-    return (_db.update(_db.candidatiTable)..where((c) => c.id.equals(id))).write(
+    return (_db.update(
+      _db.candidatiTable,
+    )..where((c) => c.id.equals(id))).write(
       const CandidatiTableCompanion(scelto: Value(true)),
+    );
+  }
+
+  /// L'esito osservabile dell'Identificazione di una Scansione — stato più
+  /// Candidati ordinati per punteggio decrescente (schermo di conferma,
+  /// #54/#59). `pending` finché la pipeline (§6.3, agganciata su #58) non ha
+  /// ancora creato la riga `Identificazione` per questa Scansione, stesso
+  /// significato di `watchStatoAnalisiCopertina`.
+  Stream<EsitoIdentificazione> watchIdentificazione(int scansioneId) {
+    final query =
+        _db.select(_db.identificazioneTable).join([
+            leftOuterJoin(
+              _db.candidatiTable,
+              _db.candidatiTable.identificazioneId.equalsExp(
+                _db.identificazioneTable.id,
+              ),
+            ),
+          ])
+          ..where(_db.identificazioneTable.scansioneId.equals(scansioneId))
+          ..orderBy([OrderingTerm.desc(_db.candidatiTable.punteggio)]);
+
+    return query.watch().map((rows) {
+      if (rows.isEmpty) {
+        return (
+          stato: StatoIdentificazione.pending,
+          errorMessage: null,
+          candidati: const <Candidato>[],
+        );
+      }
+      final identificazione = rows.first.readTable(_db.identificazioneTable);
+      final candidati = [
+        for (final row in rows)
+          if (row.readTableOrNull(_db.candidatiTable) case final c?)
+            _candidatoDaRiga(c),
+      ];
+      return (
+        stato: identificazione.status,
+        errorMessage: identificazione.errorMessage,
+        candidati: candidati,
+      );
+    });
+  }
+
+  Candidato _candidatoDaRiga(CandidatiTableData riga) {
+    return Candidato(
+      id: riga.id,
+      source: riga.source,
+      punteggio: riga.punteggio,
+      scelto: riga.scelto,
+      edizioneId: riga.edizioneId,
+      title: riga.title,
+      seriesName: riga.seriesName,
+      issueNumberLabel: riga.issueNumberLabel,
+      publisher: riga.publisher,
+      year: riga.year,
+      coverImageUrl: riga.coverImageUrl,
+    );
+  }
+
+  /// Conferma un Candidato (schermo di conferma, §6.3, deciso su #54/#59):
+  /// marca la riga scelta e collega/crea la Copia risultante. Se `interno`
+  /// (Edizione già catalogata), aggiunge solo una nuova Copia a
+  /// quell'Edizione; se `esterno` (ComicVine, nessuna Edizione propria
+  /// ancora), crea Opera/Serie/Edizione da zero a partire dai campi grezzi
+  /// del candidato prima di aggiungere la Copia. Ritorna l'id della Copia
+  /// creata.
+  Future<int> confermaCandidato({
+    required Candidato candidato,
+    required int scansioneId,
+  }) async {
+    await marcaCandidatoScelto(id: candidato.id);
+
+    final edizioneId = candidato.source == FonteCandidato.interno
+        ? candidato.edizioneId!
+        : await _creaEdizioneDaCandidato(candidato);
+
+    return aggiungiCopia(
+      edizioneId: edizioneId,
+      status: StatoCopia.posseduta,
+      scansioneId: scansioneId,
+    );
+  }
+
+  Future<int> _creaEdizioneDaCandidato(Candidato candidato) async {
+    final operaId = await aggiungiOpera(
+      title: candidato.title ?? candidato.seriesName ?? 'Senza titolo',
+    );
+
+    int? serieId;
+    if (candidato.seriesName != null) {
+      serieId = await aggiungiSerie(name: candidato.seriesName!);
+    }
+
+    return aggiungiEdizione(
+      operaId: operaId,
+      serieId: serieId,
+      publisher: candidato.publisher,
+      issueNumber: candidato.issueNumberLabel != null
+          ? int.tryParse(candidato.issueNumberLabel!.trim())
+          : null,
+      issueNumberLabel: candidato.issueNumberLabel,
+      coverImage: candidato.coverImageUrl,
     );
   }
 
@@ -332,7 +455,9 @@ class ComicsRepository {
   /// un'Identificazione. Presuppone che l'Analisi Copertina sia già
   /// `completata`: la pipeline (§6.3) avvia l'Identificazione solo dopo,
   /// stesso ordine del requisito.
-  Future<AnalisiCopertinaTableData> analisiCopertinaPerScansione(int scansioneId) {
+  Future<AnalisiCopertinaTableData> analisiCopertinaPerScansione(
+    int scansioneId,
+  ) {
     return (_db.select(
       _db.analisiCopertinaTable,
     )..where((a) => a.scansioneId.equals(scansioneId))).getSingle();
@@ -345,7 +470,10 @@ class ComicsRepository {
   Future<List<EdizioneCatalogo>> catalogoPerMatching() {
     final query = _db.select(_db.edizioni).join([
       innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
-      leftOuterJoin(_db.serieTable, _db.serieTable.id.equalsExp(_db.edizioni.serieId)),
+      leftOuterJoin(
+        _db.serieTable,
+        _db.serieTable.id.equalsExp(_db.edizioni.serieId),
+      ),
     ]);
     return query.get().then(
       (rows) => [
@@ -370,9 +498,18 @@ class ComicsRepository {
   /// #52/#57): il numero di una Serie senza `issueNumber` non è comparabile
   /// e viene escluso.
   Future<Map<int, Set<int>>> numeriPossedutiPerSerie() {
-    final query = _db.select(_db.copie).join([
-      innerJoin(_db.edizioni, _db.edizioni.id.equalsExp(_db.copie.edizioneId)),
-    ])..where(_db.copie.status.isInValues(const [StatoCopia.posseduta, StatoCopia.prestata]));
+    final query =
+        _db.select(_db.copie).join([
+          innerJoin(
+            _db.edizioni,
+            _db.edizioni.id.equalsExp(_db.copie.edizioneId),
+          ),
+        ])..where(
+          _db.copie.status.isInValues(const [
+            StatoCopia.posseduta,
+            StatoCopia.prestata,
+          ]),
+        );
 
     return query.get().then((rows) {
       final risultato = <int, Set<int>>{};
@@ -507,10 +644,12 @@ ORDER BY s.name, ns.n
                 nome: entry.value.first.read<String>('nome'),
                 numeriTotali: entry.value.first.read<int>('numeri_totali'),
                 numeriMancanti: [
-                  for (final row in entry.value) row.read<int>('numero_mancante'),
+                  for (final row in entry.value)
+                    row.read<int>('numero_mancante'),
                 ],
                 numeriPosseduti:
-                    entry.value.first.read<int>('numeri_totali') - entry.value.length,
+                    entry.value.first.read<int>('numeri_totali') -
+                    entry.value.length,
               ),
           ];
         });
@@ -523,13 +662,25 @@ ORDER BY s.name, ns.n
   /// Le ultime copie possedute aggiunte al catalogo (§4.1, carosello
   /// "Aggiunti di recente"), le più recenti per prime.
   Stream<List<ComicRecente>> watchAggiuntiDiRecente() {
-    final query = _db.select(_db.copie).join([
-      innerJoin(_db.edizioni, _db.edizioni.id.equalsExp(_db.copie.edizioneId)),
-      innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
-    ])
-      ..where(_db.copie.status.isInValues(const [StatoCopia.posseduta, StatoCopia.prestata]))
-      ..orderBy([OrderingTerm.desc(_db.copie.createdAt), OrderingTerm.desc(_db.copie.id)])
-      ..limit(_limiteAggiuntiDiRecente);
+    final query =
+        _db.select(_db.copie).join([
+            innerJoin(
+              _db.edizioni,
+              _db.edizioni.id.equalsExp(_db.copie.edizioneId),
+            ),
+            innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+          ])
+          ..where(
+            _db.copie.status.isInValues(const [
+              StatoCopia.posseduta,
+              StatoCopia.prestata,
+            ]),
+          )
+          ..orderBy([
+            OrderingTerm.desc(_db.copie.createdAt),
+            OrderingTerm.desc(_db.copie.id),
+          ])
+          ..limit(_limiteAggiuntiDiRecente);
 
     return query.watch().map(
       (rows) => [

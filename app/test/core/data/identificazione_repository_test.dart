@@ -12,7 +12,10 @@ void main() {
 
   setUp(() {
     db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
     );
     repo = ComicsRepository(db);
   });
@@ -24,7 +27,9 @@ void main() {
   test('avviaIdentificazione crea una riga in stato inCorso', () async {
     final scansioneId = await scansione();
 
-    final identificazioneId = await repo.avviaIdentificazione(scansioneId: scansioneId);
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
 
     final riga = await (db.select(
       db.identificazioneTable,
@@ -35,162 +40,207 @@ void main() {
     expect(riga.completedAt, isNull);
   });
 
-  test("aggiungiCandidato persiste un candidato interno collegato a un'Edizione", () async {
-    final scansioneId = await scansione();
-    final identificazioneId = await repo.avviaIdentificazione(scansioneId: scansioneId);
-    final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
-    final edizioneId = await repo.aggiungiEdizione(operaId: operaId, issueNumberLabel: '1');
+  test(
+    "aggiungiCandidato persiste un candidato interno collegato a un'Edizione",
+    () async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumberLabel: '1',
+      );
 
-    final candidatoId = await repo.aggiungiCandidato(
-      identificazioneId: identificazioneId,
-      source: FonteCandidato.interno,
-      punteggio: 92.5,
-      edizioneId: edizioneId,
-    );
+      final candidatoId = await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.interno,
+        punteggio: 92.5,
+        edizioneId: edizioneId,
+      );
 
-    final riga = await (db.select(
-      db.candidatiTable,
-    )..where((c) => c.id.equals(candidatoId))).getSingle();
-    expect(riga.identificazioneId, identificazioneId);
-    expect(riga.source, FonteCandidato.interno);
-    expect(riga.edizioneId, edizioneId);
-    expect(riga.punteggio, 92.5);
-    expect(riga.scelto, isFalse);
-    expect(riga.title, isNull);
-  });
+      final riga = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.id.equals(candidatoId))).getSingle();
+      expect(riga.identificazioneId, identificazioneId);
+      expect(riga.source, FonteCandidato.interno);
+      expect(riga.edizioneId, edizioneId);
+      expect(riga.punteggio, 92.5);
+      expect(riga.scelto, isFalse);
+      expect(riga.title, isNull);
+    },
+  );
 
-  test('aggiungiCandidato persiste un candidato esterno con i campi grezzi ComicVine', () async {
-    final scansioneId = await scansione();
-    final identificazioneId = await repo.avviaIdentificazione(scansioneId: scansioneId);
+  test(
+    'aggiungiCandidato persiste un candidato esterno con i campi grezzi ComicVine',
+    () async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
 
-    final candidatoId = await repo.aggiungiCandidato(
-      identificazioneId: identificazioneId,
-      source: FonteCandidato.esterno,
-      punteggio: 71,
-      title: 'Amazing Spider-Man',
-      seriesName: 'The Amazing Spider-Man',
-      issueNumberLabel: '1',
-      publisher: 'Marvel',
-      year: 1963,
-      coverImageUrl: 'https://comicvine.example/1.jpg',
-    );
+      final candidatoId = await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 71,
+        title: 'Amazing Spider-Man',
+        seriesName: 'The Amazing Spider-Man',
+        issueNumberLabel: '1',
+        publisher: 'Marvel',
+        year: 1963,
+        coverImageUrl: 'https://comicvine.example/1.jpg',
+      );
 
-    final riga = await (db.select(
-      db.candidatiTable,
-    )..where((c) => c.id.equals(candidatoId))).getSingle();
-    expect(riga.source, FonteCandidato.esterno);
-    expect(riga.edizioneId, isNull);
-    expect(riga.title, 'Amazing Spider-Man');
-    expect(riga.seriesName, 'The Amazing Spider-Man');
-    expect(riga.issueNumberLabel, '1');
-    expect(riga.publisher, 'Marvel');
-    expect(riga.year, 1963);
-    expect(riga.coverImageUrl, 'https://comicvine.example/1.jpg');
-  });
+      final riga = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.id.equals(candidatoId))).getSingle();
+      expect(riga.source, FonteCandidato.esterno);
+      expect(riga.edizioneId, isNull);
+      expect(riga.title, 'Amazing Spider-Man');
+      expect(riga.seriesName, 'The Amazing Spider-Man');
+      expect(riga.issueNumberLabel, '1');
+      expect(riga.publisher, 'Marvel');
+      expect(riga.year, 1963);
+      expect(riga.coverImageUrl, 'https://comicvine.example/1.jpg');
+    },
+  );
 
-  test('completaIdentificazione registra lo stato completata anche con zero candidati', () async {
-    final scansioneId = await scansione();
-    final identificazioneId = await repo.avviaIdentificazione(scansioneId: scansioneId);
+  test(
+    'completaIdentificazione registra lo stato completata anche con zero candidati',
+    () async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
 
-    await repo.completaIdentificazione(id: identificazioneId);
+      await repo.completaIdentificazione(id: identificazioneId);
 
-    final riga = await (db.select(
-      db.identificazioneTable,
-    )..where((i) => i.id.equals(identificazioneId))).getSingle();
-    expect(riga.status, StatoIdentificazione.completata);
-    expect(riga.completedAt, isNotNull);
-    final candidati = await (db.select(
-      db.candidatiTable,
-    )..where((c) => c.identificazioneId.equals(identificazioneId))).get();
-    expect(candidati, isEmpty);
-  });
+      final riga = await (db.select(
+        db.identificazioneTable,
+      )..where((i) => i.id.equals(identificazioneId))).getSingle();
+      expect(riga.status, StatoIdentificazione.completata);
+      expect(riga.completedAt, isNotNull);
+      final candidati = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.identificazioneId.equals(identificazioneId))).get();
+      expect(candidati, isEmpty);
+    },
+  );
 
-  test('fallisciIdentificazione registra il motivo e lo stato fallita', () async {
-    final scansioneId = await scansione();
-    final identificazioneId = await repo.avviaIdentificazione(scansioneId: scansioneId);
+  test(
+    'fallisciIdentificazione registra il motivo e lo stato fallita',
+    () async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
 
-    await repo.fallisciIdentificazione(id: identificazioneId, errorMessage: 'ComicVine offline');
+      await repo.fallisciIdentificazione(
+        id: identificazioneId,
+        errorMessage: 'ComicVine offline',
+      );
 
-    final riga = await (db.select(
-      db.identificazioneTable,
-    )..where((i) => i.id.equals(identificazioneId))).getSingle();
-    expect(riga.status, StatoIdentificazione.fallita);
-    expect(riga.errorMessage, 'ComicVine offline');
-    expect(riga.completedAt, isNotNull);
-  });
+      final riga = await (db.select(
+        db.identificazioneTable,
+      )..where((i) => i.id.equals(identificazioneId))).getSingle();
+      expect(riga.status, StatoIdentificazione.fallita);
+      expect(riga.errorMessage, 'ComicVine offline');
+      expect(riga.completedAt, isNotNull);
+    },
+  );
 
-  test('marcaCandidatoScelto marca la riga confermata senza toccare le altre', () async {
-    final scansioneId = await scansione();
-    final identificazioneId = await repo.avviaIdentificazione(scansioneId: scansioneId);
-    final scelto = await repo.aggiungiCandidato(
-      identificazioneId: identificazioneId,
-      source: FonteCandidato.esterno,
-      punteggio: 80,
-    );
-    final altro = await repo.aggiungiCandidato(
-      identificazioneId: identificazioneId,
-      source: FonteCandidato.esterno,
-      punteggio: 50,
-    );
+  test(
+    'marcaCandidatoScelto marca la riga confermata senza toccare le altre',
+    () async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final scelto = await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 80,
+      );
+      final altro = await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 50,
+      );
 
-    await repo.marcaCandidatoScelto(id: scelto);
+      await repo.marcaCandidatoScelto(id: scelto);
 
-    final rigaScelta = await (db.select(
-      db.candidatiTable,
-    )..where((c) => c.id.equals(scelto))).getSingle();
-    final rigaAltro = await (db.select(
-      db.candidatiTable,
-    )..where((c) => c.id.equals(altro))).getSingle();
-    expect(rigaScelta.scelto, isTrue);
-    expect(rigaAltro.scelto, isFalse);
-  });
+      final rigaScelta = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.id.equals(scelto))).getSingle();
+      final rigaAltro = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.id.equals(altro))).getSingle();
+      expect(rigaScelta.scelto, isTrue);
+      expect(rigaAltro.scelto, isFalse);
+    },
+  );
 
-  test('analisiCopertinaPerScansione legge la riga completata della Scansione', () async {
-    final scansioneId = await scansione();
-    final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
-    await repo.completaAnalisiCopertina(
-      id: analisiId,
-      rawResponse: '{}',
-      title: 'Batman',
-      seriesName: 'Batman',
-    );
+  test(
+    'analisiCopertinaPerScansione legge la riga completata della Scansione',
+    () async {
+      final scansioneId = await scansione();
+      final analisiId = await repo.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
+      await repo.completaAnalisiCopertina(
+        id: analisiId,
+        rawResponse: '{}',
+        title: 'Batman',
+        seriesName: 'Batman',
+      );
 
-    final analisi = await repo.analisiCopertinaPerScansione(scansioneId);
+      final analisi = await repo.analisiCopertinaPerScansione(scansioneId);
 
-    expect(analisi.id, analisiId);
-    expect(analisi.title, 'Batman');
-    expect(analisi.seriesName, 'Batman');
-  });
+      expect(analisi.id, analisiId);
+      expect(analisi.title, 'Batman');
+      expect(analisi.seriesName, 'Batman');
+    },
+  );
 
-  test('catalogoPerMatching risolve Opera/Serie via join, Serie nullable quando assente', () async {
-    final operaId = await repo.aggiungiOpera(title: 'Batman');
-    final serieId = await repo.aggiungiSerie(name: 'Batman (1940)');
-    final edizioneConSerie = await repo.aggiungiEdizione(
-      operaId: operaId,
-      serieId: serieId,
-      publisher: 'DC Comics',
-      issueNumber: 42,
-      issueNumberLabel: '42',
-      coverImage: 'https://example/42.jpg',
-    );
-    final operaSenzaSerie = await repo.aggiungiOpera(title: 'One shot');
-    final edizioneSenzaSerie = await repo.aggiungiEdizione(operaId: operaSenzaSerie);
+  test(
+    'catalogoPerMatching risolve Opera/Serie via join, Serie nullable quando assente',
+    () async {
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      final serieId = await repo.aggiungiSerie(name: 'Batman (1940)');
+      final edizioneConSerie = await repo.aggiungiEdizione(
+        operaId: operaId,
+        serieId: serieId,
+        publisher: 'DC Comics',
+        issueNumber: 42,
+        issueNumberLabel: '42',
+        coverImage: 'https://example/42.jpg',
+      );
+      final operaSenzaSerie = await repo.aggiungiOpera(title: 'One shot');
+      final edizioneSenzaSerie = await repo.aggiungiEdizione(
+        operaId: operaSenzaSerie,
+      );
 
-    final catalogo = await repo.catalogoPerMatching();
+      final catalogo = await repo.catalogoPerMatching();
 
-    expect(catalogo, hasLength(2));
-    final conSerie = catalogo.firstWhere((e) => e.edizioneId == edizioneConSerie);
-    expect(conSerie.title, 'Batman');
-    expect(conSerie.serieId, serieId);
-    expect(conSerie.seriesName, 'Batman (1940)');
-    expect(conSerie.publisher, 'DC Comics');
-    expect(conSerie.issueNumber, 42);
-    expect(conSerie.issueNumberLabel, '42');
-    expect(conSerie.coverImage, 'https://example/42.jpg');
-    final senzaSerie = catalogo.firstWhere((e) => e.edizioneId == edizioneSenzaSerie);
-    expect(senzaSerie.serieId, isNull);
-    expect(senzaSerie.seriesName, isNull);
-  });
+      expect(catalogo, hasLength(2));
+      final conSerie = catalogo.firstWhere(
+        (e) => e.edizioneId == edizioneConSerie,
+      );
+      expect(conSerie.title, 'Batman');
+      expect(conSerie.serieId, serieId);
+      expect(conSerie.seriesName, 'Batman (1940)');
+      expect(conSerie.publisher, 'DC Comics');
+      expect(conSerie.issueNumber, 42);
+      expect(conSerie.issueNumberLabel, '42');
+      expect(conSerie.coverImage, 'https://example/42.jpg');
+      final senzaSerie = catalogo.firstWhere(
+        (e) => e.edizioneId == edizioneSenzaSerie,
+      );
+      expect(senzaSerie.serieId, isNull);
+      expect(senzaSerie.seriesName, isNull);
+    },
+  );
 
   test(
     'numeriPossedutiPerSerie raggruppa solo le Copie possedute/prestate con numero',
@@ -212,11 +262,26 @@ void main() {
         serieId: serieId,
         issueNumber: 3,
       );
-      final edizioneSenzaNumero = await repo.aggiungiEdizione(operaId: operaId, serieId: serieId);
-      await repo.aggiungiCopia(edizioneId: edizione1, status: StatoCopia.posseduta);
-      await repo.aggiungiCopia(edizioneId: edizione2, status: StatoCopia.prestata);
-      await repo.aggiungiCopia(edizioneId: edizioneVenduta, status: StatoCopia.venduta);
-      await repo.aggiungiCopia(edizioneId: edizioneSenzaNumero, status: StatoCopia.posseduta);
+      final edizioneSenzaNumero = await repo.aggiungiEdizione(
+        operaId: operaId,
+        serieId: serieId,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizione1,
+        status: StatoCopia.posseduta,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizione2,
+        status: StatoCopia.prestata,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneVenduta,
+        status: StatoCopia.venduta,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneSenzaNumero,
+        status: StatoCopia.posseduta,
+      );
 
       final numeri = await repo.numeriPossedutiPerSerie();
 
@@ -224,20 +289,178 @@ void main() {
     },
   );
 
-  test('aggiungiCopia con scansioneId collega la Copia alla Scansione di origine', () async {
-    final scansioneId = await scansione();
-    final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
-    final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+  test(
+    'watchIdentificazione emette pending finché la riga non esiste ancora',
+    () async {
+      final scansioneId = await scansione();
 
-    final copiaId = await repo.aggiungiCopia(
-      edizioneId: edizioneId,
-      status: StatoCopia.posseduta,
+      final esito = await repo.watchIdentificazione(scansioneId).first;
+
+      expect(esito.stato, StatoIdentificazione.pending);
+      expect(esito.errorMessage, isNull);
+      expect(esito.candidati, isEmpty);
+    },
+  );
+
+  test(
+    'watchIdentificazione riflette lo stato e i Candidati ordinati per punteggio',
+    () async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+
+      final basso = await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 50,
+        title: 'Basso',
+      );
+      final alto = await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 90,
+        title: 'Alto',
+      );
+      await repo.completaIdentificazione(id: identificazioneId);
+
+      final esito = await repo.watchIdentificazione(scansioneId).first;
+
+      expect(esito.stato, StatoIdentificazione.completata);
+      expect(esito.candidati.map((c) => c.id), [alto, basso]);
+      expect(esito.candidati.first.title, 'Alto');
+      expect(esito.candidati.first.scelto, isFalse);
+    },
+  );
+
+  test('watchIdentificazione riflette completata con zero Candidati', () async {
+    final scansioneId = await scansione();
+    final identificazioneId = await repo.avviaIdentificazione(
       scansioneId: scansioneId,
     );
+    await repo.completaIdentificazione(id: identificazioneId);
 
-    final riga = await (db.select(
-      db.copie,
-    )..where((c) => c.id.equals(copiaId))).getSingle();
-    expect(riga.scansioneId, scansioneId);
+    final esito = await repo.watchIdentificazione(scansioneId).first;
+
+    expect(esito.stato, StatoIdentificazione.completata);
+    expect(esito.candidati, isEmpty);
   });
+
+  test(
+    "confermaCandidato interno marca la riga scelta e aggiunge una Copia all'Edizione",
+    () async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumberLabel: '42',
+      );
+      final candidatoId = await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.interno,
+        punteggio: 96,
+        edizioneId: edizioneId,
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+      expect(candidato.id, candidatoId);
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(copia.edizioneId, edizioneId);
+      expect(copia.status, StatoCopia.posseduta);
+      expect(copia.scansioneId, scansioneId);
+      final edizioni = await db.select(db.edizioni).get();
+      expect(
+        edizioni,
+        hasLength(1),
+        reason: 'nessuna nuova Edizione creata per un candidato interno',
+      );
+      final rigaCandidato = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.id.equals(candidatoId))).getSingle();
+      expect(rigaCandidato.scelto, isTrue);
+    },
+  );
+
+  test(
+    'confermaCandidato esterno crea Opera/Serie/Edizione/Copia da zero',
+    () async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final candidatoId = await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'Amazing Spider-Man',
+        seriesName: 'The Amazing Spider-Man',
+        issueNumberLabel: '1',
+        publisher: 'Marvel',
+        coverImageUrl: 'https://comicvine.example/1.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(copia.status, StatoCopia.posseduta);
+      expect(copia.scansioneId, scansioneId);
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(edizione.publisher, 'Marvel');
+      expect(edizione.issueNumberLabel, '1');
+      expect(edizione.issueNumber, 1);
+      expect(edizione.coverImage, 'https://comicvine.example/1.jpg');
+      final opera = await (db.select(
+        db.opere,
+      )..where((o) => o.id.equals(edizione.operaId))).getSingle();
+      expect(opera.title, 'Amazing Spider-Man');
+      final serie = await (db.select(
+        db.serieTable,
+      )..where((s) => s.id.equals(edizione.serieId!))).getSingle();
+      expect(serie.name, 'The Amazing Spider-Man');
+      final rigaCandidato = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.id.equals(candidatoId))).getSingle();
+      expect(rigaCandidato.scelto, isTrue);
+    },
+  );
+
+  test(
+    'aggiungiCopia con scansioneId collega la Copia alla Scansione di origine',
+    () async {
+      final scansioneId = await scansione();
+      final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
+      final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+
+      final copiaId = await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+        scansioneId: scansioneId,
+      );
+
+      final riga = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(riga.scansioneId, scansioneId);
+    },
+  );
 }

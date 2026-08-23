@@ -8,6 +8,7 @@ import 'package:mycomicbrain/features/assistente/presentation/assistente_page.da
 import 'package:mycomicbrain/features/collezione/presentation/collezione_page.dart';
 import 'package:mycomicbrain/features/dashboard/presentation/dashboard_page.dart';
 import 'package:mycomicbrain/features/duplicati/presentation/duplicati_page.dart';
+import 'package:mycomicbrain/features/identificazione/presentation/conferma_candidato_page.dart';
 import 'package:mycomicbrain/features/login/presentation/login_page.dart';
 import 'package:mycomicbrain/features/ricerca/presentation/ricerca_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/revisione_page.dart';
@@ -109,6 +110,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/scansione/riepilogo',
         builder: (context, state) =>
             RiepilogoPage(scansioni: state.extra! as List<XFile>),
+      ),
+      // Schermo "Possibile corrispondenza" (§6.3, deciso su #54, implementato
+      // su #59): raggiunto dal riepilogo per una Scansione la cui Analisi
+      // Copertina è completata.
+      GoRoute(
+        path: '/scansione/conferma-candidato',
+        builder: (context, state) =>
+            ConfermaCandidatoPage(scansioneId: state.extra! as int),
       ),
       GoRoute(
         path: '/serie',

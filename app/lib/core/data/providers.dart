@@ -11,6 +11,7 @@ import 'package:mycomicbrain/core/data/image_crop_service.dart';
 import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
+import 'package:mycomicbrain/core/domain/identificazione.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
@@ -91,4 +92,15 @@ statoAnalisiCopertinaProvider =
       return ref
           .watch(comicsRepositoryProvider)
           .watchStatoAnalisiCopertina(image);
+    });
+
+/// L'esito osservabile dell'Identificazione di una Scansione (§6.3, schermo
+/// di conferma #59), per id — a differenza di [statoAnalisiCopertinaProvider]
+/// (per percorso immagine) usa `scansioneId` perché è la chiave con cui il
+/// resto del repository dell'Identificazione già lavora.
+final StreamProviderFamily<EsitoIdentificazione, int> identificazioneProvider =
+    StreamProvider.family<EsitoIdentificazione, int>((ref, scansioneId) {
+      return ref
+          .watch(comicsRepositoryProvider)
+          .watchIdentificazione(scansioneId);
     });
