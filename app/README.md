@@ -94,8 +94,17 @@ Utile in particolare per testare lo scanner (fotocamera reale, permessi, prestaz
    ```bash
    scripts/flutter.sh run -d <id-device>  # es. l'UDID o il nome mostrato da flutter devices
    ```
-6. **Primo avvio: "Untrusted Developer"** — se l'app non parte e su iPhone appare un errore, vai su *Impostazioni → Generali → VPN e gestione dispositivo*, seleziona il tuo Apple ID/profilo sviluppatore e tocca *Trust*. Poi riavvia l'app dalla home o rilancia `scripts/flutter.sh run`.
-7. **Permesso fotocamera** — al primo utilizzo dello scanner iOS mostra il prompt di sistema (testo da `NSCameraUsageDescription` in `ios/Runner/Info.plist`); se negato per errore, va riabilitato da *Impostazioni → Privacy e sicurezza → Fotocamera → MyComicBrain*.
+6. **Su iOS 26+: crash/schermo bianco in debug** — bug noto del JIT di Flutter su iOS 26 ([flutter/flutter#163984](https://github.com/flutter/flutter/issues/163984), [#176263](https://github.com/flutter/flutter/issues/176263), variante intermittente in [#184533](https://github.com/flutter/flutter/issues/184533)): il sistema revoca i permessi di esecuzione sulle pagine JIT e l'app crasha con `EXC_BAD_ACCESS` al lancio (a volte subito, a volte dopo qualche minuto), indipendentemente dal codice dell'app. Non è un bug del progetto.
+   - **Per iterare con hot reload**: usa l'iOS Simulator (funziona regolarmente in debug, vedi sezione sopra), non il device fisico.
+   - **Per testare sul device reale** (es. la fotocamera, che sul Simulator non è disponibile): lancia in modalità `--release` o `--profile`, che non usano JIT e non sono soggette al bug:
+     ```bash
+     scripts/flutter.sh run --release -d <id-device>
+     # oppure, per i log di performance senza le ottimizzazioni aggressive del release:
+     scripts/flutter.sh run --profile -d <id-device>
+     ```
+   - Ogni tanto vale la pena rifare `flutter upgrade`: la variante intermittente potrebbe essere risolta in una release più recente di quella attuale (3.38.3).
+7. **Primo avvio: "Untrusted Developer"** — se l'app non parte e su iPhone appare un errore, vai su *Impostazioni → Generali → VPN e gestione dispositivo*, seleziona il tuo Apple ID/profilo sviluppatore e tocca *Trust*. Poi riavvia l'app dalla home o rilancia `scripts/flutter.sh run`.
+8. **Permesso fotocamera** — al primo utilizzo dello scanner iOS mostra il prompt di sistema (testo da `NSCameraUsageDescription` in `ios/Runner/Info.plist`); se negato per errore, va riabilitato da *Impostazioni → Privacy e sicurezza → Fotocamera → MyComicBrain*.
 
 ### Android (device fisico)
 
