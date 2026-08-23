@@ -11,7 +11,10 @@ void main() {
 
   setUp(() {
     db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
     );
     repo = ComicsRepository(db);
   });
@@ -20,16 +23,34 @@ void main() {
 
   Future<int> scansione() => repo.aggiungiScansione(image: '/scansioni/1.jpg');
 
-  test("idScansionePerImmagine trova l'id dalla Scansione persistita", () async {
-    final id = await scansione();
+  test(
+    "idScansionePerImmagine trova l'id dalla Scansione persistita",
+    () async {
+      final id = await scansione();
 
-    expect(await repo.idScansionePerImmagine('/scansioni/1.jpg'), id);
-  });
+      expect(await repo.idScansionePerImmagine('/scansioni/1.jpg'), id);
+    },
+  );
+
+  test(
+    'eliminaScansione rimuove solo la riga indicata (swipe-to-delete nel riepilogo, #59)',
+    () async {
+      final id = await scansione();
+      final altroId = await repo.aggiungiScansione(image: '/scansioni/2.jpg');
+
+      await repo.eliminaScansione(id: id);
+
+      final righe = await db.select(db.scansioni).get();
+      expect(righe.map((r) => r.id), [altroId]);
+    },
+  );
 
   test('avviaAnalisiCopertina crea una riga in stato inCorso', () async {
     final scansioneId = await scansione();
 
-    final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+    final analisiId = await repo.avviaAnalisiCopertina(
+      scansioneId: scansioneId,
+    );
 
     final riga = await (db.select(
       db.analisiCopertinaTable,
@@ -45,44 +66,51 @@ void main() {
     expect(riga.completedAt, isNull);
   });
 
-  test('completaAnalisiCopertina registra i campi grezzi e lo stato completata', () async {
-    final scansioneId = await scansione();
-    final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+  test(
+    'completaAnalisiCopertina registra i campi grezzi e lo stato completata',
+    () async {
+      final scansioneId = await scansione();
+      final analisiId = await repo.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
 
-    await repo.completaAnalisiCopertina(
-      id: analisiId,
-      rawResponse: '{"authors":["Stan Lee"]}',
-      title: 'Amazing Spider-Man',
-      issueNumberLabel: '1',
-      publisher: 'Marvel',
-      seriesName: 'The Amazing Spider-Man',
-      barcode: '123',
-      price: r'$1',
-      characters: const ['Spider-Man'],
-      coverStyleTags: const ['stile realistico'],
-      visualElementTags: const ['sfondo con esplosione'],
-      recognizedPublisherLogo: 'Marvel',
-    );
+      await repo.completaAnalisiCopertina(
+        id: analisiId,
+        rawResponse: '{"authors":["Stan Lee"]}',
+        title: 'Amazing Spider-Man',
+        issueNumberLabel: '1',
+        publisher: 'Marvel',
+        seriesName: 'The Amazing Spider-Man',
+        barcode: '123',
+        price: r'$1',
+        characters: const ['Spider-Man'],
+        coverStyleTags: const ['stile realistico'],
+        visualElementTags: const ['sfondo con esplosione'],
+        recognizedPublisherLogo: 'Marvel',
+      );
 
-    final riga = await (db.select(
-      db.analisiCopertinaTable,
-    )..where((a) => a.id.equals(analisiId))).getSingle();
-    expect(riga.status, StatoAnalisiCopertina.completata);
-    expect(riga.title, 'Amazing Spider-Man');
-    expect(riga.rawResponse, '{"authors":["Stan Lee"]}');
-    expect(riga.characters, ['Spider-Man']);
-    expect(riga.coverStyleTags, ['stile realistico']);
-    expect(riga.visualElementTags, ['sfondo con esplosione']);
-    expect(riga.recognizedPublisherLogo, 'Marvel');
-    expect(riga.recognizedSeriesLogo, isNull);
-    expect(riga.completedAt, isNotNull);
-  });
+      final riga = await (db.select(
+        db.analisiCopertinaTable,
+      )..where((a) => a.id.equals(analisiId))).getSingle();
+      expect(riga.status, StatoAnalisiCopertina.completata);
+      expect(riga.title, 'Amazing Spider-Man');
+      expect(riga.rawResponse, '{"authors":["Stan Lee"]}');
+      expect(riga.characters, ['Spider-Man']);
+      expect(riga.coverStyleTags, ['stile realistico']);
+      expect(riga.visualElementTags, ['sfondo con esplosione']);
+      expect(riga.recognizedPublisherLogo, 'Marvel');
+      expect(riga.recognizedSeriesLogo, isNull);
+      expect(riga.completedAt, isNotNull);
+    },
+  );
 
   test(
     'completaAnalisiCopertina senza campi di computer vision lascia le liste vuote',
     () async {
       final scansioneId = await scansione();
-      final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+      final analisiId = await repo.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
 
       await repo.completaAnalisiCopertina(id: analisiId, rawResponse: '{}');
 
@@ -95,26 +123,36 @@ void main() {
     },
   );
 
-  test('fallisciAnalisiCopertina registra il motivo e lo stato fallita', () async {
-    final scansioneId = await scansione();
-    final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+  test(
+    'fallisciAnalisiCopertina registra il motivo e lo stato fallita',
+    () async {
+      final scansioneId = await scansione();
+      final analisiId = await repo.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
 
-    await repo.fallisciAnalisiCopertina(id: analisiId, errorMessage: 'timeout');
+      await repo.fallisciAnalisiCopertina(
+        id: analisiId,
+        errorMessage: 'timeout',
+      );
 
-    final riga = await (db.select(
-      db.analisiCopertinaTable,
-    )..where((a) => a.id.equals(analisiId))).getSingle();
-    expect(riga.status, StatoAnalisiCopertina.fallita);
-    expect(riga.errorMessage, 'timeout');
-    expect(riga.completedAt, isNotNull);
-    expect(riga.title, isNull);
-  });
+      final riga = await (db.select(
+        db.analisiCopertinaTable,
+      )..where((a) => a.id.equals(analisiId))).getSingle();
+      expect(riga.status, StatoAnalisiCopertina.fallita);
+      expect(riga.errorMessage, 'timeout');
+      expect(riga.completedAt, isNotNull);
+      expect(riga.title, isNull);
+    },
+  );
 
   group('watchStatoAnalisiCopertina', () {
     test('pending finché la pipeline non ha ancora creato la riga', () async {
       await scansione();
 
-      final stato = await repo.watchStatoAnalisiCopertina('/scansioni/1.jpg').first;
+      final stato = await repo
+          .watchStatoAnalisiCopertina('/scansioni/1.jpg')
+          .first;
 
       expect(stato.stato, StatoAnalisiCopertina.pending);
       expect(stato.errorMessage, isNull);
@@ -124,27 +162,40 @@ void main() {
       final scansioneId = await scansione();
       await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
 
-      final stato = await repo.watchStatoAnalisiCopertina('/scansioni/1.jpg').first;
+      final stato = await repo
+          .watchStatoAnalisiCopertina('/scansioni/1.jpg')
+          .first;
 
       expect(stato.stato, StatoAnalisiCopertina.inCorso);
     });
 
     test('completata dopo completaAnalisiCopertina', () async {
       final scansioneId = await scansione();
-      final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+      final analisiId = await repo.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
       await repo.completaAnalisiCopertina(id: analisiId, rawResponse: '{}');
 
-      final stato = await repo.watchStatoAnalisiCopertina('/scansioni/1.jpg').first;
+      final stato = await repo
+          .watchStatoAnalisiCopertina('/scansioni/1.jpg')
+          .first;
 
       expect(stato.stato, StatoAnalisiCopertina.completata);
     });
 
     test('fallita con errorMessage dopo fallisciAnalisiCopertina', () async {
       final scansioneId = await scansione();
-      final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
-      await repo.fallisciAnalisiCopertina(id: analisiId, errorMessage: 'timeout');
+      final analisiId = await repo.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
+      await repo.fallisciAnalisiCopertina(
+        id: analisiId,
+        errorMessage: 'timeout',
+      );
 
-      final stato = await repo.watchStatoAnalisiCopertina('/scansioni/1.jpg').first;
+      final stato = await repo
+          .watchStatoAnalisiCopertina('/scansioni/1.jpg')
+          .first;
 
       expect(stato.stato, StatoAnalisiCopertina.fallita);
       expect(stato.errorMessage, 'timeout');
@@ -158,7 +209,9 @@ void main() {
           .listen((s) => valori.add(s.stato));
 
       await pumpEventQueue();
-      final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+      final analisiId = await repo.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
       await pumpEventQueue();
       await repo.completaAnalisiCopertina(id: analisiId, rawResponse: '{}');
       await pumpEventQueue();

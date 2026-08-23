@@ -23,7 +23,11 @@ import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 /// schermo di conferma candidato (§6.3, #59), altrimenti irraggiungibile —
 /// segnalato in test manuale dopo #59. Una volta avviata, "Fine" diventa
 /// "Vai alla Dashboard": la pipeline resta in background anche dopo,
-/// nessuna seconda chiamata possibile.
+/// nessuna seconda chiamata possibile. Finché la pipeline non è avviata, una
+/// riga si può eliminare con uno swipe (richiesta utente dopo test manuale
+/// #59): dopo "Fine" le righe sono già passate ad `avviaBatch`, e
+/// rimuoverne una a quel punto romperebbe la Scansione che la pipeline
+/// sequenziale si aspetta di trovare — lo swipe viene quindi disabilitato.
 class RiepilogoPage extends ConsumerStatefulWidget {
   const RiepilogoPage({required this.scansioni, super.key});
 
@@ -34,20 +38,52 @@ class RiepilogoPage extends ConsumerStatefulWidget {
 }
 
 class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
+  late final _scansioni = List<XFile>.of(widget.scansioni);
   bool _avviato = false;
 
   void _fine() {
     setState(() => _avviato = true);
     unawaited(
       ref.read(analisiCopertinaPipelineProvider).avviaBatch([
-        for (final s in widget.scansioni) s.path,
+        for (final s in _scansioni) s.path,
       ]),
     );
   }
 
+  Future<bool> _confermaEliminazione(BuildContext context) async {
+    final conferma = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rimuovere questa scansione?'),
+        content: const Text(
+          'La foto verrà eliminata e non entrerà nel riconoscimento AI.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Rimuovi'),
+          ),
+        ],
+      ),
+    );
+    return conferma ?? false;
+  }
+
+  Future<void> _elimina(XFile scansione) async {
+    final repository = ref.read(comicsRepositoryProvider);
+    final scansioneId = await repository.idScansionePerImmagine(scansione.path);
+    await repository.eliminaScansione(id: scansioneId);
+    await ref.read(scansioneStorageProvider).elimina(scansione.path);
+    if (!mounted) return;
+    setState(() => _scansioni.remove(scansione));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scansioni = widget.scansioni;
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
       body: SafeArea(
@@ -71,7 +107,7 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                   ),
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
-                    '${scansioni.length} ${scansioni.length == 1 ? 'scansione pronta' : 'scansioni pronte'} '
+                    '${_scansioni.length} ${_scansioni.length == 1 ? 'scansione pronta' : 'scansioni pronte'} '
                     'per il riconoscimento AI',
                     style: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textSecondary,
@@ -86,11 +122,22 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                   horizontal: AppSpacing.md,
                   vertical: AppSpacing.sm,
                 ),
-                itemCount: scansioni.length,
+                itemCount: _scansioni.length,
                 separatorBuilder: (_, _) =>
                     const SizedBox(height: AppSpacing.xs),
-                itemBuilder: (context, i) =>
-                    _RigaScansione(indice: i, scansione: scansioni[i]),
+                itemBuilder: (context, i) {
+                  final scansione = _scansioni[i];
+                  final riga = _RigaScansione(indice: i, scansione: scansione);
+                  if (_avviato) return riga;
+                  return Dismissible(
+                    key: ValueKey(scansione.path),
+                    direction: DismissDirection.endToStart,
+                    background: const _SfondoEliminazione(),
+                    confirmDismiss: (_) => _confermaEliminazione(context),
+                    onDismissed: (_) => _elimina(scansione),
+                    child: riga,
+                  );
+                },
               ),
             ),
             Padding(
@@ -113,6 +160,8 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                     child: FilledButton(
                       onPressed: _avviato
                           ? () => context.go('/dashboard')
+                          : _scansioni.isEmpty
+                          ? null
                           : _fine,
                       child: Text(_avviato ? 'Vai alla Dashboard' : 'Fine'),
                     ),
@@ -121,6 +170,32 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Sfondo rivelato dallo swipe-to-delete. Rosso Material puro, non un
+/// token del design system: la palette dell'app non ne ha uno per azioni
+/// distruttive (l'ambra è riservata a segnali di attenzione, mai errore —
+/// vedi `AppColors`), e un rosso universale è l'affordance più immediata
+/// per "elimina" su questo singolo elemento transitorio.
+class _SfondoEliminazione extends StatelessWidget {
+  const _SfondoEliminazione();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.red.shade400,
+        borderRadius: AppRadii.lgRadius,
+      ),
+      child: const Align(
+        alignment: Alignment.centerRight,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: Icon(Icons.delete_outline, color: Colors.white),
         ),
       ),
     );

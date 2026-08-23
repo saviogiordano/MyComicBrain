@@ -41,4 +41,29 @@ void main() {
 
     expect(scansioniDir.existsSync(), isTrue);
   });
+
+  group('elimina', () {
+    test(
+      'rimuove il file salvato (swipe-to-delete nel riepilogo, #59)',
+      () async {
+        final grezzo = File(p.join(tempBase.path, 'grezzo.jpg'))
+          ..writeAsStringSync('finta immagine');
+        final salvato = await storage.salva(grezzo);
+        expect(salvato.existsSync(), isTrue);
+
+        await storage.elimina(salvato.path);
+
+        expect(salvato.existsSync(), isFalse);
+      },
+    );
+
+    test(
+      'un file già assente non fa fallire la rimozione (best-effort)',
+      () async {
+        final percorso = p.join(tempBase.path, 'scansioni', 'mai-esistito.jpg');
+
+        await storage.elimina(percorso);
+      },
+    );
+  });
 }

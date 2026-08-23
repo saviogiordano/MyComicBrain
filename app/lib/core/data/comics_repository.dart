@@ -123,6 +123,15 @@ class ComicsRepository {
     return riga.id;
   }
 
+  /// Rimuove una Scansione non ancora inviata alla pipeline (swipe-to-delete
+  /// nel riepilogo, prima di "Fine") — solo la riga `Scansioni`: a questo
+  /// punto del flusso non esiste ancora nessuna `AnalisiCopertina` collegata
+  /// da ripulire. Il file immagine salvato va eliminato a parte con
+  /// `ScansioneStorage.elimina`, non è responsabilità del repository.
+  Future<void> eliminaScansione({required int id}) {
+    return (_db.delete(_db.scansioni)..where((s) => s.id.equals(id))).go();
+  }
+
   /// Crea la riga `AnalisiCopertina` di una Scansione, in stato `inCorso` —
   /// la pipeline (#32) la crea appena prende in carico la Scansione, prima
   /// di chiamare Claude.

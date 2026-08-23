@@ -353,6 +353,98 @@ void main() {
   );
 
   testWidgets(
+    'swipe-to-delete rimuove la scansione (file e riga DB) prima di "Fine" (#59)',
+    (tester) async {
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = ComicsRepository(db);
+      final scansioni = scansioniFinte(2);
+      for (final s in scansioni) {
+        await repository.aggiungiScansione(image: s.path);
+      }
+
+      await pumpRiepilogo(tester, scansioni, repository: repository);
+      expect(
+        find.text('2 scansioni pronte per il riconoscimento AI'),
+        findsOneWidget,
+      );
+
+      // `ScansioneStorage.elimina` fa vera I/O su file (`dart:io`): serve
+      // `runAsync` perché quella Future non si risolve nella zona
+      // fake-async di default di `testWidgets` — e un breve delay reale
+      // dopo l'ultimo `pumpAndSettle` perché quella I/O parte da
+      // `onDismissed` (fire-and-forget) e non è legata a un frame
+      // schedulato, quindi `pumpAndSettle` da solo non la aspetta.
+      await tester.runAsync(() async {
+        await tester.drag(
+          find.byType(Dismissible).first,
+          const Offset(-500, 0),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Rimuovi'));
+        await tester.pumpAndSettle();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await tester.pump();
+      });
+
+      expect(
+        find.text('1 scansione pronta per il riconoscimento AI'),
+        findsOneWidget,
+      );
+      final righeRimaste = await db.select(db.scansioni).get();
+      expect(righeRimaste, hasLength(1));
+      expect(File(scansioni.first.path).existsSync(), isFalse);
+    },
+  );
+
+  testWidgets('annullare la conferma di eliminazione non rimuove nulla', (
+    tester,
+  ) async {
+    final db = AppDatabase(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
+    addTearDown(db.close);
+    final repository = ComicsRepository(db);
+    final scansioni = scansioniFinte(1);
+    await repository.aggiungiScansione(image: scansioni.single.path);
+
+    await pumpRiepilogo(tester, scansioni, repository: repository);
+
+    await tester.drag(find.byType(Dismissible), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Annulla'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Scansione 1'), findsOneWidget);
+    final righe = await db.select(db.scansioni).get();
+    expect(righe, hasLength(1));
+    expect(File(scansioni.single.path).existsSync(), isTrue);
+  });
+
+  testWidgets('dopo "Fine" lo swipe-to-delete è disabilitato', (
+    tester,
+  ) async {
+    await pumpRiepilogo(
+      tester,
+      scansioniFinte(1),
+      pipeline: _FakeAnalisiCopertinaPipeline(),
+    );
+
+    await tester.tap(find.text('Fine'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dismissible), findsNothing);
+  });
+
+  testWidgets(
     "'Fine' avvia la pipeline di analisi copertina sull'intero batch",
     (tester) async {
       final pipeline = _FakeAnalisiCopertinaPipeline();
