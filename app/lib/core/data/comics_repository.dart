@@ -3,6 +3,7 @@ import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
+import 'package:mycomicbrain/core/domain/identificazione.dart';
 
 /// Espone il dominio del catalogo (opera/edizione/copia, §36) all'UI senza
 /// farle vedere Drift: prende e restituisce tipi di dominio, mai i tipi
@@ -73,6 +74,7 @@ class ComicsRepository {
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? scansioneId,
   }) {
     final now = DateTime.now();
     return _db
@@ -90,6 +92,7 @@ class ComicsRepository {
             notes: Value(notes),
             createdAt: createdAt ?? now,
             updatedAt: updatedAt ?? createdAt ?? now,
+            scansioneId: Value(scansioneId),
           ),
         );
   }
@@ -189,6 +192,92 @@ class ComicsRepository {
         errorMessage: Value(errorMessage),
         completedAt: Value(completedAt ?? DateTime.now()),
       ),
+    );
+  }
+
+  /// Crea la riga `Identificazione` di una Scansione, in stato `inCorso` —
+  /// la pipeline (§6.3, deciso su #53) la crea appena prende in carico la
+  /// Scansione dopo il completamento dell'Analisi Copertina, sul modello di
+  /// [avviaAnalisiCopertina].
+  Future<int> avviaIdentificazione({required int scansioneId, DateTime? createdAt}) {
+    return _db
+        .into(_db.identificazioneTable)
+        .insert(
+          IdentificazioneTableCompanion.insert(
+            scansioneId: scansioneId,
+            status: const Value(StatoIdentificazione.inCorso),
+            createdAt: createdAt ?? DateTime.now(),
+          ),
+        );
+  }
+
+  /// Persiste un Candidato proposto per un'Identificazione — una riga per
+  /// candidato, non appena proposto (deciso su #53), indipendentemente da
+  /// quale verrà poi confermato con [marcaCandidatoScelto].
+  Future<int> aggiungiCandidato({
+    required int identificazioneId,
+    required FonteCandidato source,
+    required double punteggio,
+    int? edizioneId,
+    String? title,
+    String? seriesName,
+    String? issueNumberLabel,
+    String? publisher,
+    int? year,
+    String? coverImageUrl,
+  }) {
+    return _db
+        .into(_db.candidatiTable)
+        .insert(
+          CandidatiTableCompanion.insert(
+            identificazioneId: identificazioneId,
+            source: source,
+            punteggio: punteggio,
+            edizioneId: Value(edizioneId),
+            title: Value(title),
+            seriesName: Value(seriesName),
+            issueNumberLabel: Value(issueNumberLabel),
+            publisher: Value(publisher),
+            year: Value(year),
+            coverImageUrl: Value(coverImageUrl),
+          ),
+        );
+  }
+
+  /// Conclude un'Identificazione con successo — anche col caso "zero
+  /// Candidati trovati" (nessuno stato speciale, deciso su #53): la tabella
+  /// `Candidati` resta semplicemente senza righe per questa Identificazione.
+  Future<void> completaIdentificazione({required int id, DateTime? completedAt}) {
+    return (_db.update(_db.identificazioneTable)..where((i) => i.id.equals(id))).write(
+      IdentificazioneTableCompanion(
+        status: const Value(StatoIdentificazione.completata),
+        completedAt: Value(completedAt ?? DateTime.now()),
+      ),
+    );
+  }
+
+  /// Registra un fallimento tecnico dell'Identificazione (es. ComicVine
+  /// irraggiungibile) — nessun retry automatico, sul modello di
+  /// [fallisciAnalisiCopertina].
+  Future<void> fallisciIdentificazione({
+    required int id,
+    required String errorMessage,
+    DateTime? completedAt,
+  }) {
+    return (_db.update(_db.identificazioneTable)..where((i) => i.id.equals(id))).write(
+      IdentificazioneTableCompanion(
+        status: const Value(StatoIdentificazione.fallita),
+        errorMessage: Value(errorMessage),
+        completedAt: Value(completedAt ?? DateTime.now()),
+      ),
+    );
+  }
+
+  /// Marca il Candidato confermato dall'utente (schermo di conferma, #54) —
+  /// la riga scelta fra quelle proposte per la stessa Identificazione.
+  Future<void> marcaCandidatoScelto({required int id}) {
+    return (_db.update(_db.candidatiTable)..where((c) => c.id.equals(id))).write(
+      const CandidatiTableCompanion(scelto: Value(true)),
     );
   }
 

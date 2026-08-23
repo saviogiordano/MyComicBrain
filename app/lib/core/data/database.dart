@@ -5,6 +5,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'package:mycomicbrain/core/data/database.steps.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
+import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:path_provider/path_provider.dart';
 
 part 'database.g.dart';
@@ -82,6 +83,12 @@ class Copie extends Table {
   /// Pilota "aggiunti di recente" e il KPI "aggiunti nel mese".
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
+
+  /// Scansione da cui questa Copia è nata — conferma di un Candidato o
+  /// inserimento manuale (§6.3, deciso su #53). Nullable: le fixture dei test
+  /// create direttamente con `ComicsRepository.aggiungiCopia` non passano da
+  /// una Scansione.
+  IntColumn get scansioneId => integer().nullable().references(Scansioni, #id)();
 }
 
 /// `Scansione`: una fotografia di cover acquisita e confermata, non ancora
@@ -166,14 +173,74 @@ class AnalisiCopertinaTable extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
-@DriftDatabase(tables: [Opere, SerieTable, Edizioni, Copie, Scansioni, AnalisiCopertinaTable])
+/// `Identificazione`: il processo — e la riga che lo traccia, 1:1 con una
+/// Scansione via `scansioneId` — che genera i Candidati a partire
+/// dall'Analisi Copertina di quella Scansione (§6.3, deciso su #53). Stesso
+/// pattern a stati di `AnalisiCopertinaTable`. Riga creata quando la
+/// pipeline prende in carico la Scansione dopo il completamento
+/// dell'Analisi Copertina.
+class IdentificazioneTable extends Table {
+  @override
+  String get tableName => 'identificazione';
+
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get scansioneId => integer().references(Scansioni, #id)();
+  TextColumn get status => textEnum<StatoIdentificazione>()
+      .withDefault(Constant(StatoIdentificazione.pending.name))();
+
+  /// Motivo di un fallimento tecnico — nessun retry, come `AnalisiCopertina`.
+  TextColumn get errorMessage => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get completedAt => dateTime().nullable()();
+}
+
+/// `Candidati`: un'ipotesi di corrispondenza fra una Scansione e
+/// un'Edizione, proposta durante un'Identificazione (§6.3, deciso su #53).
+/// N:1 con `IdentificazioneTable`. Colonne tipizzate, non un blob JSON:
+/// `edizioneId` è valorizzato solo per `source = interno` (Edizione già
+/// catalogata); i campi grezzi (`title`/`seriesName`/`issueNumberLabel`/
+/// `publisher`/`year`/`coverImageUrl`) coprono il caso `esterno`
+/// (ComicVine), che non ha ancora una riga Edizione propria. `punteggio` è
+/// il Punteggio di confidenza 0-100 (#52). `scelto` marca la riga che ha
+/// portato alla conferma, per poter tarare a posteriori pesi/soglie
+/// dell'algoritmo (placeholder in #52) su dati reali.
+class CandidatiTable extends Table {
+  @override
+  String get tableName => 'candidati';
+
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get identificazioneId => integer().references(IdentificazioneTable, #id)();
+  TextColumn get source => textEnum<FonteCandidato>()();
+  IntColumn get edizioneId => integer().nullable().references(Edizioni, #id)();
+  TextColumn get title => text().nullable()();
+  TextColumn get seriesName => text().nullable()();
+  TextColumn get issueNumberLabel => text().nullable()();
+  TextColumn get publisher => text().nullable()();
+  IntColumn get year => integer().nullable()();
+  TextColumn get coverImageUrl => text().nullable()();
+  RealColumn get punteggio => real()();
+  BoolColumn get scelto => boolean().withDefault(const Constant(false))();
+}
+
+@DriftDatabase(
+  tables: [
+    Opere,
+    SerieTable,
+    Edizioni,
+    Copie,
+    Scansioni,
+    AnalisiCopertinaTable,
+    IdentificazioneTable,
+    CandidatiTable,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   /// Il costruttore che accetta un [QueryExecutor] opzionale è necessario
   /// per i test in memoria (vedi `test/core/data/comics_repository_test.dart`).
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -194,6 +261,11 @@ class AppDatabase extends _$AppDatabase {
           schema.analisiCopertina.recognizedPublisherLogo,
         );
         await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.recognizedSeriesLogo);
+      },
+      from3To4: (m, schema) async {
+        await m.createTable(schema.identificazione);
+        await m.createTable(schema.candidati);
+        await m.addColumn(schema.copie, schema.copie.scansioneId);
       },
     ),
   );
