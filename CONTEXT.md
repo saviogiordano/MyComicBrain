@@ -13,7 +13,7 @@ Una pubblicazione specifica di un'opera — prima stampa, ristampa, variant, edi
 _Avoid_: Fumetto (ambiguo fra edizione e copia), albo (ok in prosa, non come termine di modello)
 
 **Copia**:
-Un esemplare fisico posseduto di un'edizione. Un'edizione può avere più copie (es. comprata due volte). Ha uno `status` proprio.
+Un esemplare fisico posseduto di un'edizione. Un'edizione può avere più copie (es. comprata due volte). Ha uno `status` proprio. Può portare un legame opzionale alla Scansione che l'ha originata (conferma di un Candidato o inserimento manuale, §6.3) — assente per le copie inserite senza passare da una Scansione. Se due Scansioni dello stesso batch confermano la stessa Edizione, il risultato sono normalmente due Copie di quell'Edizione, non un errore da prevenire — vedi Duplicato, [#53](https://github.com/saviogiordano/MyComicBrain/issues/53).
 _Avoid_: Esemplare (ok in prosa), item
 
 **Copia posseduta**:
@@ -52,3 +52,15 @@ Campi di computer vision (§6.2) dell'Analisi Copertina: il logo dell'editore/de
 **Sessione di acquisizione**:
 Un raggruppamento temporaneo, non persistito, di più Scansioni prodotte consecutivamente (fotocamera e/o galleria) prima che l'utente termini con "Fine". Esiste solo come stato della UI: non sopravvive a un riavvio e non ha una propria riga nel database — solo le Scansioni che produce vengono salvate.
 _Avoid_: Batch (ok in prosa tecnica, non come termine di dominio)
+
+**Candidato**:
+Un'ipotesi di corrispondenza fra una Scansione (tramite la sua Analisi Copertina) e un'Edizione — proposta dal riconoscimento (§6.3) durante l'Identificazione. Può provenire dal catalogo interno (un'Edizione già catalogata: confermarlo aggiunge una nuova Copia a quell'Edizione) o da un database esterno di fumetti (un'Edizione non ancora catalogata: confermarlo crea Opera/Edizione/Copia da zero). Porta un Punteggio di confidenza. Persiste come riga propria non appena proposto (non solo se confermato); confermarlo marca quella riga come scelta e collega/crea la Copia risultante — vedi [Mappa — Identificazione del fumetto](https://github.com/saviogiordano/MyComicBrain/issues/50), [#52](https://github.com/saviogiordano/MyComicBrain/issues/52), [#53](https://github.com/saviogiordano/MyComicBrain/issues/53).
+_Avoid_: Risultato, match (ok in prosa tecnica, non come termine di modello)
+
+**Identificazione**:
+Il processo — e la riga che lo traccia, 1:1 con una Scansione — che genera i Candidati a partire dall'Analisi Copertina di quella Scansione (§6.3). Stato pending/in corso/completata/fallita, stesso pattern di Analisi Copertina: nessun retry automatico né manuale, `fallita` è terminale (un errore tecnico, es. database esterno irraggiungibile — non lo stesso caso di "nessun Candidato trovato", che è comunque `completata`, solo senza Candidati proposti). Una Scansione è "risolta" quando esiste una Copia collegata a lei (conferma di un Candidato o inserimento manuale) — non è un attributo proprio dell'Identificazione. Deciso su [#53](https://github.com/saviogiordano/MyComicBrain/issues/53).
+_Avoid_: Riconoscimento (il processo AI generico di §6/§7 in prosa tecnica, non il nome di questa entità/tabella)
+
+**Punteggio di confidenza**:
+Un valore 0–100% assegnato a un Candidato durante l'identificazione (§6.3), che ne esprime la probabilità di essere la corrispondenza corretta. Calcolato combinando più segnali (non una cascata a livelli con stop al primo che risponde — tutti i segnali applicabili concorrono allo stesso punteggio): un segnale testuale dominante (somiglianza fra i campi letti nell'Analisi Copertina e i campi del Candidato), un boost secondario da Personaggi raffigurati/Tag di stile copertina/Tag di elementi visivi caratteristici/loghi riconosciuti (corrobora un match testuale già presente, non ne genera uno da solo), e un bonus additivo di contesto (stessa Serie già in catalogo con un numero adiacente o mancante fra le copie possedute). Barcode/ISBN letti nell'Analisi Copertina non contribuiscono al punteggio: nessuna delle due fonti di matching li supporta oggi come chiave di ricerca. I pesi relativi fra i segnali non sono fissati come valori di dominio: sono un dettaglio implementativo tarabile, non un concetto della collezione. Dettagli in [#52](https://github.com/saviogiordano/MyComicBrain/issues/52).
+_Avoid_: Score (ok in prosa tecnica, non come termine di modello), affidabilità (ambiguo con la condizione fisica della Copia)

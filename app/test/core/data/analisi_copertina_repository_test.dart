@@ -109,4 +109,66 @@ void main() {
     expect(riga.completedAt, isNotNull);
     expect(riga.title, isNull);
   });
+
+  group('watchStatoAnalisiCopertina', () {
+    test('pending finché la pipeline non ha ancora creato la riga', () async {
+      await scansione();
+
+      final stato = await repo.watchStatoAnalisiCopertina('/scansioni/1.jpg').first;
+
+      expect(stato.stato, StatoAnalisiCopertina.pending);
+      expect(stato.errorMessage, isNull);
+    });
+
+    test('inCorso mentre la pipeline chiama il provider AI', () async {
+      final scansioneId = await scansione();
+      await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+
+      final stato = await repo.watchStatoAnalisiCopertina('/scansioni/1.jpg').first;
+
+      expect(stato.stato, StatoAnalisiCopertina.inCorso);
+    });
+
+    test('completata dopo completaAnalisiCopertina', () async {
+      final scansioneId = await scansione();
+      final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+      await repo.completaAnalisiCopertina(id: analisiId, rawResponse: '{}');
+
+      final stato = await repo.watchStatoAnalisiCopertina('/scansioni/1.jpg').first;
+
+      expect(stato.stato, StatoAnalisiCopertina.completata);
+    });
+
+    test('fallita con errorMessage dopo fallisciAnalisiCopertina', () async {
+      final scansioneId = await scansione();
+      final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+      await repo.fallisciAnalisiCopertina(id: analisiId, errorMessage: 'timeout');
+
+      final stato = await repo.watchStatoAnalisiCopertina('/scansioni/1.jpg').first;
+
+      expect(stato.stato, StatoAnalisiCopertina.fallita);
+      expect(stato.errorMessage, 'timeout');
+    });
+
+    test('emette un nuovo valore quando lo stato cambia', () async {
+      final scansioneId = await scansione();
+      final valori = <StatoAnalisiCopertina>[];
+      final sub = repo
+          .watchStatoAnalisiCopertina('/scansioni/1.jpg')
+          .listen((s) => valori.add(s.stato));
+
+      await pumpEventQueue();
+      final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+      await pumpEventQueue();
+      await repo.completaAnalisiCopertina(id: analisiId, rawResponse: '{}');
+      await pumpEventQueue();
+      await sub.cancel();
+
+      expect(valori, [
+        StatoAnalisiCopertina.pending,
+        StatoAnalisiCopertina.inCorso,
+        StatoAnalisiCopertina.completata,
+      ]);
+    });
+  });
 }

@@ -8,6 +8,7 @@ import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/image_crop_service.dart';
 import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
+import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
@@ -49,3 +50,11 @@ final analisiCopertinaPipelineProvider = Provider<AnalisiCopertinaPipeline>((ref
     client: ref.watch(coverAnalysisClientProvider),
   );
 });
+
+/// Lo stato reale dell'Analisi Copertina di una Scansione, per percorso
+/// immagine — usato dal riepilogo per riflettere `In sospeso`/`In corso`/
+/// `Completata`/`Fallita` invece di un placeholder statico.
+final StreamProviderFamily<StatoAnalisiScansione, String> statoAnalisiCopertinaProvider =
+    StreamProvider.family<StatoAnalisiScansione, String>((ref, image) {
+      return ref.watch(comicsRepositoryProvider).watchStatoAnalisiCopertina(image);
+    });

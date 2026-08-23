@@ -56,7 +56,7 @@ class ClaudeCoverAnalysisClient implements CoverAnalysisClient {
           ],
           'output_config': {'format': _jsonSchemaFormat},
         }),
-      );
+      ).timeout(coverAnalysisTimeout);
     } on Object catch (e) {
       throw CoverAnalysisException("Chiamata all'API Claude fallita: $e");
     }

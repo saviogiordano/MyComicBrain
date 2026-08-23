@@ -113,6 +113,47 @@ void main() {
     expect(analisi.characters, isEmpty);
   });
 
+  test('riprova: riusa la riga esistente e la porta a completata', () async {
+    final path = await scansioneConImmagine('cover.jpg');
+    final pipelineFallita = AnalisiCopertinaPipeline(
+      repository: repo,
+      client: _FakeCoverAnalysisClient(eccezione: CoverAnalysisException('timeout')),
+    );
+    await pipelineFallita.avviaBatch([path]);
+    final analisiFallita = await unicaAnalisi();
+    expect(analisiFallita.status, StatoAnalisiCopertina.fallita);
+
+    final pipelineRiprova = AnalisiCopertinaPipeline(
+      repository: repo,
+      client: _FakeCoverAnalysisClient(risultato: _risultatoCompleto),
+    );
+    await pipelineRiprova.riprova(path);
+
+    final righe = await db.select(db.analisiCopertinaTable).get();
+    expect(righe, hasLength(1), reason: 'il retry non deve creare una seconda riga');
+    expect(righe.single.id, analisiFallita.id);
+    expect(righe.single.status, StatoAnalisiCopertina.completata);
+    expect(righe.single.errorMessage, isNull);
+    expect(righe.single.title, 'Amazing Spider-Man');
+  });
+
+  test('riprova: un secondo fallimento aggiorna errorMessage sulla stessa riga', () async {
+    final path = await scansioneConImmagine('cover.jpg');
+    final pipeline = AnalisiCopertinaPipeline(
+      repository: repo,
+      client: _FakeCoverAnalysisClient(eccezione: CoverAnalysisException('timeout')),
+    );
+    await pipeline.avviaBatch([path]);
+    final primoId = (await unicaAnalisi()).id;
+
+    await pipeline.riprova(path);
+
+    final analisi = await unicaAnalisi();
+    expect(analisi.id, primoId);
+    expect(analisi.status, StatoAnalisiCopertina.fallita);
+    expect(analisi.errorMessage, contains('timeout'));
+  });
+
   test('il fallimento di una Scansione non blocca le successive del batch', () async {
     final ok = await scansioneConImmagine('ok.jpg');
     final path1 = await scansioneConImmagine('ko.jpg');

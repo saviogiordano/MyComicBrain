@@ -34,7 +34,20 @@ class AnalisiCopertinaPipeline {
   Future<void> _avviaUna(String percorsoImmagine) async {
     final scansioneId = await _repository.idScansionePerImmagine(percorsoImmagine);
     final analisiId = await _repository.avviaAnalisiCopertina(scansioneId: scansioneId);
+    await _eseguiAnalisi(analisiId: analisiId, percorsoImmagine: percorsoImmagine);
+  }
 
+  /// Ripete l'Analisi Copertina di una Scansione già `fallita` (retry
+  /// manuale dal riepilogo, nessun retry automatico — #27): riusa la riga
+  /// `AnalisiCopertina` esistente invece di crearne una seconda.
+  Future<void> riprova(String percorsoImmagine) async {
+    final scansioneId = await _repository.idScansionePerImmagine(percorsoImmagine);
+    final analisiId = await _repository.idAnalisiCopertinaPerScansione(scansioneId);
+    await _repository.riavviaAnalisiCopertina(id: analisiId);
+    await _eseguiAnalisi(analisiId: analisiId, percorsoImmagine: percorsoImmagine);
+  }
+
+  Future<void> _eseguiAnalisi({required int analisiId, required String percorsoImmagine}) async {
     try {
       final bytes = await File(percorsoImmagine).readAsBytes();
       final risultato = await _client.estraiCopertina(bytes);

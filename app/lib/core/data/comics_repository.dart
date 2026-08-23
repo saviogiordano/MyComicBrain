@@ -195,6 +195,51 @@ class ComicsRepository {
     );
   }
 
+  /// L'id della riga `AnalisiCopertina` già creata per questa Scansione —
+  /// usato dal retry manuale (riepilogo) per riprendere la riga esistente
+  /// invece di crearne una seconda, che romperebbe la relazione 1:1 con la
+  /// Scansione.
+  Future<int> idAnalisiCopertinaPerScansione(int scansioneId) async {
+    final riga = await (_db.select(
+      _db.analisiCopertinaTable,
+    )..where((a) => a.scansioneId.equals(scansioneId))).getSingle();
+    return riga.id;
+  }
+
+  /// Riporta un'Analisi Copertina `fallita` in stato `inCorso` per un nuovo
+  /// tentativo — retry manuale dall'utente (nessun retry automatico, #27):
+  /// azzera `errorMessage`/`completedAt` della riga esistente.
+  Future<void> riavviaAnalisiCopertina({required int id}) {
+    return (_db.update(_db.analisiCopertinaTable)..where((a) => a.id.equals(id))).write(
+      const AnalisiCopertinaTableCompanion(
+        status: Value(StatoAnalisiCopertina.inCorso),
+        errorMessage: Value(null),
+        completedAt: Value(null),
+      ),
+    );
+  }
+
+  /// Lo stato osservabile dell'Analisi Copertina per la Scansione con questo
+  /// percorso immagine — usato dal riepilogo per riflettere lo stato reale
+  /// invece di un placeholder statico. `pending` finché la pipeline
+  /// sequenziale non ha ancora creato la riga per questa Scansione.
+  Stream<StatoAnalisiScansione> watchStatoAnalisiCopertina(String image) {
+    final query = _db.select(_db.scansioni).join([
+      leftOuterJoin(
+        _db.analisiCopertinaTable,
+        _db.analisiCopertinaTable.scansioneId.equalsExp(_db.scansioni.id),
+      ),
+    ])..where(_db.scansioni.image.equals(image));
+
+    return query.watchSingleOrNull().map((row) {
+      final analisi = row?.readTableOrNull(_db.analisiCopertinaTable);
+      return (
+        stato: analisi?.status ?? StatoAnalisiCopertina.pending,
+        errorMessage: analisi?.errorMessage,
+      );
+    });
+  }
+
   /// Crea la riga `Identificazione` di una Scansione, in stato `inCorso` —
   /// la pipeline (§6.3, deciso su #53) la crea appena prende in carico la
   /// Scansione dopo il completamento dell'Analisi Copertina, sul modello di

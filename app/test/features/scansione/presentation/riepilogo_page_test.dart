@@ -1,11 +1,15 @@
 import 'dart:io';
 
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
+import 'package:mycomicbrain/core/data/comics_repository.dart';
+import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
@@ -15,10 +19,16 @@ import 'package:path/path.dart' as p;
 /// ricevuti da "Fine" invece di chiamare Claude davvero.
 class _FakeAnalisiCopertinaPipeline implements AnalisiCopertinaPipeline {
   final batchRicevuti = <List<String>>[];
+  final riprovati = <String>[];
 
   @override
   Future<void> avviaBatch(Iterable<String> percorsiImmagine) async {
     batchRicevuti.add(percorsiImmagine.toList());
+  }
+
+  @override
+  Future<void> riprova(String percorsoImmagine) async {
+    riprovati.add(percorsoImmagine);
   }
 }
 
@@ -49,6 +59,7 @@ void main() {
     WidgetTester tester,
     List<XFile> scansioni, {
     AnalisiCopertinaPipeline? pipeline,
+    ComicsRepository? repository,
   }) async {
     final router = GoRouter(
       initialLocation: '/scansione',
@@ -78,6 +89,7 @@ void main() {
       ProviderScope(
         overrides: [
           if (pipeline != null) analisiCopertinaPipelineProvider.overrideWithValue(pipeline),
+          if (repository != null) comicsRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
@@ -114,6 +126,52 @@ void main() {
 
     expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('Riepilogo batch'), findsNothing);
+  });
+
+  testWidgets('la chip riflette lo stato reale invece di restare "In sospeso"', (tester) async {
+    final db = AppDatabase(
+      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+    );
+    addTearDown(db.close);
+    final repository = ComicsRepository(db);
+    final scansioni = scansioniFinte(1);
+    await repository.aggiungiScansione(image: scansioni.single.path);
+
+    await pumpRiepilogo(tester, scansioni, repository: repository);
+    expect(find.text('In sospeso'), findsOneWidget);
+
+    final scansioneId = await repository.idScansionePerImmagine(scansioni.single.path);
+    final analisiId = await repository.avviaAnalisiCopertina(scansioneId: scansioneId);
+    await tester.pumpAndSettle();
+    expect(find.text('In corso'), findsOneWidget);
+    expect(find.text('In sospeso'), findsNothing);
+
+    await repository.completaAnalisiCopertina(id: analisiId, rawResponse: '{}');
+    await tester.pumpAndSettle();
+    expect(find.text('Completata'), findsOneWidget);
+  });
+
+  testWidgets('la chip "Fallita" è il tasto di retry manuale', (tester) async {
+    final db = AppDatabase(
+      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+    );
+    addTearDown(db.close);
+    final repository = ComicsRepository(db);
+    final scansioni = scansioniFinte(1);
+    await repository.aggiungiScansione(image: scansioni.single.path);
+    final scansioneId = await repository.idScansionePerImmagine(scansioni.single.path);
+    final analisiId = await repository.avviaAnalisiCopertina(scansioneId: scansioneId);
+    await repository.fallisciAnalisiCopertina(id: analisiId, errorMessage: 'timeout');
+
+    final pipeline = _FakeAnalisiCopertinaPipeline();
+    await pumpRiepilogo(tester, scansioni, pipeline: pipeline, repository: repository);
+
+    expect(find.textContaining('Fallita'), findsOneWidget);
+
+    await tester.tap(find.textContaining('Fallita'));
+    await tester.pumpAndSettle();
+
+    expect(pipeline.riprovati, [scansioni.single.path]);
   });
 
   testWidgets("'Fine' avvia la pipeline di analisi copertina sull'intero batch", (tester) async {

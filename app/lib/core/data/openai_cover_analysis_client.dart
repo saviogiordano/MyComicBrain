@@ -60,7 +60,7 @@ class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
           ],
           'text': {'format': _textFormat},
         }),
-      );
+      ).timeout(coverAnalysisTimeout);
     } on Object catch (e) {
       throw CoverAnalysisException("Chiamata all'API OpenAI fallita: $e");
     }

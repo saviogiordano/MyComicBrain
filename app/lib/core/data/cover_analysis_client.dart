@@ -201,3 +201,10 @@ class CoverAnalysisException implements Exception {
 abstract interface class CoverAnalysisClient {
   Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg);
 }
+
+/// Timeout della chiamata HTTP al provider AI, condiviso fra i client
+/// (Claude, OpenAI, ...): senza un timeout esplicito, una richiesta che non
+/// riceve mai risposta lascia la Scansione bloccata a tempo indeterminato
+/// invece di finire `fallita` e sbloccare il resto del batch (nessun retry
+/// automatico, vedi `StatoAnalisiCopertina`).
+const coverAnalysisTimeout = Duration(seconds: 45);

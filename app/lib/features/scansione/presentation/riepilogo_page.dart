@@ -7,11 +7,13 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 
 /// Schermata `/scansione/riepilogo` (S-B — Lista con stato, deciso su #20):
-/// una riga per Scansione appena confermata, con thumbnail e chip "In
-/// sospeso" esplicito su ognuna (il riconoscimento AI, §6.3, è fuori scope
-/// di questa mappa, vedi `CONTEXT.md`). Schermata a sé, due azioni:
+/// una riga per Scansione appena confermata, con thumbnail e chip di stato
+/// collegata allo stato reale dell'Analisi Copertina (`watchStatoAnalisiCopertina`,
+/// "In sospeso"/"In corso"/"Completata"/"Fallita" — il riconoscimento AI,
+/// §6.3, è fuori scope di questa mappa, vedi `CONTEXT.md`). Schermata a sé, due azioni:
 /// "Aggiungi altre" torna allo scanner con il batch preservato (pop, nessun
 /// valore); "Fine" avvia la pipeline di analisi copertina (§6.1, §6.2, #32,
 /// #49) per l'intero batch — senza attendere il risultato, vedi
@@ -86,14 +88,16 @@ class RiepilogoPage extends ConsumerWidget {
   }
 }
 
-class _RigaScansione extends StatelessWidget {
+class _RigaScansione extends ConsumerWidget {
   const _RigaScansione({required this.indice, required this.scansione});
 
   final int indice;
   final XFile scansione;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stato = ref.watch(statoAnalisiCopertinaProvider(scansione.path)).valueOrNull;
+
     return AppCard(
       child: Row(
         children: [
@@ -108,17 +112,54 @@ class _RigaScansione extends StatelessWidget {
               style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.amberAlpha(0.14),
-              borderRadius: AppRadii.pillRadius,
-              border: Border.all(color: AppColors.amber),
-            ),
-            child: Text('In sospeso', style: AppTypography.labelMedium.copyWith(color: AppColors.amber)),
+          _ChipStatoAnalisi(
+            stato: stato?.stato,
+            errorMessage: stato?.errorMessage,
+            onRiprova: () => ref.read(analisiCopertinaPipelineProvider).riprova(scansione.path),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// La chip di stato del riepilogo, collegata allo stato reale della riga
+/// `AnalisiCopertinaTable` (prima era testo statico "In sospeso" a
+/// prescindere dall'esito, vedi indagine su segnalazione utente): `null`
+/// finché lo stream non ha ancora emesso il primo valore. Da `fallita`, la
+/// chip stessa è il tasto di retry manuale (nessun retry automatico, #27) —
+/// `errorMessage` compare al tocco prolungato.
+class _ChipStatoAnalisi extends StatelessWidget {
+  const _ChipStatoAnalisi({required this.stato, required this.errorMessage, required this.onRiprova});
+
+  final StatoAnalisiCopertina? stato;
+  final String? errorMessage;
+  final VoidCallback onRiprova;
+
+  @override
+  Widget build(BuildContext context) {
+    final (String label, Color colore) = switch (stato) {
+      null || StatoAnalisiCopertina.pending => ('In sospeso', AppColors.amber),
+      StatoAnalisiCopertina.inCorso => ('In corso', AppColors.amber),
+      StatoAnalisiCopertina.completata => ('Completata', AppColors.accent),
+      StatoAnalisiCopertina.fallita => ('Fallita · Riprova', AppColors.textMuted),
+    };
+
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: 4),
+      decoration: BoxDecoration(
+        color: colore.withValues(alpha: 0.14),
+        borderRadius: AppRadii.pillRadius,
+        border: Border.all(color: colore),
+      ),
+      child: Text(label, style: AppTypography.labelMedium.copyWith(color: colore)),
+    );
+
+    if (stato != StatoAnalisiCopertina.fallita) return chip;
+
+    return Tooltip(
+      message: errorMessage ?? 'Motivo del fallimento non disponibile',
+      child: InkWell(borderRadius: AppRadii.pillRadius, onTap: onRiprova, child: chip),
     );
   }
 }
