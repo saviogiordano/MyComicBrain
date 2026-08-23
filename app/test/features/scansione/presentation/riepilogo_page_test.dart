@@ -205,19 +205,34 @@ void main() {
     expect(find.text('Riepilogo batch'), findsNothing);
   });
 
-  testWidgets('"Fine" naviga davvero a /dashboard', (tester) async {
-    await pumpRiepilogo(
-      tester,
-      scansioniFinte(1),
-      pipeline: _FakeAnalisiCopertinaPipeline(),
-    );
+  testWidgets(
+    '"Fine" avvia la pipeline ma resta sul riepilogo; "Vai alla Dashboard" naviga davvero (#59)',
+    (tester) async {
+      await pumpRiepilogo(
+        tester,
+        scansioniFinte(1),
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+      );
 
-    await tester.tap(find.text('Fine'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Fine'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Dashboard'), findsOneWidget);
-    expect(find.text('Riepilogo batch'), findsNothing);
-  });
+      expect(
+        find.text('Riepilogo batch'),
+        findsOneWidget,
+        reason:
+            'resta sul riepilogo per vedere gli stati e la conferma candidato (#59)',
+      );
+      expect(find.text('Fine'), findsNothing);
+      expect(find.text('Vai alla Dashboard'), findsOneWidget);
+
+      await tester.tap(find.text('Vai alla Dashboard'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dashboard'), findsOneWidget);
+      expect(find.text('Riepilogo batch'), findsNothing);
+    },
+  );
 
   testWidgets(
     'la chip riflette lo stato reale invece di restare "In sospeso"',

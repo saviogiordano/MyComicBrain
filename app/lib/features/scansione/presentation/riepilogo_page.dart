@@ -13,28 +13,41 @@ import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 /// una riga per Scansione appena confermata, con thumbnail e chip di stato
 /// collegata allo stato reale dell'Analisi Copertina (`watchStatoAnalisiCopertina`,
 /// "In sospeso"/"In corso"/"Completata"/"Fallita" — il riconoscimento AI,
-/// §6.3, è fuori scope di questa mappa, vedi `CONTEXT.md`). Schermata a sé, due azioni:
-/// "Aggiungi altre" torna allo scanner con il batch preservato (pop, nessun
-/// valore); "Fine" avvia la pipeline di analisi copertina (§6.1, §6.2, #32,
-/// #49) per l'intero batch — senza attendere il risultato, vedi
-/// `AnalisiCopertinaPipeline` — e naviga davvero a `/dashboard`, non un
-/// placeholder.
-class RiepilogoPage extends ConsumerWidget {
+/// §6.3, è fuori scope di questa mappa, vedi `CONTEXT.md`). "Aggiungi altre"
+/// torna allo scanner con il batch preservato (pop, nessun valore); "Fine"
+/// avvia la pipeline di analisi copertina (§6.1, §6.2, #32, #49) per
+/// l'intero batch — senza attendere il risultato, vedi
+/// `AnalisiCopertinaPipeline`. A differenza della versione originale (#24),
+/// non naviga più via subito: restare sulla pagina è l'unico modo per
+/// vedere gli stati aggiornarsi dal vivo e toccare le righe pronte per lo
+/// schermo di conferma candidato (§6.3, #59), altrimenti irraggiungibile —
+/// segnalato in test manuale dopo #59. Una volta avviata, "Fine" diventa
+/// "Vai alla Dashboard": la pipeline resta in background anche dopo,
+/// nessuna seconda chiamata possibile.
+class RiepilogoPage extends ConsumerStatefulWidget {
   const RiepilogoPage({required this.scansioni, super.key});
 
   final List<XFile> scansioni;
 
-  void _fine(BuildContext context, WidgetRef ref) {
+  @override
+  ConsumerState<RiepilogoPage> createState() => _RiepilogoPageState();
+}
+
+class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
+  bool _avviato = false;
+
+  void _fine() {
+    setState(() => _avviato = true);
     unawaited(
       ref.read(analisiCopertinaPipelineProvider).avviaBatch([
-        for (final s in scansioni) s.path,
+        for (final s in widget.scansioni) s.path,
       ]),
     );
-    context.go('/dashboard');
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final scansioni = widget.scansioni;
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
       body: SafeArea(
@@ -98,8 +111,10 @@ class RiepilogoPage extends ConsumerWidget {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: FilledButton(
-                      onPressed: () => _fine(context, ref),
-                      child: const Text('Fine'),
+                      onPressed: _avviato
+                          ? () => context.go('/dashboard')
+                          : _fine,
+                      child: Text(_avviato ? 'Vai alla Dashboard' : 'Fine'),
                     ),
                   ),
                 ],
