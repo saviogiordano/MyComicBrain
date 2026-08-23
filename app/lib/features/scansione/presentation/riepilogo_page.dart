@@ -13,9 +13,10 @@ import 'package:mycomicbrain/core/design_system/design_system.dart';
 /// sospeso" esplicito su ognuna (il riconoscimento AI, §6.3, è fuori scope
 /// di questa mappa, vedi `CONTEXT.md`). Schermata a sé, due azioni:
 /// "Aggiungi altre" torna allo scanner con il batch preservato (pop, nessun
-/// valore); "Fine" avvia la pipeline di analisi OCR (§6.1, #32) per l'intero
-/// batch — senza attendere il risultato, vedi `AnalisiOcrPipeline` — e
-/// naviga davvero a `/dashboard`, non un placeholder.
+/// valore); "Fine" avvia la pipeline di analisi copertina (§6.1, §6.2, #32,
+/// #49) per l'intero batch — senza attendere il risultato, vedi
+/// `AnalisiCopertinaPipeline` — e naviga davvero a `/dashboard`, non un
+/// placeholder.
 class RiepilogoPage extends ConsumerWidget {
   const RiepilogoPage({required this.scansioni, super.key});
 
@@ -23,7 +24,7 @@ class RiepilogoPage extends ConsumerWidget {
 
   void _fine(BuildContext context, WidgetRef ref) {
     unawaited(
-      ref.read(analisiOcrPipelineProvider).avviaBatch([for (final s in scansioni) s.path]),
+      ref.read(analisiCopertinaPipelineProvider).avviaBatch([for (final s in scansioni) s.path]),
     );
     context.go('/dashboard');
   }

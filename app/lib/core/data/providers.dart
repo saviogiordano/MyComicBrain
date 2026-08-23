@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mycomicbrain/core/data/analisi_ocr_pipeline.dart';
-import 'package:mycomicbrain/core/data/claude_ocr_client.dart';
+import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
+import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/image_crop_service.dart';
@@ -20,13 +20,15 @@ final imageCropServiceProvider = Provider<ImageCropService>((ref) => ImageCropSe
 
 final scansioneStorageProvider = Provider<ScansioneStorage>((ref) => ScansioneStorage());
 
-final claudeOcrClientProvider = Provider<ClaudeOcrClient>((ref) => ClaudeOcrClient());
+final claudeCoverAnalysisClientProvider = Provider<ClaudeCoverAnalysisClient>(
+  (ref) => ClaudeCoverAnalysisClient(),
+);
 
-/// Pipeline di analisi OCR di fine batch (§6.1, #32), triggerata da "Fine"
-/// nel riepilogo.
-final analisiOcrPipelineProvider = Provider<AnalisiOcrPipeline>((ref) {
-  return AnalisiOcrPipeline(
+/// Pipeline di analisi copertina di fine batch (§6.1, §6.2, #32, #49),
+/// triggerata da "Fine" nel riepilogo.
+final analisiCopertinaPipelineProvider = Provider<AnalisiCopertinaPipeline>((ref) {
+  return AnalisiCopertinaPipeline(
     repository: ref.watch(comicsRepositoryProvider),
-    client: ref.watch(claudeOcrClientProvider),
+    client: ref.watch(claudeCoverAnalysisClientProvider),
   );
 });

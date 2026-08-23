@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/database.dart';
-import 'package:mycomicbrain/core/domain/analisi_ocr.dart';
+import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
 
@@ -96,8 +96,8 @@ class ComicsRepository {
 
   /// Persiste una Scansione confermata (revisione ritaglio/rotazione, #24).
   /// Il riconoscimento (§6.3, collegamento a un'edizione) resta fuori scope
-  /// di questa mappa — l'Analisi OCR (§6.1) parte separatamente, vedi
-  /// [idScansionePerImmagine]/[avviaAnalisiOcr].
+  /// di questa mappa — l'Analisi Copertina (§6.1, §6.2) parte separatamente,
+  /// vedi [idScansionePerImmagine]/[avviaAnalisiCopertina].
   Future<int> aggiungiScansione({required String image, DateTime? createdAt}) {
     return _db
         .into(_db.scansioni)
@@ -119,25 +119,25 @@ class ComicsRepository {
     return riga.id;
   }
 
-  /// Crea la riga `AnalisiOcr` di una Scansione, in stato `inCorso` — la
-  /// pipeline (#32) la crea appena prende in carico la Scansione, prima di
-  /// chiamare Claude.
-  Future<int> avviaAnalisiOcr({required int scansioneId, DateTime? createdAt}) {
+  /// Crea la riga `AnalisiCopertina` di una Scansione, in stato `inCorso` —
+  /// la pipeline (#32) la crea appena prende in carico la Scansione, prima
+  /// di chiamare Claude.
+  Future<int> avviaAnalisiCopertina({required int scansioneId, DateTime? createdAt}) {
     return _db
-        .into(_db.analisiOcrTable)
+        .into(_db.analisiCopertinaTable)
         .insert(
-          AnalisiOcrTableCompanion.insert(
+          AnalisiCopertinaTableCompanion.insert(
             scansioneId: scansioneId,
-            status: const Value(StatoAnalisiOcr.inCorso),
+            status: const Value(StatoAnalisiCopertina.inCorso),
             createdAt: createdAt ?? DateTime.now(),
           ),
         );
   }
 
-  /// Registra il risultato di un'Analisi OCR completata con successo — campi
-  /// grezzi e non parsati (#31), `rawResponse` preserva l'intera risposta
-  /// strutturata di Claude.
-  Future<void> completaAnalisiOcr({
+  /// Registra il risultato di un'Analisi Copertina completata con successo —
+  /// campi grezzi e non parsati (#31, #48), `rawResponse` preserva l'intera
+  /// risposta strutturata di Claude.
+  Future<void> completaAnalisiCopertina({
     required int id,
     required String rawResponse,
     String? title,
@@ -147,10 +147,15 @@ class ComicsRepository {
     String? isbn,
     String? barcode,
     String? price,
+    List<String> characters = const [],
+    List<String> coverStyleTags = const [],
+    List<String> visualElementTags = const [],
+    String? recognizedPublisherLogo,
+    String? recognizedSeriesLogo,
     DateTime? completedAt,
   }) {
-    return (_db.update(_db.analisiOcrTable)..where((a) => a.id.equals(id))).write(
-      AnalisiOcrTableCompanion(
+    return (_db.update(_db.analisiCopertinaTable)..where((a) => a.id.equals(id))).write(
+      AnalisiCopertinaTableCompanion(
         title: Value(title),
         issueNumberLabel: Value(issueNumberLabel),
         publisher: Value(publisher),
@@ -158,24 +163,29 @@ class ComicsRepository {
         isbn: Value(isbn),
         barcode: Value(barcode),
         price: Value(price),
+        characters: Value(characters),
+        coverStyleTags: Value(coverStyleTags),
+        visualElementTags: Value(visualElementTags),
+        recognizedPublisherLogo: Value(recognizedPublisherLogo),
+        recognizedSeriesLogo: Value(recognizedSeriesLogo),
         rawResponse: Value(rawResponse),
-        status: const Value(StatoAnalisiOcr.completata),
+        status: const Value(StatoAnalisiCopertina.completata),
         completedAt: Value(completedAt ?? DateTime.now()),
       ),
     );
   }
 
-  /// Registra un fallimento dell'Analisi OCR — nessun retry automatico
+  /// Registra un fallimento dell'Analisi Copertina — nessun retry automatico
   /// (destinazione della mappa #27): lo stato resta `fallita`, `errorMessage`
   /// cattura il motivo per capirlo a posteriori.
-  Future<void> fallisciAnalisiOcr({
+  Future<void> fallisciAnalisiCopertina({
     required int id,
     required String errorMessage,
     DateTime? completedAt,
   }) {
-    return (_db.update(_db.analisiOcrTable)..where((a) => a.id.equals(id))).write(
-      AnalisiOcrTableCompanion(
-        status: const Value(StatoAnalisiOcr.fallita),
+    return (_db.update(_db.analisiCopertinaTable)..where((a) => a.id.equals(id))).write(
+      AnalisiCopertinaTableCompanion(
+        status: const Value(StatoAnalisiCopertina.fallita),
         errorMessage: Value(errorMessage),
         completedAt: Value(completedAt ?? DateTime.now()),
       ),

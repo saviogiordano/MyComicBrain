@@ -1,11 +1,26 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:mycomicbrain/core/data/database.steps.dart';
-import 'package:mycomicbrain/core/domain/analisi_ocr.dart';
+import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:path_provider/path_provider.dart';
 
 part 'database.g.dart';
+
+/// Converter condiviso per le colonne di tag liberi di `AnalisiCopertinaTable`
+/// (`characters`, `coverStyleTags`, `visualElementTags`, deciso su #48):
+/// liste di stringhe, serializzate come JSON nella colonna testuale.
+class StringListConverter extends TypeConverter<List<String>, String> {
+  const StringListConverter();
+
+  @override
+  List<String> fromSql(String fromDb) => (jsonDecode(fromDb) as List<dynamic>).cast<String>();
+
+  @override
+  String toSql(List<String> value) => jsonEncode(value);
+}
 
 /// `Opera`: la storia/testata a prescindere da come è stata pubblicata.
 /// Separata da `Edizione` fin dalla v1 (§36), anche se oggi popolata quasi
@@ -74,7 +89,8 @@ class Copie extends Table {
 /// vedi `CONTEXT.md`). `userId` è un placeholder per l'autenticazione
 /// futura. `ocrText`/`recognitionStatus`/`confidence` (placeholder
 /// anticipati per errore di design, mai consumati) sono stati rimossi in
-/// #32: l'Analisi OCR vive ora nella propria tabella, vedi `AnalisiOcrTable`.
+/// #32: l'Analisi Copertina vive ora nella propria tabella, vedi
+/// `AnalisiCopertinaTable`.
 class Scansioni extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get userId => integer().nullable()();
@@ -84,17 +100,21 @@ class Scansioni extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
-/// `Analisi OCR`: risultato dell'estrazione automatica via Claude (§6.1,
-/// forma decisa su #31). Relazione 1:1 con `Scansioni` via `scansioneId`,
-/// una riga creata quando la pipeline (#32) prende in carico la Scansione.
-/// Campi grezzi e non parsati (il parsing verso Opera/Edizione/Serie è
-/// §6.3, fuori scope): un campo non trovato da Claude resta `null`.
-/// `rawResponse` preserva l'intera risposta strutturata — autori, codici
-/// identificativi, posizione del testo — perché nessuna schermata di
-/// questa mappa li consuma ancora.
-class AnalisiOcrTable extends Table {
+/// `Analisi Copertina`: risultato dell'estrazione automatica via Claude
+/// (OCR §6.1, forma decisa su #31; computer vision §6.2, campi aggiunti su
+/// #48/#49 — la tabella si chiamava `AnalisiOcrTable`/`analisi_ocr` prima di
+/// coprire anche la computer vision). Relazione 1:1 con `Scansioni` via
+/// `scansioneId`, una riga creata quando la pipeline (#32) prende in carico
+/// la Scansione. Campi grezzi e non parsati (il parsing verso
+/// Opera/Edizione/Serie è §6.3, fuori scope): un campo non trovato/non
+/// riconosciuto da Claude resta `null` (valori singoli) o lista vuota
+/// (`characters`/`coverStyleTags`/`visualElementTags`). `rawResponse`
+/// preserva l'intera risposta strutturata — autori, codici identificativi,
+/// posizione del testo — perché nessuna schermata di questa mappa li
+/// consuma ancora.
+class AnalisiCopertinaTable extends Table {
   @override
-  String get tableName => 'analisi_ocr';
+  String get tableName => 'analisi_copertina';
 
   IntColumn get id => integer().autoIncrement()();
   IntColumn get scansioneId => integer().references(Scansioni, #id)();
@@ -106,11 +126,39 @@ class AnalisiOcrTable extends Table {
   TextColumn get barcode => text().nullable()();
   TextColumn get price => text().nullable()();
 
+  /// Personaggi raffigurati sulla copertina (§6.2, tag liberi — deciso su
+  /// #48). Lista vuota se Claude non riconosce nulla con sufficiente
+  /// sicurezza, mai `null`.
+  TextColumn get characters =>
+      text().map(const StringListConverter()).withDefault(const Constant('[]'))();
+
+  /// Tag di stile/genere artistico o tipologia editoriale della copertina
+  /// nel suo complesso (§6.2, deciso su #48), es. "manga", "variant cover".
+  TextColumn get coverStyleTags =>
+      text().map(const StringListConverter()).withDefault(const Constant('[]'))();
+
+  /// Elementi visivi concreti e specifici della copertina (§6.2, deciso su
+  /// #48) che non descrivono uno stile generale, es. "sfondo con
+  /// esplosione".
+  TextColumn get visualElementTags =>
+      text().map(const StringListConverter()).withDefault(const Constant('[]'))();
+
+  /// Logo dell'editore riconosciuto visivamente (§6.2, deciso su #48) —
+  /// parallelo a [publisher] (letto testualmente via OCR), ma distinto:
+  /// un logo può essere riconosciuto anche quando il nome testuale
+  /// dell'editore non è leggibile sulla copertina, e viceversa.
+  TextColumn get recognizedPublisherLogo => text().nullable()();
+
+  /// Logo della serie/collana riconosciuto visivamente (§6.2, deciso su
+  /// #48) — parallelo a [seriesName] (letto testualmente via OCR), stessa
+  /// distinzione di [recognizedPublisherLogo].
+  TextColumn get recognizedSeriesLogo => text().nullable()();
+
   /// L'intera risposta JSON strutturata di Claude (autori, codici
   /// identificativi, posizione qualitativa/bounding box del testo).
   TextColumn get rawResponse => text().nullable()();
-  TextColumn get status => textEnum<StatoAnalisiOcr>()
-      .withDefault(Constant(StatoAnalisiOcr.pending.name))();
+  TextColumn get status => textEnum<StatoAnalisiCopertina>()
+      .withDefault(Constant(StatoAnalisiCopertina.pending.name))();
 
   /// Motivo di un fallimento — utile dato che non c'è retry automatico.
   TextColumn get errorMessage => text().nullable()();
@@ -118,14 +166,14 @@ class AnalisiOcrTable extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
-@DriftDatabase(tables: [Opere, SerieTable, Edizioni, Copie, Scansioni, AnalisiOcrTable])
+@DriftDatabase(tables: [Opere, SerieTable, Edizioni, Copie, Scansioni, AnalisiCopertinaTable])
 class AppDatabase extends _$AppDatabase {
   /// Il costruttore che accetta un [QueryExecutor] opzionale è necessario
   /// per i test in memoria (vedi `test/core/data/comics_repository_test.dart`).
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -135,6 +183,17 @@ class AppDatabase extends _$AppDatabase {
         await m.dropColumn(schema.scansioni, 'recognition_status');
         await m.dropColumn(schema.scansioni, 'confidence');
         await m.createTable(schema.analisiOcr);
+      },
+      from2To3: (m, schema) async {
+        await m.renameTable(schema.analisiCopertina, 'analisi_ocr');
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.characters);
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.coverStyleTags);
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.visualElementTags);
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.recognizedPublisherLogo,
+        );
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.recognizedSeriesLogo);
       },
     ),
   );

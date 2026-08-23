@@ -3,30 +3,31 @@ import 'dart:io';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mycomicbrain/core/data/analisi_ocr_pipeline.dart';
-import 'package:mycomicbrain/core/data/claude_ocr_client.dart';
+import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
+import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
-import 'package:mycomicbrain/core/domain/analisi_ocr.dart';
+import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:path/path.dart' as p;
 
-/// [ClaudeOcrClient] finto: restituisce [risultato] o solleva [eccezione]
-/// senza mai chiamare la rete — usato per isolare la pipeline dall'API.
-class _FakeClaudeOcrClient implements ClaudeOcrClient {
-  _FakeClaudeOcrClient({this.risultato, this.eccezione});
+/// [ClaudeCoverAnalysisClient] finto: restituisce [risultato] o solleva
+/// [eccezione] senza mai chiamare la rete — usato per isolare la pipeline
+/// dall'API.
+class _FakeClaudeCoverAnalysisClient implements ClaudeCoverAnalysisClient {
+  _FakeClaudeCoverAnalysisClient({this.risultato, this.eccezione});
 
-  final ClaudeOcrResult? risultato;
+  final ClaudeCoverAnalysisResult? risultato;
   final Exception? eccezione;
 
   @override
-  Future<ClaudeOcrResult> estraiCopertina(Uint8List immagineJpeg) async {
+  Future<ClaudeCoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
     final eccezione = this.eccezione;
     if (eccezione != null) throw eccezione;
     return risultato!;
   }
 }
 
-const _risultatoCompleto = ClaudeOcrResult(
+const _risultatoCompleto = ClaudeCoverAnalysisResult(
   title: 'Amazing Spider-Man',
   issueNumberLabel: '300',
   publisher: 'Marvel',
@@ -34,6 +35,11 @@ const _risultatoCompleto = ClaudeOcrResult(
   isbn: null,
   barcode: '076194130132500111',
   price: '€ 1,50',
+  characters: ['Spider-Man', 'Venom'],
+  coverStyleTags: ['stile realistico'],
+  visualElementTags: ['sfondo con esplosione'],
+  recognizedPublisherLogo: 'Marvel',
+  recognizedSeriesLogo: null,
   raw: {'authors': ['David Michelinie']},
 );
 
@@ -43,7 +49,7 @@ void main() {
   late ComicsRepository repo;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('analisi_ocr_pipeline_test_');
+    tempDir = await Directory.systemTemp.createTemp('analisi_copertina_pipeline_test_');
     db = AppDatabase(DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true));
     repo = ComicsRepository(db);
   });
@@ -60,19 +66,20 @@ void main() {
     return path;
   }
 
-  Future<AnalisiOcrTableData> unicaAnalisi() => db.select(db.analisiOcrTable).getSingle();
+  Future<AnalisiCopertinaTableData> unicaAnalisi() =>
+      db.select(db.analisiCopertinaTable).getSingle();
 
   test('successo: persiste i campi grezzi e lo stato completata', () async {
     final path = await scansioneConImmagine('cover.jpg');
-    final pipeline = AnalisiOcrPipeline(
+    final pipeline = AnalisiCopertinaPipeline(
       repository: repo,
-      client: _FakeClaudeOcrClient(risultato: _risultatoCompleto),
+      client: _FakeClaudeCoverAnalysisClient(risultato: _risultatoCompleto),
     );
 
     await pipeline.avviaBatch([path]);
 
     final analisi = await unicaAnalisi();
-    expect(analisi.status, StatoAnalisiOcr.completata);
+    expect(analisi.status, StatoAnalisiCopertina.completata);
     expect(analisi.title, 'Amazing Spider-Man');
     expect(analisi.issueNumberLabel, '300');
     expect(analisi.publisher, 'Marvel');
@@ -80,6 +87,11 @@ void main() {
     expect(analisi.isbn, isNull);
     expect(analisi.barcode, '076194130132500111');
     expect(analisi.price, '€ 1,50');
+    expect(analisi.characters, ['Spider-Man', 'Venom']);
+    expect(analisi.coverStyleTags, ['stile realistico']);
+    expect(analisi.visualElementTags, ['sfondo con esplosione']);
+    expect(analisi.recognizedPublisherLogo, 'Marvel');
+    expect(analisi.recognizedSeriesLogo, isNull);
     expect(analisi.rawResponse, contains('David Michelinie'));
     expect(analisi.errorMessage, isNull);
     expect(analisi.completedAt, isNotNull);
@@ -87,53 +99,56 @@ void main() {
 
   test('fallimento: nessuna eccezione propagata, stato fallita con errorMessage', () async {
     final path = await scansioneConImmagine('cover.jpg');
-    final pipeline = AnalisiOcrPipeline(
+    final pipeline = AnalisiCopertinaPipeline(
       repository: repo,
-      client: _FakeClaudeOcrClient(eccezione: ClaudeOcrException('rete assente')),
+      client: _FakeClaudeCoverAnalysisClient(
+        eccezione: ClaudeCoverAnalysisException('rete assente'),
+      ),
     );
 
     await pipeline.avviaBatch([path]);
 
     final analisi = await unicaAnalisi();
-    expect(analisi.status, StatoAnalisiOcr.fallita);
+    expect(analisi.status, StatoAnalisiCopertina.fallita);
     expect(analisi.errorMessage, contains('rete assente'));
     expect(analisi.title, isNull);
+    expect(analisi.characters, isEmpty);
   });
 
   test('il fallimento di una Scansione non blocca le successive del batch', () async {
     final ok = await scansioneConImmagine('ok.jpg');
     final path1 = await scansioneConImmagine('ko.jpg');
     var chiamate = 0;
-    final client = _ClaudeOcrClientAlternante(
+    final client = _ClaudeCoverAnalysisClientAlternante(
       risposte: [
-        () => throw ClaudeOcrException('fallita'),
+        () => throw ClaudeCoverAnalysisException('fallita'),
         () => _risultatoCompleto,
       ],
       onChiamata: () => chiamate++,
     );
-    final pipeline = AnalisiOcrPipeline(repository: repo, client: client);
+    final pipeline = AnalisiCopertinaPipeline(repository: repo, client: client);
 
     await pipeline.avviaBatch([path1, ok]);
 
     expect(chiamate, 2);
-    final analisi = await (db.select(db.analisiOcrTable)
+    final analisi = await (db.select(db.analisiCopertinaTable)
           ..orderBy([(a) => OrderingTerm.asc(a.id)]))
         .get();
     expect(analisi, hasLength(2));
-    expect(analisi[0].status, StatoAnalisiOcr.fallita);
-    expect(analisi[1].status, StatoAnalisiOcr.completata);
+    expect(analisi[0].status, StatoAnalisiCopertina.fallita);
+    expect(analisi[1].status, StatoAnalisiCopertina.completata);
   });
 }
 
-class _ClaudeOcrClientAlternante implements ClaudeOcrClient {
-  _ClaudeOcrClientAlternante({required this.risposte, required this.onChiamata});
+class _ClaudeCoverAnalysisClientAlternante implements ClaudeCoverAnalysisClient {
+  _ClaudeCoverAnalysisClientAlternante({required this.risposte, required this.onChiamata});
 
-  final List<ClaudeOcrResult Function()> risposte;
+  final List<ClaudeCoverAnalysisResult Function()> risposte;
   final void Function() onChiamata;
   var _indice = 0;
 
   @override
-  Future<ClaudeOcrResult> estraiCopertina(Uint8List immagineJpeg) async {
+  Future<ClaudeCoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
     onChiamata();
     return risposte[_indice++]();
   }

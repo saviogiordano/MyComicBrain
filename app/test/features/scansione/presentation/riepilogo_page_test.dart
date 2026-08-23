@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mycomicbrain/core/data/analisi_ocr_pipeline.dart';
+import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
@@ -13,7 +13,7 @@ import 'package:path/path.dart' as p;
 
 /// Sostituisce la pipeline reale (rete/DB) nei test: registra i batch
 /// ricevuti da "Fine" invece di chiamare Claude davvero.
-class _FakeAnalisiOcrPipeline implements AnalisiOcrPipeline {
+class _FakeAnalisiCopertinaPipeline implements AnalisiCopertinaPipeline {
   final batchRicevuti = <List<String>>[];
 
   @override
@@ -48,7 +48,7 @@ void main() {
   Future<GoRouter> pumpRiepilogo(
     WidgetTester tester,
     List<XFile> scansioni, {
-    AnalisiOcrPipeline? pipeline,
+    AnalisiCopertinaPipeline? pipeline,
   }) async {
     final router = GoRouter(
       initialLocation: '/scansione',
@@ -77,7 +77,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          if (pipeline != null) analisiOcrPipelineProvider.overrideWithValue(pipeline),
+          if (pipeline != null) analisiCopertinaPipelineProvider.overrideWithValue(pipeline),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
@@ -107,7 +107,7 @@ void main() {
   });
 
   testWidgets('"Fine" naviga davvero a /dashboard', (tester) async {
-    await pumpRiepilogo(tester, scansioniFinte(1), pipeline: _FakeAnalisiOcrPipeline());
+    await pumpRiepilogo(tester, scansioniFinte(1), pipeline: _FakeAnalisiCopertinaPipeline());
 
     await tester.tap(find.text('Fine'));
     await tester.pumpAndSettle();
@@ -116,8 +116,8 @@ void main() {
     expect(find.text('Riepilogo batch'), findsNothing);
   });
 
-  testWidgets("'Fine' avvia la pipeline di analisi OCR sull'intero batch", (tester) async {
-    final pipeline = _FakeAnalisiOcrPipeline();
+  testWidgets("'Fine' avvia la pipeline di analisi copertina sull'intero batch", (tester) async {
+    final pipeline = _FakeAnalisiCopertinaPipeline();
     final scansioni = scansioniFinte(2);
 
     await pumpRiepilogo(tester, scansioni, pipeline: pipeline);
