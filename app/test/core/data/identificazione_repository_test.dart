@@ -63,6 +63,9 @@ void main() {
     int? pageCount,
     String? language,
     String? color,
+    String? printingType,
+    String? classificazione,
+    String? description,
   }) async {
     final scansioneId = await scansione();
     final analisiId = await repo.avviaAnalisiCopertina(
@@ -82,6 +85,9 @@ void main() {
       pageCount: pageCount,
       language: language,
       color: color,
+      printingType: printingType,
+      classificazione: classificazione,
+      description: description,
     );
     return scansioneId;
   }
@@ -663,6 +669,85 @@ void main() {
       // completezza — arrivano comunque dal Candidato quando l'AI non li
       // sovrascrive con un valore proprio.
       expect(edizione.issueNumberLabel, '700');
+    },
+  );
+
+  test(
+    'confermaCandidato esterno: Tipo di stampa/Classificazione/Descrizione '
+    "vengono dall'Analisi Copertina (AI), nessun ripiego sul Candidato — "
+    'deciso su #71/#74: la risorsa `issue` di ComicVine non espone questi '
+    "campi, l'AI è l'unica fonte",
+    () async {
+      final scansioneId = await scansioneConAnalisi(
+        printingType: 'Direct Edition',
+        classificazione: 'Rated T+',
+        description: 'Peter Parker affronta il Green Goblin.',
+      );
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'The Amazing Spider-Man',
+        issueNumberLabel: '700',
+        coverImageUrl: 'https://comicvine.example/700.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(edizione.printingType, 'Direct Edition');
+      expect(edizione.classificazione, 'Rated T+');
+      expect(edizione.description, 'Peter Parker affronta il Green Goblin.');
+    },
+  );
+
+  test(
+    'confermaCandidato esterno: Tipo di stampa/Classificazione/Descrizione '
+    "restano vuoti quando l'Analisi Copertina non li ha letti — nessun "
+    'ripiego possibile, il Candidato ComicVine non porta questi campi',
+    () async {
+      final scansioneId = await scansioneConAnalisi();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'The Amazing Spider-Man',
+        issueNumberLabel: '700',
+        coverImageUrl: 'https://comicvine.example/700.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(edizione.printingType, isNull);
+      expect(edizione.classificazione, isNull);
+      expect(edizione.description, isNull);
     },
   );
 

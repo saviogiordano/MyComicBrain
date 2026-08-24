@@ -67,6 +67,8 @@ class ComicsRepository {
     String? ean,
     String? volume,
     String? description,
+    String? printingType,
+    String? classificazione,
     DateTime? createdAt,
   }) {
     return _db
@@ -87,6 +89,8 @@ class ComicsRepository {
             ean: Value(ean),
             volume: Value(volume),
             description: Value(description),
+            printingType: Value(printingType),
+            classificazione: Value(classificazione),
             createdAt: createdAt ?? DateTime.now(),
           ),
         );
@@ -577,9 +581,10 @@ class ComicsRepository {
   /// — usarla come unica fonte lasciava l'Edizione quasi vuota (bug
   /// osservato, deciso su #70). ComicVine resta la fonte per titolo/serie/
   /// numero solo come ripiego quando l'AI non li ha letti, e per la cover
-  /// (sempre, [_coverImagePerCandidato]). ComicVine non è più una fonte per
-  /// la descrizione (deciso su #71/§73): quel campo arriva dall'Analisi
-  /// Copertina (AI), non da questo metodo.
+  /// (sempre, [_coverImagePerCandidato]). Descrizione/Tipo di stampa/
+  /// Classificazione (deciso su #71/#74) non hanno ripiego su `candidato`:
+  /// la risorsa `issue` di ComicVine non li espone comunque, l'AI è l'unica
+  /// fonte.
   Future<int> _creaEdizioneDaCandidato(
     Candidato candidato,
     int scansioneId,
@@ -621,6 +626,9 @@ class ComicsRepository {
       language: _nonVuoto(analisi.language),
       color: _nonVuoto(analisi.color),
       ean: ean,
+      description: _nonVuoto(analisi.description),
+      printingType: _nonVuoto(analisi.printingType),
+      classificazione: _nonVuoto(analisi.classificazione),
     );
   }
 
