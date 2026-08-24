@@ -1024,6 +1024,8 @@ ORDER BY s.name, ns.n
         ean: edizione.ean,
         volume: edizione.volume,
         description: edizione.description,
+        printingType: edizione.printingType,
+        classificazione: edizione.classificazione,
         autori: autori,
         copie: copie,
       );

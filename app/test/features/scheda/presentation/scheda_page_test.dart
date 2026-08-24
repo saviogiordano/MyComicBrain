@@ -45,6 +45,8 @@ void main() {
     int? serieId,
     String? volume,
     String? description,
+    String? printingType,
+    String? classificazione,
   }) async {
     final operaId = await repository.aggiungiOpera(title: titolo);
     return repository.aggiungiEdizione(
@@ -52,6 +54,8 @@ void main() {
       serieId: serieId,
       volume: volume,
       description: description,
+      printingType: printingType,
+      classificazione: classificazione,
     );
   }
 
@@ -130,6 +134,45 @@ void main() {
 
       expect(find.text('COPIE (3)'), findsOneWidget);
       expect(find.byType(ExpansionTile), findsNWidgets(3));
+    },
+  );
+
+  testWidgets(
+    'mostra Tipo di stampa/Classificazione in griglia e il disclaimer AI sulla Descrizione',
+    (tester) async {
+      final edizioneId = await operaEdizione(
+        titolo: 'Watchmen',
+        printingType: 'Direct Edition',
+        classificazione: 'Rated T+',
+        description: 'Una storia di supereroi decostruita.',
+      );
+      await repository.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+
+      await pumpScheda(tester, edizioneId: edizioneId);
+
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is RichText &&
+              w.text.toPlainText().contains('Tipo di stampa: Direct Edition'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is RichText &&
+              w.text.toPlainText().contains('Classificazione: Rated T+'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text("Descrizione generata dall'AI: può contenere imprecisioni."),
+        findsOneWidget,
+      );
     },
   );
 

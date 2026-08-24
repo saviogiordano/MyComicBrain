@@ -62,6 +62,8 @@ class EdizioneDettaglio {
     this.ean,
     this.volume,
     this.description,
+    this.printingType,
+    this.classificazione,
     this.autori = const [],
     this.copie = const [],
   });
@@ -83,6 +85,8 @@ class EdizioneDettaglio {
   final String? ean;
   final String? volume;
   final String? description;
+  final String? printingType;
+  final String? classificazione;
   final List<CreatorConRuolo> autori;
   final List<CopiaDettaglio> copie;
 }

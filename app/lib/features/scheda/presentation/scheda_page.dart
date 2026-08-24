@@ -314,6 +314,8 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
               _griglia('Lingua', e.language),
               _griglia('EAN/ISBN', e.ean),
               _griglia('Volume', e.volume),
+              _griglia('Tipo di stampa', e.printingType),
+              _griglia('Classificazione', e.classificazione),
             ],
           ),
           if (e.autori.isNotEmpty) ...[
@@ -336,6 +338,14 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
               e.description!,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              "Descrizione generata dall'AI: può contenere imprecisioni.",
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+                fontStyle: FontStyle.italic,
               ),
             ),
           ],
