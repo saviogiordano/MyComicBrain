@@ -149,58 +149,140 @@ void main() {
       },
     );
 
-    test('scarta i volumi con meno albi del numero cercato', () async {
-      final fake = _FakeHttpClient(
-        risultatiVolumi: [
-          _volume(
-            id: 43785,
-            name: 'Uncanny X-Men',
-            publisher: 'Marvel',
-            countOfIssues: 20,
-          ),
-          _volume(
-            id: 2133,
-            name: 'The X-Men',
-            publisher: 'Marvel',
-            countOfIssues: 141,
-          ),
-        ],
-        risultatiPerVolume: {
-          2133: [
-            {
-              'id': 20546,
-              'name': 'Dark Phoenix',
-              'issue_number': '135',
-              'volume': {'id': 2133, 'name': 'The X-Men'},
-              'image': null,
-              'site_detail_url':
-                  'https://comicvine.gamespot.com/the-x-men-135-dark-phoenix/4000-20546/',
-            },
+    test(
+      'ripulisce il prefisso "#" dall\'etichetta di numero prima del filtro e del parsing intero',
+      () async {
+        // issue_number su ComicVine non porta mai il "#": un'etichetta letta
+        // da copertina come "#700" (la convenzione più comune) non deve
+        // rompere né il filtro esatto né il parsing intero per
+        // count_of_issues, altrimenti la ricerca per volume introdotta su
+        // #60 fallisce in silenzio per praticamente ogni albo USA.
+        final fake = _FakeHttpClient(
+          risultatiVolumi: [
+            _volume(
+              id: 78701,
+              name: 'The Amazing Spider-Man',
+              publisher: 'Marvel',
+              countOfIssues: 58,
+            ),
+            _volume(
+              id: 2127,
+              name: 'The Amazing Spider-Man',
+              publisher: 'Marvel',
+              countOfIssues: 651,
+            ),
           ],
-        },
-      );
-      final client = ComicVineHttpClient(httpClient: fake);
+          risultatiPerVolume: {
+            2127: [
+              {
+                'id': 373805,
+                'name': 'Dying Wish',
+                'issue_number': '700',
+                'volume': {'id': 2127, 'name': 'The Amazing Spider-Man'},
+                'image': null,
+                'site_detail_url':
+                    'https://comicvine.gamespot.com/the-amazing-spider-man-700/4000-373805/',
+              },
+            ],
+          },
+        );
+        final client = ComicVineHttpClient(httpClient: fake);
 
-      final risultati = await client.cercaIssue(
-        title: null,
-        seriesName: 'Uncanny X-Men',
-        issueNumberLabel: '135',
-        publisher: 'Marvel',
-      );
+        final risultati = await client.cercaIssue(
+          title: null,
+          seriesName: 'The Amazing Spider-Man',
+          issueNumberLabel: '#700',
+          publisher: 'Marvel',
+        );
 
-      expect(risultati, hasLength(1));
-      expect(risultati.single.volumeName, 'The X-Men');
-      // Un solo volume interrogato per numero: 43785 è stato scartato prima
-      // della chiamata perché count_of_issues (20) è sotto il numero (135).
-      final chiamateFiltro = fake.richieste.where(
-        (r) => r.url.path.contains('/issues/'),
-      );
-      expect(chiamateFiltro, hasLength(1));
-      expect(
-        chiamateFiltro.single.url.queryParameters['filter'],
-        'volume:2133,issue_number:135',
-      );
-    });
+        expect(risultati, hasLength(1));
+        expect(risultati.single.issueNumber, '700');
+        // 2127 (651 albi, sotto il 700 cercato per una numerazione "legacy"
+        // con salti — caso reale verificato dal vivo) va comunque
+        // interrogato con "700" pulito, non "#700": la sola prova che
+        // conta è che il filtro usi il numero senza "#".
+        final filtroPer2127 = fake.richieste.where(
+          (r) =>
+              r.url.path.contains('/issues/') &&
+              r.url.queryParameters['filter'] == 'volume:2127,issue_number:700',
+        );
+        expect(filtroPer2127, hasLength(1));
+      },
+    );
+
+    test(
+      'predilige un volume con abbastanza albi quando più volumi combaciano per nome',
+      () async {
+        // Scenario reale: molte ripartenze recenti si chiamano esattamente
+        // come la testata originale e pareggiano per somiglianza testuale —
+        // solo l'idoneità per numero (count_of_issues) le distingue. Più di
+        // 5 volumi per esercitare anche il tetto [_massimoVolumiCandidati].
+        final fake = _FakeHttpClient(
+          risultatiVolumi: [
+            _volume(
+              id: 2133,
+              name: 'The X-Men',
+              publisher: 'Marvel',
+              countOfIssues: 141,
+            ),
+            for (final ripartenza in [
+              (id: 43785, count: 20),
+              (id: 57181, count: 36),
+              (id: 87825, count: 2),
+              (id: 115285, count: 22),
+              (id: 159189, count: 34),
+              (id: 87190, count: 19),
+            ])
+              _volume(
+                id: ripartenza.id,
+                name: 'Uncanny X-Men',
+                publisher: 'Marvel',
+                countOfIssues: ripartenza.count,
+              ),
+          ],
+          risultatiPerVolume: {
+            2133: [
+              {
+                'id': 20546,
+                'name': 'Dark Phoenix',
+                'issue_number': '135',
+                'volume': {'id': 2133, 'name': 'The X-Men'},
+                'image': null,
+                'site_detail_url':
+                    'https://comicvine.gamespot.com/the-x-men-135-dark-phoenix/4000-20546/',
+              },
+            ],
+          },
+        );
+        final client = ComicVineHttpClient(httpClient: fake);
+
+        final risultati = await client.cercaIssue(
+          title: null,
+          seriesName: 'Uncanny X-Men',
+          issueNumberLabel: '135',
+          publisher: 'Marvel',
+        );
+
+        expect(risultati, hasLength(1));
+        expect(risultati.single.volumeName, 'The X-Men');
+        final chiamateFiltro = fake.richieste.where(
+          (r) => r.url.path.contains('/issues/'),
+        );
+        // Il tetto sui volumi candidati resta rispettato anche con 7 volumi
+        // trovati dalla ricerca.
+        expect(chiamateFiltro.length, lessThanOrEqualTo(5));
+        expect(
+          chiamateFiltro,
+          contains(
+            predicate<http.BaseRequest>(
+              (r) =>
+                  r.url.queryParameters['filter'] ==
+                  'volume:2133,issue_number:135',
+            ),
+          ),
+        );
+      },
+    );
 
     test(
       'ripiega sulla ricerca testuale libera se nessun volume candidato contiene quel numero',

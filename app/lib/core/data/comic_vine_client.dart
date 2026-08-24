@@ -139,7 +139,7 @@ class ComicVineHttpClient implements ComicVineClient {
     required String? issueNumberLabel,
     required String? publisher,
   }) async {
-    final numeroLabel = issueNumberLabel?.trim();
+    final numeroLabel = _numeroPulito(issueNumberLabel);
     final serieQuery = _campiNonVuoti([seriesName, title]).join(' ');
 
     if (serieQuery.isNotEmpty &&
@@ -288,18 +288,36 @@ class ComicVineHttpClient implements ComicVineClient {
   }
 }
 
+/// L'etichetta di numero letta da una copertina (es. `"#700"`), ripulita
+/// del prefisso `#` e degli spazi — `null`/vuota resta tale. `issue_number`
+/// su ComicVine non porta mai il `#` (verificato dal vivo): un'etichetta
+/// non ripulita non trova mai corrispondenza né nel filtro esatto per
+/// numero né nel parsing intero per [_selezionaVolumi], facendo fallire in
+/// silenzio la ricerca per volume introdotta su #60 per qualunque numero
+/// letto con il prefisso `#`, la convenzione più comune sulle copertine USA.
+String? _numeroPulito(String? label) {
+  final pulito = label?.trim().replaceFirst(RegExp(r'^#\s*'), '');
+  return pulito == null || pulito.isEmpty ? null : pulito;
+}
+
 /// Sceglie fino a [_massimoVolumiCandidati] volumi da interrogare per
-/// numero, fra quelli trovati da `_cercaVolumi` (#60):
+/// numero, fra quelli trovati da `_cercaVolumi` (#60). Ordina per un
+/// punteggio che combina:
 ///
-/// 1. **Scarta** i volumi il cui `count_of_issues` è inferiore al numero
-///    cercato — non possono contenerlo (es. una ripartenza recente da 20
-///    albi non può avere un #135). Un `count_of_issues` mancante non scarta
-///    il volume (dato non garantito da ComicVine). Questo filtro è ciò che
-///    rende la selezione efficace: più testate omonime (ripartenze,
-///    edizioni estere) hanno spesso lo stesso punteggio di somiglianza sul
-///    nome da sole.
-/// 2. **Ordina** i sopravvissuti per somiglianza testuale nome+editore
-///    rispetto ai campi letti dalla copertina, e tiene solo i migliori.
+/// 1. **Somiglianza testuale** nome+editore rispetto ai campi letti dalla
+///    copertina — il segnale dominante, serve a scartare testate diverse.
+/// 2. **Idoneità per numero** (`count_of_issues` vs. il numero cercato) —
+///    un *bonus/penalità morbido*, non un'esclusione: un `count_of_issues`
+///    inferiore al numero cercato rende improbabile ma non impossibile che
+///    il volume lo contenga (numerazioni "legacy" con salti/rinumerazioni —
+///    es. *The Amazing Spider-Man* 1963, `count_of_issues` 651, contiene
+///    comunque il #700 — verificato dal vivo). Un'esclusione rigida
+///    scarterebbe per errore proprio il volume corretto in questi casi;
+///    la penalità morbida lo demota senza eliminarlo, mentre resta forte
+///    abbastanza da far vincere il volume giusto su ripartenze recenti
+///    omonime con pochissimi albi (es. una ripartenza da 20 albi per un
+///    #135 cercato). Un `count_of_issues` mancante è neutro (né bonus né
+///    penalità — dato non garantito da ComicVine).
 List<_ComicVineVolumeCandidate> _selezionaVolumi(
   List<_ComicVineVolumeCandidate> volumi, {
   required String? nomeRiferimento,
@@ -307,26 +325,25 @@ List<_ComicVineVolumeCandidate> _selezionaVolumi(
   required String numeroLabel,
 }) {
   final numero = int.tryParse(numeroLabel);
-  final ammissibili = numero == null
-      ? volumi
-      : volumi
-            .where((v) => v.countOfIssues == null || v.countOfIssues! >= numero)
-            .toList();
+
+  double idoneitaPerNumero(_ComicVineVolumeCandidate v) {
+    if (numero == null || numero <= 0 || v.countOfIssues == null) return 1;
+    if (v.countOfIssues! >= numero) return 1;
+    return v.countOfIssues! / numero;
+  }
 
   double punteggio(_ComicVineVolumeCandidate v) {
     final simNome = nomeRiferimento == null || nomeRiferimento.trim().isEmpty
         ? 0.0
         : similaritaTestuale(nomeRiferimento, v.name ?? '');
-    if (publisher == null ||
-        publisher.trim().isEmpty ||
-        v.publisherName == null) {
-      return simNome;
-    }
-    return simNome * 0.7 +
-        similaritaTestuale(publisher, v.publisherName!) * 0.3;
+    final simTestuale =
+        publisher == null || publisher.trim().isEmpty || v.publisherName == null
+        ? simNome
+        : simNome * 0.7 + similaritaTestuale(publisher, v.publisherName!) * 0.3;
+    return simTestuale * 0.6 + idoneitaPerNumero(v) * 0.4;
   }
 
-  final ordinati = [...ammissibili]
+  final ordinati = [...volumi]
     ..sort((a, b) => punteggio(b).compareTo(punteggio(a)));
   return ordinati.take(_massimoVolumiCandidati).toList();
 }
