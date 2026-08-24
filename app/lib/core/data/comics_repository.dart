@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
@@ -468,10 +469,21 @@ class ComicsRepository {
   /// futura di quell'URL. Se il download fallisce (rete, host irraggiungibile)
   /// ricade sull'URL originale invece di lasciare l'Edizione senza cover —
   /// nessun retry, la conferma del Candidato non deve fallire per questo.
+  ///
+  /// Il percorso scaricato viene salvato *relativo* alla cartella base
+  /// (non l'assoluto di [CopertinaDownloader.scarica]): il container
+  /// dell'app cambia UUID a ogni reinstallazione/aggiornamento su iOS, e un
+  /// percorso assoluto persistito in DB in una sessione precedente punta a
+  /// un container che potrebbe non esistere più (bug osservato: cover
+  /// visibile subito dopo la conferma, sparita al riavvio dopo un nuovo
+  /// `flutter run`). Vedi `percorso_locale.dart`.
   Future<String?> _coverImagePerCandidato(Candidato candidato) async {
     final url = candidato.coverImageUrl;
     if (url == null) return null;
-    return await _copertinaDownloader.scarica(url) ?? url;
+    final locale = await _copertinaDownloader.scarica(url);
+    if (locale == null) return url;
+    final base = await _copertinaDownloader.baseDirectory();
+    return percorso_locale.relativizza(locale, base);
   }
 
   /// La riga `AnalisiCopertina` completata di questa Scansione — letta dal
@@ -706,18 +718,39 @@ ORDER BY s.name, ns.n
           ])
           ..limit(_limiteAggiuntiDiRecente);
 
-    return query.watch().map(
-      (rows) => [
-        for (final row in rows)
+    return query.watch().asyncMap((rows) async {
+      final risultati = <ComicRecente>[];
+      for (final row in rows) {
+        risultati.add(
           ComicRecente(
             edizioneId: row.readTable(_db.edizioni).id,
             titolo: row.readTable(_db.opere).title,
             numero: row.readTable(_db.edizioni).issueNumber,
             numeroLabel: row.readTable(_db.edizioni).issueNumberLabel,
             editore: row.readTable(_db.edizioni).publisher,
-            coverImage: row.readTable(_db.edizioni).coverImage,
+            coverImage: await _coverImageAssoluto(
+              row.readTable(_db.edizioni).coverImage,
+            ),
           ),
-      ],
-    );
+        );
+      }
+      return risultati;
+    });
+  }
+
+  /// Il valore di `Edizioni.coverImage` così com'è per un URL remoto
+  /// (fallback ComicVine di [_coverImagePerCandidato]); per un percorso
+  /// locale, ricostruito assoluto sulla cartella base *corrente* — vedi
+  /// `percorso_locale.dart` sul perché non basta usare il valore in DB
+  /// così com'è. `baseDirectory` è lazy (vedi [percorso_locale.risolvi]):
+  /// non tocca `path_provider` per un URL remoto o un percorso che non
+  /// corrisponde a nessuna sottocartella locale nota.
+  Future<String?> _coverImageAssoluto(String? coverImage) async {
+    if (coverImage == null) return null;
+    if (coverImage.startsWith('http://') ||
+        coverImage.startsWith('https://')) {
+      return coverImage;
+    }
+    return percorso_locale.risolvi(coverImage, _copertinaDownloader.baseDirectory);
   }
 }

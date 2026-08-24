@@ -462,12 +462,19 @@ void main() {
       expect(edizione.issueNumberLabel, '1');
       expect(edizione.issueNumber, 1);
       // La cover è stata scaricata in locale (§6.3): non più l'URL remoto
-      // ma un file dentro la directory `copertine/`.
-      expect(edizione.coverImage, isNotNull);
-      expect(edizione.coverImage, isNot('https://comicvine.example/1.jpg'));
-      final fileCopertina = File(edizione.coverImage!);
+      // ma un file dentro la directory `copertine/`. Salvato *relativo*
+      // alla cartella base, non assoluto: il container dell'app cambia
+      // UUID a ogni reinstallazione/aggiornamento su iOS, un percorso
+      // assoluto persistito in DB non sarebbe più valido al riavvio
+      // successivo (bug osservato: cover sparita dopo un nuovo `flutter
+      // run`) — vedi `percorso_locale.dart`.
+      final coverImage = edizione.coverImage;
+      expect(coverImage, isNotNull);
+      expect(coverImage, isNot('https://comicvine.example/1.jpg'));
+      expect(p.isRelative(coverImage!), isTrue);
+      expect(p.dirname(coverImage), 'copertine');
+      final fileCopertina = File(p.join(tempBase.path, coverImage));
       expect(fileCopertina.existsSync(), isTrue);
-      expect(p.dirname(fileCopertina.path), p.join(tempBase.path, 'copertine'));
       expect(fileCopertina.readAsBytesSync(), [1, 2, 3]);
       final opera = await (db.select(
         db.opere,

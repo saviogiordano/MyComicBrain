@@ -1,9 +1,13 @@
-import 'package:drift/drift.dart';
+import 'dart:io';
+
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
+import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   late AppDatabase db;
@@ -342,27 +346,114 @@ void main() {
       expect(recente.numeroVisualizzato, '#4 Variant');
     });
 
-    test("porta coverImage dall'edizione, null se assente", () async {
-      final operaId = await repo.aggiungiOpera(title: 'Con cover');
-      final edizioneId = await repo.aggiungiEdizione(
-        operaId: operaId,
-        coverImage: '/copertine/1.jpg',
-      );
+    test('coverImage null se assente', () async {
+      final operaId = await repo.aggiungiOpera(title: 'Senza cover');
+      final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
       await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
 
-      final senzaCoverOperaId = await repo.aggiungiOpera(title: 'Senza cover');
-      final senzaCoverEdizioneId = await repo.aggiungiEdizione(operaId: senzaCoverOperaId);
-      await repo.aggiungiCopia(edizioneId: senzaCoverEdizioneId, status: StatoCopia.posseduta);
-
-      final recenti = await repo.watchAggiuntiDiRecente().first;
-      expect(
-        recenti.firstWhere((c) => c.edizioneId == edizioneId).coverImage,
-        '/copertine/1.jpg',
-      );
-      expect(
-        recenti.firstWhere((c) => c.edizioneId == senzaCoverEdizioneId).coverImage,
-        null,
-      );
+      final recente = (await repo.watchAggiuntiDiRecente().first).single;
+      expect(recente.coverImage, null);
     });
+
+    // La risoluzione di un coverImage non-null (relativo, assoluto
+    // "vecchio stile", URL remoto, o assoluto senza sottocartella nota) è
+    // coperta dai test dedicati sotto — vedi `percorso_locale.dart` sul
+    // perché il valore grezzo in DB non basta mai da solo.
+
+    test(
+      'URL remoto: passa invariato, nessuna dipendenza da path_provider',
+      () async {
+        final operaId = await repo.aggiungiOpera(title: 'Cover remota');
+        final edizioneId = await repo.aggiungiEdizione(
+          operaId: operaId,
+          coverImage: 'https://comicvine.example/cover.jpg',
+        );
+        await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+
+        // `repo` (dal `setUp`) usa il `CopertinaDownloader` di default, la
+        // cui `baseDirectory` è il vero `path_provider` — non mockato in
+        // questo ambiente di test. Se questa chiamata anche solo la
+        // invocasse, il test fallirebbe con `MissingPluginException`.
+        final recente = (await repo.watchAggiuntiDiRecente().first).single;
+        expect(recente.coverImage, 'https://comicvine.example/cover.jpg');
+      },
+    );
+
+    test(
+      'percorso assoluto senza sottocartella nota: passa invariato, nessuna '
+      'dipendenza da path_provider',
+      () async {
+        final operaId = await repo.aggiungiOpera(title: 'Cover di test');
+        final edizioneId = await repo.aggiungiEdizione(
+          operaId: operaId,
+          coverImage: '${Directory.systemTemp.path}/una_cover.png',
+        );
+        await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+
+        final recente = (await repo.watchAggiuntiDiRecente().first).single;
+        expect(recente.coverImage, '${Directory.systemTemp.path}/una_cover.png');
+      },
+    );
+
+    test(
+      'percorso relativo (salvato dopo la migrazione): risolto sulla '
+      'cartella base corrente',
+      () async {
+        final tempBase = await Directory.systemTemp.createTemp(
+          'comics_repository_cover_relativo_',
+        );
+        addTearDown(() => tempBase.delete(recursive: true));
+        final repoConBase = ComicsRepository(
+          db,
+          copertinaDownloader: CopertinaDownloader(
+            baseDirectory: () async => tempBase,
+          ),
+        );
+
+        final operaId = await repoConBase.aggiungiOpera(title: 'Con cover relativa');
+        final edizioneId = await repoConBase.aggiungiEdizione(
+          operaId: operaId,
+          coverImage: p.join('copertine', '1.jpg'),
+        );
+        await repoConBase.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+
+        final recente = (await repoConBase.watchAggiuntiDiRecente().first).single;
+        expect(recente.coverImage, p.join(tempBase.path, 'copertine', '1.jpg'));
+      },
+    );
+
+    test(
+      'percorso assoluto "vecchio stile" (container di un\'installazione '
+      'precedente): ricostruito sulla cartella base corrente — bug '
+      'osservato: la cover spariva dopo un nuovo `flutter run`',
+      () async {
+        final tempBase = await Directory.systemTemp.createTemp(
+          'comics_repository_cover_legacy_',
+        );
+        addTearDown(() => tempBase.delete(recursive: true));
+        final repoConBase = ComicsRepository(
+          db,
+          copertinaDownloader: CopertinaDownloader(
+            baseDirectory: () async => tempBase,
+          ),
+        );
+
+        final operaId = await repoConBase.aggiungiOpera(title: 'Con cover legacy');
+        // Simula un percorso persistito con un container ormai inesistente
+        // (installazione precedente): assoluto, con lo stesso suffisso
+        // relativo `copertine/<file>` che iOS migra fisicamente al
+        // riavvio, ma sotto un prefisso diverso da `tempBase`.
+        final edizioneId = await repoConBase.aggiungiEdizione(
+          operaId: operaId,
+          coverImage:
+              '/var/mobile/Containers/Data/Application/VECCHIO-UUID/'
+              'Library/Application Support/copertine/1.jpg',
+        );
+        await repoConBase.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+
+        final recente = (await repoConBase.watchAggiuntiDiRecente().first).single;
+        expect(recente.coverImage, p.join(tempBase.path, 'copertine', '1.jpg'));
+      },
+    );
   });
 }

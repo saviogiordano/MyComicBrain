@@ -38,6 +38,12 @@ class CopertinaDownloader {
   final http.Client _httpClient;
   final Future<Directory> Function() _baseDirectory;
 
+  /// Esposta a `ComicsRepository` per ricostruire (o riconoscere) i
+  /// percorsi salvati in DB con la stessa cartella base usata qui —
+  /// stessa istanza iniettata nei test, [getApplicationSupportDirectory]
+  /// in produzione.
+  Future<Directory> Function() get baseDirectory => _baseDirectory;
+
   Future<String?> scarica(String url) async {
     final http.Response response;
     try {
