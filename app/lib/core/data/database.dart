@@ -5,6 +5,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'package:mycomicbrain/core/data/database.steps.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
+import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -92,6 +93,15 @@ class Edizioni extends Table {
   /// ridondanti per un dato mai usato per il matching.
   TextColumn get ean => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
+
+  /// Volume/raccolta (es. "Vol. 3", "Omnibus 1", §8.1, deciso su #64) — testo
+  /// libero come `issueNumberLabel`, non un intero: distinto da
+  /// issueNumber/issueNumberLabel (il numero del singolo albo) e da serieId
+  /// (la collana/serie periodica).
+  TextColumn get volume => text().nullable()();
+
+  /// Descrizione libera dell'edizione (§8.1).
+  TextColumn get description => text().nullable()();
 }
 
 /// `Copia`: un esemplare fisico posseduto di un'edizione. `status` guida
@@ -263,6 +273,36 @@ class CandidatiTable extends Table {
   BoolColumn get scelto => boolean().withDefault(const Constant(false))();
 }
 
+/// `Creator`: un autore/artista, condiviso tra Edizioni diverse. Nessun
+/// vincolo UNIQUE su `name` (deciso su #64): un constraint rigido
+/// romperebbe il caso legittimo degli omonimi e non risolve comunque i
+/// typo — la prevenzione dei doppioni è compito della UX di
+/// ricerca/autocomplete (vedi "Not yet specified" sulla mappa #63), non
+/// dello schema.
+class Creator extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+}
+
+/// `ComicCreator`: collega un Creator a un'Edizione con un ruolo (deciso
+/// su #64). Chiave univoca su (edizioneId, creatorId, ruolo) — non su
+/// (edizioneId, creatorId): un autore può comparire più volte sulla
+/// stessa Edizione con ruoli diversi (es. "scritto e disegnato da"), e
+/// un'Edizione può avere più Creator con lo stesso ruolo (es. due
+/// disegnatori). Blocca solo il duplicato esatto (stesso autore, stesso
+/// ruolo, stessa edizione, due volte).
+class ComicCreator extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get edizioneId => integer().references(Edizioni, #id)();
+  IntColumn get creatorId => integer().references(Creator, #id)();
+  TextColumn get ruolo => textEnum<RuoloCreator>()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {edizioneId, creatorId, ruolo},
+  ];
+}
+
 @DriftDatabase(
   tables: [
     Opere,
@@ -273,6 +313,8 @@ class CandidatiTable extends Table {
     AnalisiCopertinaTable,
     IdentificazioneTable,
     CandidatiTable,
+    Creator,
+    ComicCreator,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -281,11 +323,17 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from5To6: (m, schema) async {
+        await m.createTable(schema.creator);
+        await m.createTable(schema.comicCreator);
+        await m.addColumn(schema.edizioni, schema.edizioni.volume);
+        await m.addColumn(schema.edizioni, schema.edizioni.description);
+      },
       from4To5: (m, schema) async {
         await m.addColumn(schema.serie, schema.serie.issn);
         await m.addColumn(schema.edizioni, schema.edizioni.releaseDate);

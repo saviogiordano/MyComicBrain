@@ -4,6 +4,7 @@ import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
+import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
 import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
@@ -61,6 +62,8 @@ class ComicsRepository {
     String? language,
     String? color,
     String? ean,
+    String? volume,
+    String? description,
     DateTime? createdAt,
   }) {
     return _db
@@ -79,6 +82,8 @@ class ComicsRepository {
             language: Value(language),
             color: Value(color),
             ean: Value(ean),
+            volume: Value(volume),
+            description: Value(description),
             createdAt: createdAt ?? DateTime.now(),
           ),
         );
@@ -117,6 +122,68 @@ class ComicsRepository {
             scansioneId: Value(scansioneId),
           ),
         );
+  }
+
+  /// Cerca Creator esistenti per nome (match parziale, per l'autocomplete
+  /// della Scheda — vedi "Not yet specified" sulla mappa #63).
+  Future<List<CreatorData>> cercaCreator(String query) {
+    return (_db.select(
+      _db.creator,
+    )..where((c) => c.name.like('%$query%'))).get();
+  }
+
+  /// Crea un nuovo Creator. Nessun controllo di univocità sul nome (#64).
+  Future<int> aggiungiCreator(String name) {
+    return _db.into(_db.creator).insert(CreatorCompanion.insert(name: name));
+  }
+
+  /// Collega un Creator a un'Edizione con un ruolo. Ammessi più Creator con
+  /// lo stesso ruolo sulla stessa Edizione e lo stesso Creator con ruoli
+  /// diversi (#64).
+  Future<void> collegaCreatorAEdizione({
+    required int edizioneId,
+    required int creatorId,
+    required RuoloCreator ruolo,
+  }) {
+    return _db
+        .into(_db.comicCreator)
+        .insert(
+          ComicCreatorCompanion.insert(
+            edizioneId: edizioneId,
+            creatorId: creatorId,
+            ruolo: ruolo,
+          ),
+        );
+  }
+
+  /// Rimuove un collegamento Creator↔Edizione (riga ComicCreator).
+  Future<void> rimuoviCreatorDaEdizione(int comicCreatorId) {
+    return (_db.delete(
+      _db.comicCreator,
+    )..where((c) => c.id.equals(comicCreatorId))).go();
+  }
+
+  /// Legge tutti i Creator collegati a un'Edizione con il relativo ruolo,
+  /// per il rendering della Scheda (§8.1).
+  Future<List<CreatorConRuolo>> autoriDiEdizione(int edizioneId) {
+    final query = _db.select(_db.comicCreator).join([
+      innerJoin(
+        _db.creator,
+        _db.creator.id.equalsExp(_db.comicCreator.creatorId),
+      ),
+    ])..where(_db.comicCreator.edizioneId.equals(edizioneId));
+
+    return query.get().then(
+      (rows) => [
+        for (final row in rows)
+          (
+            comicCreatorId: row.readTable(_db.comicCreator).id,
+            creatorId: row.readTable(_db.creator).id,
+            name: row.readTable(_db.creator).name,
+            ruolo: row.readTable(_db.comicCreator).ruolo,
+          ),
+      ],
+    );
   }
 
   /// Persiste una Scansione confermata (revisione ritaglio/rotazione, #24).
