@@ -17,7 +17,14 @@ const coverAnalysisPrompt =
     '(titolo, numero, editore, collana, prezzo, barcode) indica la '
     'posizione qualitativa e, se stimabile, il bounding box in coordinate '
     'pixel assolute [x1, y1, x2, y2] (angolo in alto a sinistra e in basso '
-    "a destra) rispetto all'immagine ricevuta. Per characters, "
+    "a destra) rispetto all'immagine ricevuta. Riporta releaseDate "
+    "esattamente come stampato sulla copertina (es. 'dicembre 2010'), senza "
+    'normalizzarlo in una data ISO. pageCount è il numero di pagine se '
+    'riportato in copertina o su un\'etichetta di prezzo/formato. language è '
+    "la lingua del testo di copertina (es. 'italiano'). color è "
+    "'a colori' o 'bianco e nero' se determinabile dalla copertina stessa. "
+    'issn è il codice ISSN della collana/testata periodica se presente, '
+    'distinto dal barcode EAN. Per characters, '
     'coverStyleTags e visualElementTags restituisci una lista vuota se non '
     'riesci a riconoscere alcun elemento con sufficiente sicurezza — non '
     'includere elementi di cui non sei ragionevolmente certo. '
@@ -80,6 +87,21 @@ const Map<String, Object?> coverAnalysisJsonSchema = {
     'price': {
       'type': ['string', 'null'],
     },
+    'releaseDate': {
+      'type': ['string', 'null'],
+    },
+    'pageCount': {
+      'type': ['integer', 'null'],
+    },
+    'language': {
+      'type': ['string', 'null'],
+    },
+    'color': {
+      'type': ['string', 'null'],
+    },
+    'issn': {
+      'type': ['string', 'null'],
+    },
     'identifierCodes': {
       'type': 'array',
       'items': {'type': 'string'},
@@ -131,6 +153,11 @@ const Map<String, Object?> coverAnalysisJsonSchema = {
     'isbn',
     'barcode',
     'price',
+    'releaseDate',
+    'pageCount',
+    'language',
+    'color',
+    'issn',
     'identifierCodes',
     'textElements',
     'characters',
@@ -158,6 +185,11 @@ class CoverAnalysisResult {
     required this.isbn,
     required this.barcode,
     required this.price,
+    required this.releaseDate,
+    required this.pageCount,
+    required this.language,
+    required this.color,
+    required this.issn,
     required this.characters,
     required this.coverStyleTags,
     required this.visualElementTags,
@@ -173,6 +205,11 @@ class CoverAnalysisResult {
   final String? isbn;
   final String? barcode;
   final String? price;
+  final String? releaseDate;
+  final int? pageCount;
+  final String? language;
+  final String? color;
+  final String? issn;
   final List<String> characters;
   final List<String> coverStyleTags;
   final List<String> visualElementTags;

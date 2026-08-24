@@ -55,6 +55,11 @@ const _risultatoCompleto = CoverAnalysisResult(
   isbn: null,
   barcode: '076194130132500111',
   price: '€ 1,50',
+  releaseDate: 'giugno 1988',
+  pageCount: 32,
+  language: 'inglese',
+  color: 'a colori',
+  issn: null,
   characters: ['Spider-Man', 'Venom'],
   coverStyleTags: ['stile realistico'],
   visualElementTags: ['sfondo con esplosione'],
@@ -116,6 +121,11 @@ void main() {
     expect(analisi.isbn, isNull);
     expect(analisi.barcode, '076194130132500111');
     expect(analisi.price, '€ 1,50');
+    expect(analisi.releaseDate, 'giugno 1988');
+    expect(analisi.pageCount, 32);
+    expect(analisi.language, 'inglese');
+    expect(analisi.color, 'a colori');
+    expect(analisi.issn, isNull);
     expect(analisi.characters, ['Spider-Man', 'Venom']);
     expect(analisi.coverStyleTags, ['stile realistico']);
     expect(analisi.visualElementTags, ['sfondo con esplosione']);

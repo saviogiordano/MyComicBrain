@@ -43,6 +43,11 @@ class SerieTable extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
   IntColumn get totalIssues => integer().nullable()();
+
+  /// ISSN della collana (es. edicola italiana, deciso su #63) — identifica
+  /// la testata periodica nel suo complesso, non la singola Edizione: sta
+  /// su `Serie`/collana, non su `Edizioni`.
+  TextColumn get issn => text().nullable()();
 }
 
 /// `Edizione`: la pubblicazione specifica di un'opera — l'unità catalogata.
@@ -60,6 +65,32 @@ class Edizioni extends Table {
   /// corrispondente se posseduta.
   TextColumn get issueNumberLabel => text().nullable()();
   TextColumn get coverImage => text().nullable()();
+
+  /// Data di pubblicazione così com'è riportata sulla copertina/testata
+  /// (es. "dicembre 2010", deciso su #63) — testo grezzo e non parsato: i
+  /// fumetti a periodicità mensile/bimestrale spesso riportano solo
+  /// mese/anno, un `DateTimeColumn` costringerebbe a inventare un giorno.
+  TextColumn get releaseDate => text().nullable()();
+
+  /// Prezzo di copertina originale (es. "€ 5,30", deciso su #63) — testo
+  /// grezzo, non un importo numerico: distinto da `Copia.purchasePrice`
+  /// (quanto pagato da chi possiede l'esemplare, spesso diverso dal
+  /// prezzo di copertina per usato/sconti).
+  TextColumn get coverPrice => text().nullable()();
+  IntColumn get pageCount => integer().nullable()();
+  TextColumn get language => text().nullable()();
+
+  /// "a colori" / "bianco e nero" — testo libero (deciso su #63): non
+  /// un enum, lo spettro reale (seppia, colore parziale, ...) non è
+  /// abbastanza vincolato da giustificarne uno.
+  TextColumn get color => text().nullable()();
+
+  /// EAN/ISBN riportato sulla copertina (deciso su #63) — un solo campo:
+  /// sulle edizioni italiane da edicola è quasi sempre un EAN periodico
+  /// (prefisso 977), non un ISBN da libreria; tenerli distinti come in
+  /// `AnalisiCopertinaTable` avrebbe richiesto due campi quasi sempre
+  /// ridondanti per un dato mai usato per il matching.
+  TextColumn get ean => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -132,6 +163,16 @@ class AnalisiCopertinaTable extends Table {
   TextColumn get isbn => text().nullable()();
   TextColumn get barcode => text().nullable()();
   TextColumn get price => text().nullable()();
+
+  /// Campi aggiunti per il prefill di `InserisciManualmentePage` (deciso su
+  /// #63): stessa filosofia degli altri campi di questa tabella, grezzi e
+  /// non parsati. Vedi i commenti gemelli su `Edizioni`/`SerieTable` per il
+  /// perché di ciascun formato.
+  TextColumn get releaseDate => text().nullable()();
+  IntColumn get pageCount => integer().nullable()();
+  TextColumn get language => text().nullable()();
+  TextColumn get color => text().nullable()();
+  TextColumn get issn => text().nullable()();
 
   /// Personaggi raffigurati sulla copertina (§6.2, tag liberi — deciso su
   /// #48). Lista vuota se Claude non riconosce nulla con sufficiente
@@ -240,11 +281,25 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from4To5: (m, schema) async {
+        await m.addColumn(schema.serie, schema.serie.issn);
+        await m.addColumn(schema.edizioni, schema.edizioni.releaseDate);
+        await m.addColumn(schema.edizioni, schema.edizioni.coverPrice);
+        await m.addColumn(schema.edizioni, schema.edizioni.pageCount);
+        await m.addColumn(schema.edizioni, schema.edizioni.language);
+        await m.addColumn(schema.edizioni, schema.edizioni.color);
+        await m.addColumn(schema.edizioni, schema.edizioni.ean);
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.releaseDate);
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.pageCount);
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.language);
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.color);
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.issn);
+      },
       from1To2: (m, schema) async {
         await m.dropColumn(schema.scansioni, 'ocr_text');
         await m.dropColumn(schema.scansioni, 'recognition_status');

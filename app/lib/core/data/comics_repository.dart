@@ -32,13 +32,18 @@ class ComicsRepository {
         );
   }
 
-  Future<int> aggiungiSerie({required String name, int? totalIssues}) {
+  Future<int> aggiungiSerie({
+    required String name,
+    int? totalIssues,
+    String? issn,
+  }) {
     return _db
         .into(_db.serieTable)
         .insert(
           SerieTableCompanion.insert(
             name: name,
             totalIssues: Value(totalIssues),
+            issn: Value(issn),
           ),
         );
   }
@@ -50,6 +55,12 @@ class ComicsRepository {
     int? issueNumber,
     String? issueNumberLabel,
     String? coverImage,
+    String? releaseDate,
+    String? coverPrice,
+    int? pageCount,
+    String? language,
+    String? color,
+    String? ean,
     DateTime? createdAt,
   }) {
     return _db
@@ -62,6 +73,12 @@ class ComicsRepository {
             issueNumber: Value(issueNumber),
             issueNumberLabel: Value(issueNumberLabel),
             coverImage: Value(coverImage),
+            releaseDate: Value(releaseDate),
+            coverPrice: Value(coverPrice),
+            pageCount: Value(pageCount),
+            language: Value(language),
+            color: Value(color),
+            ean: Value(ean),
             createdAt: createdAt ?? DateTime.now(),
           ),
         );
@@ -127,6 +144,23 @@ class ComicsRepository {
     return riga.id;
   }
 
+  /// Il valore da passare come `coverImage` di [aggiungiEdizione] per usare
+  /// la cover scansionata di questa Scansione (§6.3, deciso su #63) —
+  /// `InserisciManualmentePage` non ha altrimenti nessuna cover da mostrare,
+  /// a differenza di un Candidato che ne porta una propria (ComicVine o
+  /// un'Edizione interna già catalogata). Relativizzato alla cartella base
+  /// come [_coverImagePerCandidato]: `ScansioneStorage` salva `image` come
+  /// percorso *assoluto* (sotto `scansioni/`, riconosciuto comunque da
+  /// [percorso_locale.risolvi] anche non relativizzato), ma le nuove righe
+  /// devono restare coerenti col formato relativo usato da qui in avanti.
+  Future<String> coverImagePerScansione(int scansioneId) async {
+    final riga = await (_db.select(
+      _db.scansioni,
+    )..where((s) => s.id.equals(scansioneId))).getSingle();
+    final base = await _copertinaDownloader.baseDirectory();
+    return percorso_locale.relativizza(riga.image, base);
+  }
+
   /// Rimuove una Scansione non ancora inviata alla pipeline (swipe-to-delete
   /// nel riepilogo, prima di "Fine") — solo la riga `Scansioni`: a questo
   /// punto del flusso non esiste ancora nessuna `AnalisiCopertina` collegata
@@ -167,6 +201,11 @@ class ComicsRepository {
     String? isbn,
     String? barcode,
     String? price,
+    String? releaseDate,
+    int? pageCount,
+    String? language,
+    String? color,
+    String? issn,
     List<String> characters = const [],
     List<String> coverStyleTags = const [],
     List<String> visualElementTags = const [],
@@ -185,6 +224,11 @@ class ComicsRepository {
         isbn: Value(isbn),
         barcode: Value(barcode),
         price: Value(price),
+        releaseDate: Value(releaseDate),
+        pageCount: Value(pageCount),
+        language: Value(language),
+        color: Value(color),
+        issn: Value(issn),
         characters: Value(characters),
         coverStyleTags: Value(coverStyleTags),
         visualElementTags: Value(visualElementTags),
@@ -407,7 +451,7 @@ class ComicsRepository {
   /// migrazione di container di `watchAggiuntiDiRecente`/
   /// `percorso_locale.dart`, va risolto qui allo stesso modo. Un Candidato
   /// `esterno` porta invece sempre un vero URL remoto ComicVine, passato
-  /// invariato da [_coverImageAssoluto].
+  /// invariato da [risolviCoverImage].
   Future<Candidato> _candidatoDaRiga(CandidatiTableData riga) async {
     return Candidato(
       id: riga.id,
@@ -420,7 +464,7 @@ class ComicsRepository {
       issueNumberLabel: riga.issueNumberLabel,
       publisher: riga.publisher,
       year: riga.year,
-      coverImageUrl: await _coverImageAssoluto(riga.coverImageUrl),
+      coverImageUrl: await risolviCoverImage(riga.coverImageUrl),
     );
   }
 
@@ -735,7 +779,7 @@ ORDER BY s.name, ns.n
             numero: row.readTable(_db.edizioni).issueNumber,
             numeroLabel: row.readTable(_db.edizioni).issueNumberLabel,
             editore: row.readTable(_db.edizioni).publisher,
-            coverImage: await _coverImageAssoluto(
+            coverImage: await risolviCoverImage(
               row.readTable(_db.edizioni).coverImage,
             ),
           ),
@@ -752,7 +796,7 @@ ORDER BY s.name, ns.n
   /// così com'è. `baseDirectory` è lazy (vedi [percorso_locale.risolvi]):
   /// non tocca `path_provider` per un URL remoto o un percorso che non
   /// corrisponde a nessuna sottocartella locale nota.
-  Future<String?> _coverImageAssoluto(String? coverImage) async {
+  Future<String?> risolviCoverImage(String? coverImage) async {
     if (coverImage == null) return null;
     if (coverImage.startsWith('http://') ||
         coverImage.startsWith('https://')) {

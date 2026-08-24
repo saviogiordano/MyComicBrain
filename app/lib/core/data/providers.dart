@@ -112,3 +112,17 @@ final StreamProviderFamily<EsitoIdentificazione, int> identificazioneProvider =
           .watch(comicsRepositoryProvider)
           .watchIdentificazione(scansioneId);
     });
+
+/// L'Analisi Copertina completata di una Scansione, per id — usata da
+/// `InserisciManualmentePage` (§6.3, deciso su #63) per precompilare il
+/// form col risultato AI invece di lasciarlo vuoto quando né il catalogo
+/// interno né ComicVine hanno trovato un candidato affidabile.
+final FutureProviderFamily<AnalisiCopertinaTableData, int>
+analisiCopertinaProvider = FutureProvider.family<AnalisiCopertinaTableData, int>((
+  ref,
+  scansioneId,
+) {
+  return ref
+      .watch(comicsRepositoryProvider)
+      .analisiCopertinaPerScansione(scansioneId);
+});
