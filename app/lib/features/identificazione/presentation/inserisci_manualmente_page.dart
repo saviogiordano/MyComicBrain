@@ -45,6 +45,9 @@ class _InserisciManualmentePageState
   final _language = TextEditingController();
   final _color = TextEditingController();
   final _ean = TextEditingController();
+  final _description = TextEditingController();
+  final _classificazione = TextEditingController();
+  final _printingType = TextEditingController();
   bool _faParteDiSerie = false;
   bool _salvando = false;
   bool _prefillFatto = false;
@@ -71,6 +74,9 @@ class _InserisciManualmentePageState
     _language.dispose();
     _color.dispose();
     _ean.dispose();
+    _description.dispose();
+    _classificazione.dispose();
+    _printingType.dispose();
     super.dispose();
   }
 
@@ -123,6 +129,9 @@ class _InserisciManualmentePageState
     // valido — da qui `_valore` prima del fallback, non `??` da solo.
     final barcode = _valore(analisi.barcode);
     _ean.text = barcode.isNotEmpty ? barcode : _valore(analisi.isbn);
+    _description.text = _valore(analisi.description);
+    _classificazione.text = _valore(analisi.classificazione);
+    _printingType.text = _valore(analisi.printingType);
   }
 
   /// Normalizza un campo grezzo dell'Analisi Copertina: `null` e stringhe
@@ -157,6 +166,9 @@ class _InserisciManualmentePageState
     final language = _language.text.trim();
     final color = _color.text.trim();
     final ean = _ean.text.trim();
+    final description = _description.text.trim();
+    final classificazione = _classificazione.text.trim();
+    final printingType = _printingType.text.trim();
 
     final edizioneId = await repository.aggiungiEdizione(
       operaId: operaId,
@@ -171,6 +183,9 @@ class _InserisciManualmentePageState
       language: language.isEmpty ? null : language,
       color: color.isEmpty ? null : color,
       ean: ean.isEmpty ? null : ean,
+      description: description.isEmpty ? null : description,
+      classificazione: classificazione.isEmpty ? null : classificazione,
+      printingType: printingType.isEmpty ? null : printingType,
     );
 
     await repository.aggiungiCopia(
@@ -298,6 +313,27 @@ class _InserisciManualmentePageState
               'EAN/ISBN riportato',
               'es. 977112421890900067',
               key: const Key('campo-ean'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _campo(
+              _printingType,
+              'Tipo di stampa',
+              'es. Direct Edition',
+              key: const Key('campo-tipo-stampa'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _campo(
+              _classificazione,
+              'Classificazione',
+              'es. Rated T+',
+              key: const Key('campo-classificazione'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _campo(
+              _description,
+              'Descrizione',
+              '',
+              key: const Key('campo-descrizione'),
             ),
             const SizedBox(height: AppSpacing.xxl),
             SizedBox(

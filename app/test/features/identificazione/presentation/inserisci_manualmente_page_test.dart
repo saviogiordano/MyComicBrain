@@ -280,6 +280,9 @@ void main() {
         language: 'italiano',
         color: 'a colori',
         issn: '9771124218909',
+        printingType: 'Direct Edition',
+        classificazione: 'Rated T+',
+        description: 'Una storia di supereroi.',
       );
 
       await pumpInserisciManualmente(tester, scansioneId: scansioneId);
@@ -301,6 +304,12 @@ void main() {
       expect(testoDi(const Key('campo-lingua')), 'italiano');
       expect(testoDi(const Key('campo-colore')), 'a colori');
       expect(testoDi(const Key('campo-ean')), '977112421890900067');
+      expect(testoDi(const Key('campo-tipo-stampa')), 'Direct Edition');
+      expect(testoDi(const Key('campo-classificazione')), 'Rated T+');
+      expect(
+        testoDi(const Key('campo-descrizione')),
+        'Una storia di supereroi.',
+      );
 
       // Il toggle "fa parte di una collana" si attiva da solo perché l'AI
       // ha riconosciuto una collana — l'utente non deve riattivarlo a mano.
@@ -319,6 +328,9 @@ void main() {
       expect(edizioni.single.language, 'italiano');
       expect(edizioni.single.color, 'a colori');
       expect(edizioni.single.ean, '977112421890900067');
+      expect(edizioni.single.printingType, 'Direct Edition');
+      expect(edizioni.single.classificazione, 'Rated T+');
+      expect(edizioni.single.description, 'Una storia di supereroi.');
 
       final serie = await db.select(db.serieTable).get();
       expect(serie.single.name, 'Marvel Mega');
