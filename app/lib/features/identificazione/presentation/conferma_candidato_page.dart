@@ -10,9 +10,8 @@ import 'package:mycomicbrain/core/domain/identificazione.dart';
 /// come righe selezionabili ordinate per Punteggio di confidenza, ciascuna
 /// con cover/titolo/tag sorgente/punteggio. "Conferma" agisce sul Candidato
 /// selezionato (collega/crea la Copia risultante, vedi
-/// `ComicsRepository.confermaCandidato`); "Inserisci manualmente" resta un
-/// punto d'ingresso dichiarato ma non ancora implementato (flusso fuori
-/// scope di #59, vedi mappa #50 — "Not yet specified").
+/// `ComicsRepository.confermaCandidato`); "Inserisci manualmente" apre
+/// `InserisciManualmentePage` (Variante B, deciso su #61/#62).
 class ConfermaCandidatoPage extends ConsumerStatefulWidget {
   const ConfermaCandidatoPage({required this.scansioneId, super.key});
 
@@ -28,12 +27,9 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
   bool _confermando = false;
 
   void _inserisciManualmente() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Inserimento manuale non ancora disponibile in questa versione',
-        ),
-      ),
+    context.push(
+      '/scansione/inserisci-manualmente',
+      extra: widget.scansioneId,
     );
   }
 

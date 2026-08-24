@@ -56,6 +56,11 @@ void main() {
           builder: (context, state) =>
               ConfermaCandidatoPage(scansioneId: state.extra! as int),
         ),
+        GoRoute(
+          path: '/scansione/inserisci-manualmente',
+          builder: (context, state) =>
+              Scaffold(body: Text('inserisci manualmente #${state.extra}')),
+        ),
       ],
     );
     await tester.pumpWidget(
@@ -184,15 +189,12 @@ void main() {
     expect(find.text('Inserisci manualmente'), findsOneWidget);
 
     await tester.tap(find.text('Inserisci manualmente'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    // `findsWidgets`: la `SnackBar` di Material duplica il testo per la
-    // misurazione interna del layout, oltre alla copia visibile.
     expect(
-      find.text(
-        'Inserimento manuale non ancora disponibile in questa versione',
-      ),
-      findsWidgets,
+      find.text('inserisci manualmente #$scansioneId'),
+      findsOneWidget,
+      reason: 'naviga a /scansione/inserisci-manualmente con lo scansioneId',
     );
   });
 

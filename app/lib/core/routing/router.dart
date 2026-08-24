@@ -9,6 +9,7 @@ import 'package:mycomicbrain/features/collezione/presentation/collezione_page.da
 import 'package:mycomicbrain/features/dashboard/presentation/dashboard_page.dart';
 import 'package:mycomicbrain/features/duplicati/presentation/duplicati_page.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/conferma_candidato_page.dart';
+import 'package:mycomicbrain/features/identificazione/presentation/inserisci_manualmente_page.dart';
 import 'package:mycomicbrain/features/login/presentation/login_page.dart';
 import 'package:mycomicbrain/features/ricerca/presentation/ricerca_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/revisione_page.dart';
@@ -118,6 +119,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/scansione/conferma-candidato',
         builder: (context, state) =>
             ConfermaCandidatoPage(scansioneId: state.extra! as int),
+      ),
+      // Schermo "Inserisci manualmente" (§6.3, deciso su #61, implementato
+      // su #62): raggiunto da ConfermaCandidatoPage quando nessun Candidato
+      // combacia.
+      GoRoute(
+        path: '/scansione/inserisci-manualmente',
+        builder: (context, state) =>
+            InserisciManualmentePage(scansioneId: state.extra! as int),
       ),
       GoRoute(
         path: '/serie',
