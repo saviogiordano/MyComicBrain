@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
-import 'package:mycomicbrain/core/data/database.dart' show AnalisiCopertinaTableData;
+import 'package:mycomicbrain/core/data/database.dart'
+    show AnalisiCopertinaTableData;
+import 'package:mycomicbrain/core/data/text_similarity.dart';
 import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 
@@ -167,7 +169,12 @@ class MatchingEngine {
       issueNumberLabel: issueNumberLabel,
       publisher: publisher,
     );
-    final boostCv = _boostCv(analisi: analisi, title: title, seriesName: seriesName, publisher: publisher);
+    final boostCv = _boostCv(
+      analisi: analisi,
+      title: title,
+      seriesName: seriesName,
+      publisher: publisher,
+    );
     final bonusContesto = _bonusDiContesto(
       serieId: serieId,
       issueNumero: issueNumero,
@@ -192,7 +199,7 @@ class MatchingEngine {
       final at = a?.trim();
       final bt = b?.trim();
       if (at == null || at.isEmpty || bt == null || bt.isEmpty) return;
-      contributi.add((peso, _similarita(at, bt)));
+      contributi.add((peso, similaritaTestuale(at, bt)));
     }
 
     aggiungi(_pesoSeriesName, analisi.seriesName, seriesName);
@@ -218,17 +225,14 @@ class MatchingEngine {
     required String? seriesName,
     required String? publisher,
   }) {
-    final tag =
-        <String>[
-              ...analisi.characters,
-              ...analisi.coverStyleTags,
-              ...analisi.visualElementTags,
-              if (analisi.recognizedPublisherLogo != null) analisi.recognizedPublisherLogo!,
-              if (analisi.recognizedSeriesLogo != null) analisi.recognizedSeriesLogo!,
-            ]
-            .map((t) => t.trim().toLowerCase())
-            .where((t) => t.isNotEmpty)
-            .toSet();
+    final tag = <String>[
+      ...analisi.characters,
+      ...analisi.coverStyleTags,
+      ...analisi.visualElementTags,
+      if (analisi.recognizedPublisherLogo != null)
+        analisi.recognizedPublisherLogo!,
+      if (analisi.recognizedSeriesLogo != null) analisi.recognizedSeriesLogo!,
+    ].map((t) => t.trim().toLowerCase()).where((t) => t.isNotEmpty).toSet();
     if (tag.isEmpty) return 0;
 
     final testo = [
@@ -254,7 +258,9 @@ class MatchingEngine {
     if (serieId == null || issueNumero == null) return 0;
     final posseduti = numeriPossedutiPerSerie[serieId];
     if (posseduti == null || posseduti.isEmpty) return 0;
-    final adiacente = posseduti.contains(issueNumero - 1) || posseduti.contains(issueNumero + 1);
+    final adiacente =
+        posseduti.contains(issueNumero - 1) ||
+        posseduti.contains(issueNumero + 1);
     return adiacente ? _bonusContesto : 0;
   }
 
@@ -272,7 +278,7 @@ class MatchingEngine {
       final serieId = edizione.serieId;
       final nomeSerie = edizione.seriesName;
       if (serieId == null || nomeSerie == null || !visti.add(serieId)) continue;
-      final similarita = _similarita(seriesName, nomeSerie);
+      final similarita = similaritaTestuale(seriesName, nomeSerie);
       if (similarita > miglioreSimilarita) {
         miglioreSimilarita = similarita;
         migliorId = serieId;
@@ -291,38 +297,5 @@ class MatchingEngine {
 /// — `null` se non presente o non un intero puro (es. `"42.1"`, `"Annual
 /// 1"`): il bonus di contesto confronta solo numeri interi comparabili con
 /// `Edizioni.issueNumber`.
-int? _numeroDaLabel(String? label) => label == null ? null : int.tryParse(label.trim());
-
-/// Similarità normalizzata 0-1 fra due stringhe (confronto case/spazi-
-/// insensitive), basata sulla distanza di Levenshtein (deciso su #52: "es.
-/// token-set/Levenshtein normalizzato").
-double _similarita(String a, String b) {
-  final x = a.trim().toLowerCase();
-  final y = b.trim().toLowerCase();
-  if (x == y) return 1;
-  if (x.isEmpty || y.isEmpty) return 0;
-  final distanza = _levenshtein(x, y);
-  final lunghezzaMax = math.max(x.length, y.length);
-  return 1 - (distanza / lunghezzaMax);
-}
-
-int _levenshtein(String a, String b) {
-  var precedente = List<int>.generate(b.length + 1, (j) => j);
-  var corrente = List<int>.filled(b.length + 1, 0);
-
-  for (var i = 1; i <= a.length; i++) {
-    corrente[0] = i;
-    for (var j = 1; j <= b.length; j++) {
-      final costo = a[i - 1] == b[j - 1] ? 0 : 1;
-      corrente[j] = [
-        corrente[j - 1] + 1,
-        precedente[j] + 1,
-        precedente[j - 1] + costo,
-      ].reduce(math.min);
-    }
-    final scambio = precedente;
-    precedente = corrente;
-    corrente = scambio;
-  }
-  return precedente[b.length];
-}
+int? _numeroDaLabel(String? label) =>
+    label == null ? null : int.tryParse(label.trim());

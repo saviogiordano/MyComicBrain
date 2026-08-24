@@ -4,25 +4,60 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 
-/// `http.Client` finto: risponde con [risposta]/[statusCode] fissi e
-/// registra l'ultima richiesta inviata, senza rete reale.
+/// `http.Client` finto: risponde in base al `resources`/percorso della
+/// richiesta (`volume` per la ricerca volumi, `/issues/` per il filtro per
+/// numero, `issue` per la vecchia ricerca testuale libera), registrando
+/// tutte le richieste inviate — a differenza di un fake a risposta fissa,
+/// serve a testare il flusso a due passaggi (#60).
 class _FakeHttpClient extends http.BaseClient {
-  _FakeHttpClient({required this.statusCode, required this.risposta});
+  _FakeHttpClient({
+    this.risultatiVolumi = const [],
+    this.risultatiPerVolume = const {},
+    this.risultatiTestoLibero = const [],
+    this.statusCode = 1,
+  });
 
+  final List<Map<String, dynamic>> risultatiVolumi;
+
+  /// Risultati del filtro `/issues/?filter=volume:<id>,...`, per id volume.
+  final Map<int, List<Map<String, dynamic>>> risultatiPerVolume;
+  final List<Map<String, dynamic>> risultatiTestoLibero;
   final int statusCode;
-  final String risposta;
-  http.BaseRequest? ultimaRichiesta;
+
+  final List<http.BaseRequest> richieste = [];
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    ultimaRichiesta = request;
-    return http.StreamedResponse(Stream.value(utf8.encode(risposta)), statusCode);
+    richieste.add(request);
+    final uri = request.url;
+
+    final List<Map<String, dynamic>> risultati;
+    if (uri.path.contains('/issues/')) {
+      final filtro = uri.queryParameters['filter'] ?? '';
+      final match = RegExp(r'volume:(\d+)').firstMatch(filtro);
+      final volumeId = match == null ? null : int.parse(match.group(1)!);
+      risultati = risultatiPerVolume[volumeId] ?? const [];
+    } else if (uri.queryParameters['resources'] == 'volume') {
+      risultati = risultatiVolumi;
+    } else {
+      risultati = risultatiTestoLibero;
+    }
+
+    return http.StreamedResponse(
+      Stream.value(
+        utf8.encode(_rispostaComicVine(risultati, statusCode: statusCode)),
+      ),
+      200,
+    );
   }
 }
 
-String _rispostaComicVine(List<Map<String, dynamic>> results, {int statusCode = 1}) => jsonEncode({
+String _rispostaComicVine(
+  List<Map<String, dynamic>> results, {
+  int statusCode = 1,
+}) => jsonEncode({
   'error': statusCode == 1 ? 'OK' : "l'API key non è valida",
-  'limit': 10,
+  'limit': 100,
   'offset': 0,
   'number_of_page_results': results.length,
   'number_of_total_results': results.length,
@@ -34,144 +69,358 @@ const Map<String, dynamic> _issueCompleta = {
   'id': 111000,
   'name': 'Amazing Fantasy',
   'issue_number': '15',
-  'volume': {'id': 222, 'name': 'Amazing Fantasy', 'site_detail_url': 'https://comicvine.gamespot.com/volume/'},
-  'image': {'medium_url': 'https://comicvine.gamespot.com/a/uploads/medium.jpg'},
-  'site_detail_url': 'https://comicvine.gamespot.com/amazing-fantasy-15/4000-111000/',
+  'volume': {
+    'id': 222,
+    'name': 'Amazing Fantasy',
+    'site_detail_url': 'https://comicvine.gamespot.com/volume/',
+  },
+  'image': {
+    'medium_url': 'https://comicvine.gamespot.com/a/uploads/medium.jpg',
+  },
+  'site_detail_url':
+      'https://comicvine.gamespot.com/amazing-fantasy-15/4000-111000/',
+};
+
+Map<String, dynamic> _volume({
+  required int id,
+  required String name,
+  String? publisher,
+  int? countOfIssues,
+}) => {
+  'id': id,
+  'name': name,
+  if (publisher != null) 'publisher': {'name': publisher},
+  'count_of_issues': ?countOfIssues,
 };
 
 void main() {
-  test('estrae i campi rilevanti per lo scoring da una risposta 200 con status_code 1', () async {
-    final client = ComicVineHttpClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaComicVine([_issueCompleta])),
+  group('con numero e serie/titolo disponibili (ricerca per volume, #60)', () {
+    test(
+      'cerca prima i volumi e poi filtra per numero nel volume scelto',
+      () async {
+        final fake = _FakeHttpClient(
+          risultatiVolumi: [
+            _volume(
+              id: 2133,
+              name: 'The X-Men',
+              publisher: 'Marvel',
+              countOfIssues: 141,
+            ),
+          ],
+          risultatiPerVolume: {
+            2133: [
+              {
+                'id': 20546,
+                'name': 'Dark Phoenix',
+                'issue_number': '135',
+                'volume': {'id': 2133, 'name': 'The X-Men'},
+                'image': {
+                  'medium_url': 'https://comicvine.gamespot.com/x-men-135.jpg',
+                },
+                'site_detail_url':
+                    'https://comicvine.gamespot.com/the-x-men-135-dark-phoenix/4000-20546/',
+              },
+            ],
+          },
+        );
+        final client = ComicVineHttpClient(httpClient: fake);
+
+        final risultati = await client.cercaIssue(
+          title: null,
+          seriesName: 'Uncanny X-Men',
+          issueNumberLabel: '135',
+          publisher: 'Marvel Comics Group',
+        );
+
+        expect(risultati, hasLength(1));
+        expect(risultati.single.issueNumber, '135');
+        expect(risultati.single.volumeName, 'The X-Men');
+
+        expect(fake.richieste, hasLength(2));
+        final ricercaVolumi = fake.richieste[0].url;
+        expect(ricercaVolumi.queryParameters['resources'], 'volume');
+        expect(ricercaVolumi.queryParameters['query'], 'Uncanny X-Men');
+        final filtroIssue = fake.richieste[1].url;
+        expect(filtroIssue.path, contains('/issues/'));
+        expect(
+          filtroIssue.queryParameters['filter'],
+          'volume:2133,issue_number:135',
+        );
+      },
     );
 
-    final risultati = await client.cercaIssue(
-      title: 'Amazing Fantasy',
-      seriesName: 'Amazing Fantasy',
-      issueNumberLabel: '15',
-      publisher: 'Marvel',
+    test('scarta i volumi con meno albi del numero cercato', () async {
+      final fake = _FakeHttpClient(
+        risultatiVolumi: [
+          _volume(
+            id: 43785,
+            name: 'Uncanny X-Men',
+            publisher: 'Marvel',
+            countOfIssues: 20,
+          ),
+          _volume(
+            id: 2133,
+            name: 'The X-Men',
+            publisher: 'Marvel',
+            countOfIssues: 141,
+          ),
+        ],
+        risultatiPerVolume: {
+          2133: [
+            {
+              'id': 20546,
+              'name': 'Dark Phoenix',
+              'issue_number': '135',
+              'volume': {'id': 2133, 'name': 'The X-Men'},
+              'image': null,
+              'site_detail_url':
+                  'https://comicvine.gamespot.com/the-x-men-135-dark-phoenix/4000-20546/',
+            },
+          ],
+        },
+      );
+      final client = ComicVineHttpClient(httpClient: fake);
+
+      final risultati = await client.cercaIssue(
+        title: null,
+        seriesName: 'Uncanny X-Men',
+        issueNumberLabel: '135',
+        publisher: 'Marvel',
+      );
+
+      expect(risultati, hasLength(1));
+      expect(risultati.single.volumeName, 'The X-Men');
+      // Un solo volume interrogato per numero: 43785 è stato scartato prima
+      // della chiamata perché count_of_issues (20) è sotto il numero (135).
+      final chiamateFiltro = fake.richieste.where(
+        (r) => r.url.path.contains('/issues/'),
+      );
+      expect(chiamateFiltro, hasLength(1));
+      expect(
+        chiamateFiltro.single.url.queryParameters['filter'],
+        'volume:2133,issue_number:135',
+      );
+    });
+
+    test(
+      'ripiega sulla ricerca testuale libera se nessun volume candidato contiene quel numero',
+      () async {
+        final fake = _FakeHttpClient(
+          risultatiVolumi: [
+            _volume(id: 2133, name: 'The X-Men', countOfIssues: 141),
+          ],
+          risultatiTestoLibero: [_issueCompleta],
+        );
+        final client = ComicVineHttpClient(httpClient: fake);
+
+        final risultati = await client.cercaIssue(
+          title: null,
+          seriesName: 'The X-Men',
+          issueNumberLabel: '999',
+          publisher: null,
+        );
+
+        expect(risultati, hasLength(1));
+        expect(risultati.single.name, 'Amazing Fantasy');
+        final ultima = fake.richieste.last.url;
+        expect(ultima.queryParameters['resources'], 'issue');
+      },
     );
 
-    expect(risultati, hasLength(1));
-    final match = risultati.single;
-    expect(match.id, 111000);
-    expect(match.name, 'Amazing Fantasy');
-    expect(match.issueNumber, '15');
-    expect(match.volumeName, 'Amazing Fantasy');
-    expect(match.coverImageUrl, 'https://comicvine.gamespot.com/a/uploads/medium.jpg');
-    expect(match.siteDetailUrl, 'https://comicvine.gamespot.com/amazing-fantasy-15/4000-111000/');
+    test('non scarta un volume con count_of_issues mancante', () async {
+      final fake = _FakeHttpClient(
+        risultatiVolumi: [_volume(id: 2133, name: 'The X-Men')],
+        risultatiPerVolume: {
+          2133: [
+            {
+              'id': 20546,
+              'name': 'Dark Phoenix',
+              'issue_number': '135',
+              'volume': {'id': 2133, 'name': 'The X-Men'},
+              'image': null,
+              'site_detail_url':
+                  'https://comicvine.gamespot.com/the-x-men-135-dark-phoenix/4000-20546/',
+            },
+          ],
+        },
+      );
+      final client = ComicVineHttpClient(httpClient: fake);
+
+      final risultati = await client.cercaIssue(
+        title: null,
+        seriesName: 'The X-Men',
+        issueNumberLabel: '135',
+        publisher: null,
+      );
+
+      expect(risultati, hasLength(1));
+    });
   });
 
-  test('costruisce la query da seriesName+title quando entrambi presenti', () async {
-    final fake = _FakeHttpClient(statusCode: 200, risposta: _rispostaComicVine([]));
-    final client = ComicVineHttpClient(httpClient: fake);
+  group('fallback su ricerca testuale libera (comportamento precedente)', () {
+    test(
+      'usa la ricerca testuale libera quando issueNumberLabel è null',
+      () async {
+        final fake = _FakeHttpClient(risultatiTestoLibero: [_issueCompleta]);
+        final client = ComicVineHttpClient(httpClient: fake);
 
-    await client.cercaIssue(
-      title: 'Amazing Fantasy',
-      seriesName: 'Amazing Fantasy',
-      issueNumberLabel: '15',
-      publisher: 'Marvel',
+        final risultati = await client.cercaIssue(
+          title: 'Amazing Fantasy',
+          seriesName: 'Amazing Fantasy',
+          issueNumberLabel: null,
+          publisher: 'Marvel',
+        );
+
+        expect(risultati, hasLength(1));
+        expect(fake.richieste, hasLength(1));
+        final uri = fake.richieste.single.url;
+        expect(uri.queryParameters['query'], 'Amazing Fantasy Amazing Fantasy');
+        expect(uri.queryParameters['resources'], 'issue');
+        expect(
+          uri.queryParameters['field_list'],
+          'id,name,issue_number,volume,image,site_detail_url',
+        );
+      },
     );
 
-    final uri = (fake.ultimaRichiesta! as http.Request).url;
-    expect(uri.queryParameters['query'], 'Amazing Fantasy Amazing Fantasy');
-    expect(uri.queryParameters['resources'], 'issue');
-    expect(uri.queryParameters['field_list'], 'id,name,issue_number,volume,image,site_detail_url');
+    test(
+      'usa issueNumberLabel+publisher come fallback quando title e seriesName sono null',
+      () async {
+        final fake = _FakeHttpClient();
+        final client = ComicVineHttpClient(httpClient: fake);
+
+        await client.cercaIssue(
+          title: null,
+          seriesName: null,
+          issueNumberLabel: '15',
+          publisher: 'Marvel',
+        );
+
+        expect(fake.richieste, hasLength(1));
+        final uri = fake.richieste.single.url;
+        expect(uri.queryParameters['query'], '15 Marvel');
+        expect(uri.queryParameters['resources'], 'issue');
+      },
+    );
+
+    test("non chiama l'API se tutti i campi OCR sono null", () async {
+      final fake = _FakeHttpClient();
+      final client = ComicVineHttpClient(httpClient: fake);
+
+      final risultati = await client.cercaIssue(
+        title: null,
+        seriesName: null,
+        issueNumberLabel: null,
+        publisher: null,
+      );
+
+      expect(risultati, isEmpty);
+      expect(fake.richieste, isEmpty);
+    });
+
+    test(
+      "un campo volume o image mancante nel risultato non genera un'eccezione",
+      () async {
+        final issueSenzaVolumeEImage = {
+          'id': 999,
+          'name': null,
+          'issue_number': '1',
+          'volume': null,
+          'image': null,
+          'site_detail_url': 'https://comicvine.gamespot.com/x/1-999/',
+        };
+        final client = ComicVineHttpClient(
+          httpClient: _FakeHttpClient(
+            risultatiTestoLibero: [issueSenzaVolumeEImage],
+          ),
+        );
+
+        final risultati = await client.cercaIssue(
+          title: null,
+          seriesName: null,
+          issueNumberLabel: '1',
+          publisher: null,
+        );
+
+        final match = risultati.single;
+        expect(match.name, isNull);
+        expect(match.volumeName, isNull);
+        expect(match.coverImageUrl, isNull);
+      },
+    );
   });
 
-  test('usa issueNumberLabel+publisher come fallback quando title e seriesName sono null', () async {
-    final fake = _FakeHttpClient(statusCode: 200, risposta: _rispostaComicVine([]));
-    final client = ComicVineHttpClient(httpClient: fake);
+  group('errori', () {
+    test(
+      'un status_code diverso da 1 solleva ComicVineException con il messaggio di errore',
+      () async {
+        final client = ComicVineHttpClient(
+          httpClient: _FakeHttpClient(statusCode: 100),
+        );
 
-    await client.cercaIssue(title: null, seriesName: null, issueNumberLabel: '15', publisher: 'Marvel');
-
-    final uri = (fake.ultimaRichiesta! as http.Request).url;
-    expect(uri.queryParameters['query'], '15 Marvel');
-  });
-
-  test("non chiama l'API se tutti i campi OCR sono null", () async {
-    final fake = _FakeHttpClient(statusCode: 200, risposta: _rispostaComicVine([]));
-    final client = ComicVineHttpClient(httpClient: fake);
-
-    final risultati = await client.cercaIssue(
-      title: null,
-      seriesName: null,
-      issueNumberLabel: null,
-      publisher: null,
+        await expectLater(
+          () => client.cercaIssue(
+            title: 'x',
+            seriesName: null,
+            issueNumberLabel: null,
+            publisher: null,
+          ),
+          throwsA(
+            isA<ComicVineException>().having(
+              (e) => e.message,
+              'message',
+              contains("l'API key non è valida"),
+            ),
+          ),
+        );
+      },
     );
 
-    expect(risultati, isEmpty);
-    expect(fake.ultimaRichiesta, isNull);
-  });
+    test('una risposta HTTP non-2xx solleva ComicVineException', () async {
+      final client = ComicVineHttpClient(httpClient: _FakeHttpClientNon2xx());
 
-  test("un campo volume o image mancante nel risultato non genera un'eccezione", () async {
-    final issueSenzaVolumeEImage = {
-      'id': 999,
-      'name': null,
-      'issue_number': '1',
-      'volume': null,
-      'image': null,
-      'site_detail_url': 'https://comicvine.gamespot.com/x/1-999/',
-    };
-    final client = ComicVineHttpClient(
-      httpClient: _FakeHttpClient(
-        statusCode: 200,
-        risposta: _rispostaComicVine([issueSenzaVolumeEImage]),
-      ),
-    );
-
-    final risultati = await client.cercaIssue(
-      title: null,
-      seriesName: null,
-      issueNumberLabel: '1',
-      publisher: null,
-    );
-
-    final match = risultati.single;
-    expect(match.name, isNull);
-    expect(match.volumeName, isNull);
-    expect(match.coverImageUrl, isNull);
-  });
-
-  test('un status_code diverso da 1 solleva ComicVineException con il messaggio di errore', () async {
-    final client = ComicVineHttpClient(
-      httpClient: _FakeHttpClient(
-        statusCode: 200,
-        risposta: _rispostaComicVine([], statusCode: 100),
-      ),
-    );
-
-    await expectLater(
-      () => client.cercaIssue(title: 'x', seriesName: null, issueNumberLabel: null, publisher: null),
-      throwsA(
-        isA<ComicVineException>().having(
-          (e) => e.message,
-          'message',
-          contains("l'API key non è valida"),
+      await expectLater(
+        () => client.cercaIssue(
+          title: 'x',
+          seriesName: null,
+          issueNumberLabel: null,
+          publisher: null,
         ),
-      ),
-    );
+        throwsA(isA<ComicVineException>()),
+      );
+    });
+
+    test('una risposta non JSON valido solleva ComicVineException', () async {
+      final client = ComicVineHttpClient(
+        httpClient: _FakeHttpClientRispostaInvalida(),
+      );
+
+      await expectLater(
+        () => client.cercaIssue(
+          title: 'x',
+          seriesName: null,
+          issueNumberLabel: null,
+          publisher: null,
+        ),
+        throwsA(isA<ComicVineException>()),
+      );
+    });
   });
+}
 
-  test('una risposta HTTP non-2xx solleva ComicVineException', () async {
-    final client = ComicVineHttpClient(
-      httpClient: _FakeHttpClient(statusCode: 500, risposta: 'errore interno'),
+class _FakeHttpClientNon2xx extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(
+      Stream.value(utf8.encode('errore interno')),
+      500,
     );
+  }
+}
 
-    await expectLater(
-      () => client.cercaIssue(title: 'x', seriesName: null, issueNumberLabel: null, publisher: null),
-      throwsA(isA<ComicVineException>()),
-    );
-  });
-
-  test('una risposta non JSON valido solleva ComicVineException', () async {
-    final client = ComicVineHttpClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: 'non è json'),
-    );
-
-    await expectLater(
-      () => client.cercaIssue(title: 'x', seriesName: null, issueNumberLabel: null, publisher: null),
-      throwsA(isA<ComicVineException>()),
-    );
-  });
+class _FakeHttpClientRispostaInvalida extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(Stream.value(utf8.encode('non è json')), 200);
+  }
 }
