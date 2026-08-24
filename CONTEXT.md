@@ -5,7 +5,7 @@ Catalogo personale di fumetti: cattura una collezione fisica con scansione/ricon
 ## Language
 
 **Opera**:
-La storia/testata a prescindere da come è stata pubblicata (es. "Spider-Man"). Distinta dall'edizione (§36 dei requisiti).
+La storia/testata a prescindere da come è stata pubblicata (es. "Spider-Man"). Distinta dall'edizione (§32 dei requisiti).
 _Avoid_: Titolo, fumetto (quando si intende l'opera e non l'edizione)
 
 **Edizione**:
@@ -59,7 +59,7 @@ _Avoid_: Risultato, match (ok in prosa tecnica, non come termine di modello)
 
 **Identificazione**:
 Il processo — e la riga che lo traccia, 1:1 con una Scansione — che genera i Candidati a partire dall'Analisi Copertina di quella Scansione (§6.3). Stato pending/in corso/completata/fallita, stesso pattern di Analisi Copertina: nessun retry automatico né manuale, `fallita` è terminale (un errore tecnico, es. database esterno irraggiungibile — non lo stesso caso di "nessun Candidato trovato", che è comunque `completata`, solo senza Candidati proposti). Una Scansione è "risolta" quando esiste una Copia collegata a lei (conferma di un Candidato o inserimento manuale) — non è un attributo proprio dell'Identificazione. Deciso su [#53](https://github.com/saviogiordano/MyComicBrain/issues/53).
-_Avoid_: Riconoscimento (il processo AI generico di §6/§7 in prosa tecnica, non il nome di questa entità/tabella)
+_Avoid_: Riconoscimento (il processo AI generico di §6 in prosa tecnica, non il nome di questa entità/tabella)
 
 **Punteggio di confidenza**:
 Un valore 0–100% assegnato a un Candidato durante l'identificazione (§6.3), che ne esprime la probabilità di essere la corrispondenza corretta. Calcolato combinando più segnali (non una cascata a livelli con stop al primo che risponde — tutti i segnali applicabili concorrono allo stesso punteggio): un segnale testuale dominante (somiglianza fra i campi letti nell'Analisi Copertina e i campi del Candidato), un boost secondario da Personaggi raffigurati/Tag di stile copertina/Tag di elementi visivi caratteristici/loghi riconosciuti (corrobora un match testuale già presente, non ne genera uno da solo), e un bonus additivo di contesto (stessa Serie già in catalogo con un numero adiacente o mancante fra le copie possedute). Barcode/ISBN letti nell'Analisi Copertina non contribuiscono al punteggio: nessuna delle due fonti di matching li supporta oggi come chiave di ricerca. I pesi relativi fra i segnali non sono fissati come valori di dominio: sono un dettaglio implementativo tarabile, non un concetto della collezione. Dettagli in [#52](https://github.com/saviogiordano/MyComicBrain/issues/52).

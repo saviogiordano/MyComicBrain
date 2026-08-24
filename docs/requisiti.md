@@ -85,11 +85,11 @@ La home deve mostrare:
 
 Esempio:
 
-> La tua collezione  
-> 1.248 fumetti  
-> 87 serie  
-> 14 serie complete  
-> 23 duplicati  
+> La tua collezione
+> 1.248 fumetti
+> 87 serie
+> 14 serie complete
+> 23 duplicati
 > 37 numeri mancanti
 
 ---
@@ -126,9 +126,9 @@ Prima dell'analisi l'app dovrebbe poter:
 
 ---
 
-# 6. Analisi AI della copertina
+# 6. Analisi AI della copertina e identificazione
 
-Il motore AI deve analizzare l'immagine per individuare gli elementi utili alla catalogazione.
+Il motore AI deve analizzare l'immagine per individuare gli elementi utili alla catalogazione, identificare il fumetto corrispondente e recuperarne i metadati bibliografici.
 
 ## 6.1 OCR
 
@@ -159,11 +159,21 @@ L'AI dovrebbe cercare di riconoscere:
 
 ## 6.3 Identificazione del fumetto
 
-Il sistema deve combinare:
+Il sistema deve combinare i segnali raccolti dall'analisi della cover (OCR, computer vision, eventuale barcode/ISBN) con il catalogo interno e con un database esterno di fumetti, per generare uno o più candidati di corrispondenza.
 
-**immagine + OCR + barcode + database + contesto della collezione**
+Il punteggio di confidenza di ciascun candidato è calcolato **combinando più segnali**, non con una cascata di livelli che si ferma al primo segnale disponibile:
 
-per generare uno o più candidati.
+- **segnale testuale dominante**: somiglianza tra i campi letti (titolo, numero, editore, nome collana) e i campi del candidato;
+- **boost secondario da computer vision**: personaggi raffigurati, tag di stile copertina, tag di elementi visivi caratteristici, loghi riconosciuti — corrobora un match testuale già presente, non lo genera da solo;
+- **bonus di contesto**: la stessa serie è già presente in collezione con un numero adiacente o mancante tra le copie possedute (vedi esempio in §13).
+
+Barcode/ISBN letti in fase di OCR non contribuiscono oggi al punteggio come chiave di ricerca autonoma.
+
+Ogni candidato deve riportare:
+
+- edizione proposta (titolo, numero, editore, anno, ...);
+- punteggio di confidenza;
+- provenienza: catalogo interno (un'edizione già posseduta — confermarlo aggiunge una nuova copia) oppure database esterno (un'edizione non ancora catalogata — confermarlo crea opera/edizione/copia da zero).
 
 Esempio:
 
@@ -182,53 +192,15 @@ Confidenza: 96%
 [ Inserisci manualmente ]
 ```
 
----
+L'AI non deve modificare automaticamente la collezione senza controllo dell'utente: ogni candidato richiede conferma esplicita, e l'utente deve poter modificare qualsiasi campo prima del salvataggio, scegliere un'alternativa tra i candidati proposti o inserire i dati manualmente (vedi anche le soglie di confidenza in §24).
 
-# 7. Motore di riconoscimento
+## 6.4 Acquisizione dei metadati
 
-Il riconoscimento non deve dipendere esclusivamente dall'AI generativa.
+Quando l'utente conferma un candidato proveniente da un database esterno, il sistema deve recuperare i metadati bibliografici completi da quella fonte.
 
-Deve essere implementata una pipeline a più livelli:
+### Metadati da acquisire
 
-### Livello 1 — Barcode/ISBN
-
-Se viene riconosciuto un ISBN o altro identificativo, utilizzarlo come chiave primaria di ricerca.
-
-### Livello 2 — OCR
-
-Utilizzare titolo, numero, editore e altri testi rilevati.
-
-### Livello 3 — Image matching
-
-Confrontare la cover con immagini di copertina presenti nei database.
-
-### Livello 4 — Ricerca semantica
-
-Utilizzare un modello AI per interpretare informazioni incomplete o ambigue.
-
-### Livello 5 — Contesto
-
-Utilizzare i dati già presenti nella collezione.
-
-Esempio:
-
-Se l'utente possiede:
-
-- Spider-Man #1
-- Spider-Man #2
-- Spider-Man #3
-
-e fotografa una cover riconosciuta come Spider-Man #4, il sistema dovrebbe aumentare la probabilità che il candidato #4 sia corretto.
-
----
-
-# 8. Acquisizione dei metadati
-
-Una volta identificato il fumetto, il sistema deve interrogare una o più fonti esterne.
-
-## Metadati da acquisire
-
-### Identificazione
+#### Identificazione
 
 - titolo;
 - titolo originale;
@@ -244,7 +216,7 @@ Una volta identificato il fumetto, il sistema deve interrogare una o più fonti 
 - UPC/EAN;
 - codice prodotto.
 
-### Creatori
+#### Creatori
 
 - sceneggiatore;
 - disegnatore;
@@ -253,7 +225,7 @@ Una volta identificato il fumetto, il sistema deve interrogare una o più fonti 
 - traduttore;
 - altri contributori.
 
-### Contenuto
+#### Contenuto
 
 - descrizione;
 - personaggi;
@@ -262,7 +234,7 @@ Una volta identificato il fumetto, il sistema deve interrogare una o più fonti 
 - tag;
 - arco narrativo.
 
-### Informazioni editoriali
+#### Informazioni editoriali
 
 - numero di pagine;
 - formato;
@@ -272,87 +244,19 @@ Una volta identificato il fumetto, il sistema deve interrogare una o più fonti 
 - variant;
 - serie/volume.
 
-### Immagini
+#### Immagini
 
 - cover originale;
 - eventuali immagini aggiuntive;
 - thumbnail.
 
----
+### Fonte dei dati
 
-# 9. Sistema multi-fonte
-
-Il backend deve prevedere un livello astratto:
-
-**Metadata Provider**
-
-in modo da poter aggiungere o sostituire fonti senza modificare l'app.
-
-Esempio:
-
-```text
-Comic Catalog
-      │
-      ▼
-Metadata Aggregator
-      │
- ┌────┼─────┐
- ▼    ▼     ▼
-API  API    API
-```
-
-Le fonti possono comprendere:
-
-- database internazionali;
-- database di editori;
-- database italiani;
-- Open Library;
-- servizi specializzati in fumetti;
-- fonti configurabili in futuro.
-
-Il sistema deve conservare la **fonte del singolo dato**, quando disponibile.
-
-Esempio:
-
-```text
-Titolo: Spider-Man
-Fonte: Provider A
-
-ISBN: 9781234567890
-Fonte: Provider B
-
-Editore: Marvel
-Fonte: Provider A
-```
+Il recupero avviene tramite un database esterno di fumetti (oggi ComicVine). La fonte è associata al candidato nel suo complesso, non tracciata per singolo campo: non è richiesto un layer di astrazione multi-provider, ma l'architettura non preclude l'aggiunta di ulteriori fonti in futuro.
 
 ---
 
-# 10. Gestione dei risultati AI
-
-L'AI non deve modificare automaticamente la collezione senza controllo dell'utente.
-
-Ogni risultato deve avere:
-
-- valore rilevato;
-- fonte;
-- livello di confidenza;
-- eventuali alternative.
-
-Esempio:
-
-| Campo | Valore | Confidenza |
-|---|---|---:|
-| Titolo | Spider-Man | 99% |
-| Numero | 42 | 96% |
-| Editore | Marvel | 98% |
-| Anno | 2019 | 82% |
-| ISBN | 978... | 99% |
-
-L'utente deve poter modificare qualsiasi campo prima del salvataggio.
-
----
-
-# 11. Gestione manuale
+# 7. Gestione manuale
 
 Deve essere sempre possibile inserire un fumetto senza AI.
 
@@ -375,11 +279,11 @@ Campi principali:
 
 ---
 
-# 12. Scheda del fumetto
+# 8. Scheda del fumetto
 
-Ogni fumetto deve avere una propria scheda.
+Ogni fumetto (edizione) deve avere una propria scheda, punto di accesso a tutte le informazioni e a tutte le operazioni su quella edizione e sulle sue copie.
 
-## Informazioni bibliografiche
+## 8.1 Informazioni bibliografiche
 
 - cover;
 - titolo;
@@ -393,7 +297,7 @@ Ogni fumetto deve avere una propria scheda.
 - autori;
 - descrizione.
 
-## Informazioni personali
+## 8.2 Informazioni personali
 
 - posseduto;
 - numero di copie;
@@ -404,7 +308,7 @@ Ogni fumetto deve avere una propria scheda.
 - posizione fisica;
 - note personali.
 
-## Stato
+## 8.3 Stato
 
 Possibili valori:
 
@@ -416,9 +320,31 @@ Possibili valori:
 - Venduto
 - Mancante
 
+## 8.4 Operazioni disponibili dalla scheda
+
+Oltre alla sola visualizzazione, la scheda deve permettere:
+
+**Modifica**
+
+- modificare qualsiasi campo bibliografico e personale (§8.1, §8.2);
+- correggere manualmente i dati proposti dall'AI anche dopo il salvataggio, non solo in fase di conferma del candidato (§6.3).
+
+**Gestione delle copie**
+
+- aggiungere una nuova copia alla stessa edizione (§9);
+- modificare condizione, prezzo, data di acquisto, venditore e posizione di ogni singola copia;
+- cambiare lo stato di una copia (§8.3);
+- rimuovere una singola copia, mantenendo l'edizione se restano altre copie.
+
+**Cancellazione**
+
+- eliminare una singola copia;
+- eliminare l'intera edizione (tutte le copie), con richiesta di conferma esplicita se sono presenti più copie o dati personali già inseriti (prezzo, note, ...);
+- l'app deve avvisare chiaramente prima di un'eliminazione, in quanto non è garantito poterla annullare.
+
 ---
 
-# 13. Gestione delle copie
+# 9. Gestione delle copie
 
 Il modello dati deve distinguere il **fumetto/edizione** dalla **copia fisica**.
 
@@ -442,7 +368,7 @@ Questo permette di gestire correttamente i duplicati.
 
 ---
 
-# 14. Condizione del fumetto
+# 10. Condizione del fumetto
 
 Deve essere possibile selezionare una condizione standardizzata.
 
@@ -463,7 +389,7 @@ In una fase successiva l'AI potrebbe stimare automaticamente la condizione della
 
 ---
 
-# 15. Organizzazione della collezione
+# 11. Organizzazione della collezione
 
 L'utente deve poter organizzare i fumetti attraverso:
 
@@ -482,7 +408,7 @@ L'utente deve poter organizzare i fumetti attraverso:
 
 ---
 
-# 16. Ricerca
+# 12. Ricerca
 
 La ricerca deve supportare:
 
@@ -504,7 +430,7 @@ L'AI dovrebbe poter trasformare la richiesta in un filtro strutturato.
 
 ---
 
-# 17. Serie e numeri mancanti
+# 13. Serie e numeri mancanti
 
 Una funzionalità importante è la gestione delle serie.
 
@@ -536,7 +462,7 @@ L'app deve poter calcolare automaticamente:
 
 ---
 
-# 18. Rilevamento duplicati
+# 14. Rilevamento duplicati
 
 Durante una nuova scansione il sistema deve verificare se l'edizione è già presente.
 
@@ -559,7 +485,7 @@ L'utente può scegliere:
 
 ---
 
-# 19. AI Assistant
+# 15. AI Assistant
 
 L'app può includere un assistente conversazionale.
 
@@ -581,7 +507,7 @@ L'assistente deve operare sui dati della collezione dell'utente e non inventare 
 
 ---
 
-# 20. Statistiche
+# 16. Statistiche
 
 Dashboard statistiche:
 
@@ -600,7 +526,7 @@ Dashboard statistiche:
 
 ---
 
-# 21. Posizione fisica
+# 17. Posizione fisica
 
 L'utente deve poter indicare dove è conservato ogni fumetto.
 
@@ -618,7 +544,7 @@ La posizione deve essere ricercabile.
 
 ---
 
-# 22. Importazione ed esportazione
+# 18. Importazione ed esportazione
 
 L'app deve supportare:
 
@@ -638,7 +564,7 @@ L'app deve supportare:
 
 ---
 
-# 23. Sincronizzazione
+# 19. Sincronizzazione
 
 La collezione deve essere sincronizzata tra:
 
@@ -655,7 +581,7 @@ Il sistema deve supportare:
 
 ---
 
-# 24. Offline mode
+# 20. Offline mode
 
 Le funzioni fondamentali devono essere utilizzabili offline:
 
@@ -671,7 +597,7 @@ Le operazioni effettuate offline devono essere sincronizzate successivamente.
 
 ---
 
-# 25. Privacy
+# 21. Privacy
 
 L'utente deve avere il controllo sulle proprie fotografie e sui propri dati.
 
@@ -690,7 +616,7 @@ Per utenti europei sarebbe inoltre opportuno prevedere una configurazione dell'i
 
 ---
 
-# 26. Architettura tecnica
+# 22. Architettura tecnica
 
 Una possibile architettura:
 
@@ -722,7 +648,7 @@ Una possibile architettura:
 
 ---
 
-# 27. Modello dati principale
+# 23. Modello dati principale
 
 ## Comic
 
@@ -833,7 +759,7 @@ matched_fields
 
 ---
 
-# 28. Requisiti AI
+# 24. Requisiti AI
 
 Il sistema AI deve:
 
@@ -867,7 +793,7 @@ Le soglie dovranno essere calibrate con dati reali durante il beta testing.
 
 ---
 
-# 29. Learning loop
+# 25. Learning loop
 
 Il sistema deve poter imparare dalle correzioni dell'utente.
 
@@ -892,7 +818,7 @@ Importante: il sistema deve distinguere tra apprendimento globale del modello e 
 
 ---
 
-# 30. Gestione degli errori
+# 26. Gestione degli errori
 
 L'app deve gestire:
 
@@ -920,7 +846,7 @@ Azioni:
 
 ---
 
-# 31. Performance
+# 27. Performance
 
 Obiettivi MVP:
 
@@ -942,7 +868,7 @@ Scan 4 → waiting
 
 ---
 
-# 32. Sicurezza
+# 28. Sicurezza
 
 Il backend deve prevedere:
 
@@ -959,7 +885,7 @@ Il backend deve prevedere:
 
 ---
 
-# 33. MVP
+# 29. MVP
 
 Per la prima versione eviterei di implementare tutto.
 
@@ -1010,7 +936,7 @@ Per la prima versione eviterei di implementare tutto.
 
 ---
 
-# 34. Funzioni per la versione 2
+# 30. Funzioni per la versione 2
 
 Dopo aver validato il flusso principale:
 
@@ -1031,7 +957,7 @@ Dopo aver validato il flusso principale:
 
 ---
 
-# 35. Funzioni avanzate future
+# 31. Funzioni avanzate future
 
 ## Riconoscimento della variant
 
@@ -1064,7 +990,7 @@ Il database deve quindi trattare **edizione** e **storia/opera** come concetti d
 
 ---
 
-# 36. Requisito fondamentale: separare opera, edizione e copia
+# 32. Requisito fondamentale: separare opera, edizione e copia
 
 Questa è una scelta architetturale molto importante.
 
@@ -1087,7 +1013,7 @@ In questo modo l'app non considera erroneamente due versioni diverse dello stess
 
 ---
 
-# 37. Criteri di successo del prodotto
+# 33. Criteri di successo del prodotto
 
 Il progetto può essere considerato riuscito se un utente riesce a:
 
@@ -1127,7 +1053,7 @@ Altri KPI:
 
 ---
 
-# 38. Priorità delle funzionalità
+# 34. Priorità delle funzionalità
 
 | Funzionalità | Priorità |
 |---|---|
@@ -1154,7 +1080,7 @@ Altri KPI:
 
 ---
 
-# 39. Principio UX principale
+# 35. Principio UX principale
 
 L'app non dovrebbe sembrare un database da compilare.
 
