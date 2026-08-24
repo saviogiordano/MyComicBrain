@@ -15,6 +15,7 @@ import 'package:mycomicbrain/features/ricerca/presentation/ricerca_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/revisione_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/scansione_page.dart';
+import 'package:mycomicbrain/features/scheda/presentation/modifica_scheda_page.dart';
 import 'package:mycomicbrain/features/scheda/presentation/scheda_page.dart';
 import 'package:mycomicbrain/features/serie/presentation/serie_page.dart';
 import 'package:mycomicbrain/features/statistiche/presentation/statistiche_page.dart';
@@ -95,9 +96,19 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
+      // Punto di accesso unico a un'Edizione (§8, deciso su #63,
+      // implementato su #69) — il placeholder precedente non leggeva
+      // nemmeno l'id.
       GoRoute(
         path: '/scheda/:id',
-        builder: (context, state) => const SchedaPage(),
+        builder: (context, state) =>
+            SchedaPage(edizioneId: int.parse(state.pathParameters['id']!)),
+      ),
+      GoRoute(
+        path: '/scheda/:id/modifica',
+        builder: (context, state) => ModificaSchedaPage(
+          edizioneId: int.parse(state.pathParameters['id']!),
+        ),
       ),
       // Schermate di revisione e riepilogo del batch (R-A/S-B, decise su
       // #20, implementate su #24). Lo scanner (#23) ci naviga passando lo

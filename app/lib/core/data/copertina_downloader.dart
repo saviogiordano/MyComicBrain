@@ -66,4 +66,21 @@ class CopertinaDownloader {
     final file = await File(destPath).writeAsBytes(response.bodyBytes);
     return file.path;
   }
+
+  /// Copia un file immagine scelto localmente (galleria, `image_picker`) in
+  /// `<ApplicationSupportDirectory>/copertine/` — usato dalla modifica della
+  /// cover dalla Scheda (§8.1, deciso su #67), stesso schema di [scarica] ma
+  /// senza rete: la sorgente è già un file sul device, non un URL remoto.
+  Future<String> salvaLocale(File sorgente) async {
+    final base = await _baseDirectory();
+    final dir = Directory(p.join(base.path, _cartellaCopertine));
+    await dir.create(recursive: true);
+
+    final destPath = p.join(
+      dir.path,
+      '${DateTime.now().millisecondsSinceEpoch}.jpg',
+    );
+    final salvato = await sorgente.copy(destPath);
+    return salvato.path;
+  }
 }

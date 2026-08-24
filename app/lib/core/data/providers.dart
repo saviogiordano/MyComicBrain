@@ -12,6 +12,7 @@ import 'package:mycomicbrain/core/data/image_crop_service.dart';
 import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
+import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -118,11 +119,20 @@ final StreamProviderFamily<EsitoIdentificazione, int> identificazioneProvider =
 /// form col risultato AI invece di lasciarlo vuoto quando né il catalogo
 /// interno né ComicVine hanno trovato un candidato affidabile.
 final FutureProviderFamily<AnalisiCopertinaTableData, int>
-analisiCopertinaProvider = FutureProvider.family<AnalisiCopertinaTableData, int>((
-  ref,
-  scansioneId,
-) {
-  return ref
-      .watch(comicsRepositoryProvider)
-      .analisiCopertinaPerScansione(scansioneId);
-});
+analisiCopertinaProvider =
+    FutureProvider.family<AnalisiCopertinaTableData, int>((
+      ref,
+      scansioneId,
+    ) {
+      return ref
+          .watch(comicsRepositoryProvider)
+          .analisiCopertinaPerScansione(scansioneId);
+    });
+
+/// L'Edizione con le sue Copie e i suoi Autori per la Scheda del fumetto
+/// (§8, deciso su #63/#65/#67/#68), per id — `null` se l'Edizione è stata
+/// cancellata.
+final StreamProviderFamily<EdizioneDettaglio?, int> edizioneDettaglioProvider =
+    StreamProvider.family<EdizioneDettaglio?, int>((ref, edizioneId) {
+      return ref.watch(comicsRepositoryProvider).watchEdizione(edizioneId);
+    });

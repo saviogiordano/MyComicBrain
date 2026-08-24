@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
@@ -7,6 +9,7 @@ import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
 import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
+import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 
 /// Espone il dominio del catalogo (opera/edizione/copia, §36) all'UI senza
@@ -865,10 +868,273 @@ ORDER BY s.name, ns.n
   /// corrisponde a nessuna sottocartella locale nota.
   Future<String?> risolviCoverImage(String? coverImage) async {
     if (coverImage == null) return null;
-    if (coverImage.startsWith('http://') ||
-        coverImage.startsWith('https://')) {
+    if (coverImage.startsWith('http://') || coverImage.startsWith('https://')) {
       return coverImage;
     }
-    return percorso_locale.risolvi(coverImage, _copertinaDownloader.baseDirectory);
+    return percorso_locale.risolvi(
+      coverImage,
+      _copertinaDownloader.baseDirectory,
+    );
+  }
+
+  // --- Scheda del fumetto (§8, deciso su #63/#65/#67/#68, implementato su
+  // #69). ---
+
+  /// L'Edizione con le sue Copie e i suoi Autori, per la Scheda — `null` se
+  /// l'Edizione non esiste più (es. appena cancellata da un'altra sessione).
+  /// Un solo join con `Copie`/`ComicCreator`/`Creator` in parallelo (prodotto
+  /// cartesiano raggruppato per id in Dart, stesso pattern di
+  /// [watchIdentificazione]) invece di combinare più stream: nessuna
+  /// dipendenza da rxdart in questo repository.
+  Stream<EdizioneDettaglio?> watchEdizione(int edizioneId) {
+    final query = _db.select(_db.edizioni).join([
+      innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+      leftOuterJoin(
+        _db.serieTable,
+        _db.serieTable.id.equalsExp(_db.edizioni.serieId),
+      ),
+      leftOuterJoin(
+        _db.copie,
+        _db.copie.edizioneId.equalsExp(_db.edizioni.id),
+      ),
+      leftOuterJoin(
+        _db.comicCreator,
+        _db.comicCreator.edizioneId.equalsExp(_db.edizioni.id),
+      ),
+      leftOuterJoin(
+        _db.creator,
+        _db.creator.id.equalsExp(_db.comicCreator.creatorId),
+      ),
+    ])..where(_db.edizioni.id.equals(edizioneId));
+
+    return query.watch().asyncMap((rows) async {
+      if (rows.isEmpty) return null;
+
+      final edizione = rows.first.readTable(_db.edizioni);
+      final opera = rows.first.readTable(_db.opere);
+      final serie = rows.first.readTableOrNull(_db.serieTable);
+
+      final copieById = <int, CopiaDettaglio>{};
+      final autoriById = <int, CreatorConRuolo>{};
+      for (final row in rows) {
+        final copia = row.readTableOrNull(_db.copie);
+        if (copia != null) {
+          copieById[copia.id] = CopiaDettaglio(
+            id: copia.id,
+            status: copia.status,
+            readingStatus: copia.readingStatus,
+            condition: copia.condition,
+            purchasePrice: copia.purchasePrice,
+            purchaseDate: copia.purchaseDate,
+            seller: copia.seller,
+            location: copia.location,
+            notes: copia.notes,
+          );
+        }
+        final comicCreator = row.readTableOrNull(_db.comicCreator);
+        final creator = row.readTableOrNull(_db.creator);
+        if (comicCreator != null && creator != null) {
+          autoriById[comicCreator.id] = (
+            comicCreatorId: comicCreator.id,
+            creatorId: creator.id,
+            name: creator.name,
+            ruolo: comicCreator.ruolo,
+          );
+        }
+      }
+
+      final copie = copieById.values.toList()
+        ..sort((a, b) => a.id.compareTo(b.id));
+      final autori = autoriById.values.toList()
+        ..sort((a, b) => a.comicCreatorId.compareTo(b.comicCreatorId));
+
+      return EdizioneDettaglio(
+        edizioneId: edizione.id,
+        operaId: opera.id,
+        titolo: opera.title,
+        serieId: serie?.id,
+        serieName: serie?.name,
+        publisher: edizione.publisher,
+        issueNumber: edizione.issueNumber,
+        issueNumberLabel: edizione.issueNumberLabel,
+        coverImage: await risolviCoverImage(edizione.coverImage),
+        releaseDate: edizione.releaseDate,
+        coverPrice: edizione.coverPrice,
+        pageCount: edizione.pageCount,
+        language: edizione.language,
+        color: edizione.color,
+        ean: edizione.ean,
+        volume: edizione.volume,
+        description: edizione.description,
+        autori: autori,
+        copie: copie,
+      );
+    });
+  }
+
+  /// Il valore grezzo (relativo, non risolto) di `Edizioni.coverImage` — a
+  /// differenza di [watchEdizione]/[risolviCoverImage] (che lo risolvono
+  /// assoluto per la visualizzazione), serve alla modifica bibliografica
+  /// (#67) per non alterare la cover quando l'utente non ne sceglie una
+  /// nuova dalla galleria.
+  Future<String?> coverImageGrezzoDi(int edizioneId) async {
+    final riga = await (_db.select(
+      _db.edizioni,
+    )..where((e) => e.id.equals(edizioneId))).getSingle();
+    return riga.coverImage;
+  }
+
+  /// Salva una cover scelta dalla galleria (`image_picker`) per la modifica
+  /// bibliografica della Scheda (§8.1, deciso su #67) e la relativizza nello
+  /// stesso formato del resto del catalogo — vedi [_coverImagePerCandidato].
+  Future<String> salvaCoverLocale(File file) async {
+    final locale = await _copertinaDownloader.salvaLocale(file);
+    final base = await _copertinaDownloader.baseDirectory();
+    return percorso_locale.relativizza(locale, base);
+  }
+
+  /// Aggiorna il titolo dell'Opera collegata a un'Edizione (§8.1) — il
+  /// titolo vive su `Opere`, non su `Edizioni` (§36, distinzione Opera/
+  /// Edizione).
+  Future<void> aggiornaTitoloOpera({
+    required int operaId,
+    required String title,
+  }) {
+    return (_db.update(
+      _db.opere,
+    )..where((o) => o.id.equals(operaId))).write(
+      OpereCompanion(title: Value(title)),
+    );
+  }
+
+  /// Aggiorna i campi bibliografici di un'Edizione (§8.1, flusso deciso su
+  /// #67) — esclusi titolo ([aggiornaTitoloOpera]) e Autori
+  /// ([collegaCreatorAEdizione]/[rimuoviCreatorDaEdizione]).
+  Future<void> aggiornaEdizione({
+    required int id,
+    int? serieId,
+    String? publisher,
+    int? issueNumber,
+    String? issueNumberLabel,
+    String? coverImage,
+    String? releaseDate,
+    String? coverPrice,
+    int? pageCount,
+    String? language,
+    String? color,
+    String? ean,
+    String? volume,
+    String? description,
+  }) {
+    return (_db.update(
+      _db.edizioni,
+    )..where((e) => e.id.equals(id))).write(
+      EdizioniCompanion(
+        serieId: Value(serieId),
+        publisher: Value(publisher),
+        issueNumber: Value(issueNumber),
+        issueNumberLabel: Value(issueNumberLabel),
+        coverImage: Value(coverImage),
+        releaseDate: Value(releaseDate),
+        coverPrice: Value(coverPrice),
+        pageCount: Value(pageCount),
+        language: Value(language),
+        color: Value(color),
+        ean: Value(ean),
+        volume: Value(volume),
+        description: Value(description),
+      ),
+    );
+  }
+
+  /// Aggiorna i campi personali §8.2 di una Copia (flusso deciso su #67) —
+  /// esclusi `status`/`readingStatus` (§8.3, [cambiaStatoCopia]): scrive
+  /// solo le colonne qui elencate, lasciando lo stato invariato.
+  Future<void> aggiornaCopia({
+    required int id,
+    CondizioneCopia? condition,
+    double? purchasePrice,
+    DateTime? purchaseDate,
+    String? seller,
+    String? location,
+    String? notes,
+  }) {
+    return (_db.update(
+      _db.copie,
+    )..where((c) => c.id.equals(id))).write(
+      CopieCompanion(
+        condition: Value(condition),
+        purchasePrice: Value(purchasePrice),
+        purchaseDate: Value(purchaseDate),
+        seller: Value(seller),
+        location: Value(location),
+        notes: Value(notes),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Cambia lo stato di una Copia (§8.3, selettore singolo mutuamente
+  /// esclusivo — deciso in apertura della mappa #63, vedi `voce_stato.dart`):
+  /// scrive solo `status`/`readingStatus`, lasciando invariati i campi §8.2.
+  Future<void> cambiaStatoCopia({
+    required int id,
+    required StatoCopia status,
+    StatoLettura? readingStatus,
+  }) {
+    return (_db.update(
+      _db.copie,
+    )..where((c) => c.id.equals(id))).write(
+      CopieCompanion(
+        status: Value(status),
+        readingStatus: Value(readingStatus),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Rimuove una singola Copia (§8.4). Se era l'ultima Copia della sua
+  /// Edizione, elimina anche l'Edizione (deciso su #68: nessuno stato
+  /// "orfana, 0 copie") — ritorna `true` in quel caso, così il chiamante
+  /// (la Scheda) sa di dover navigare via.
+  Future<bool> rimuoviCopia(int id) {
+    return _db.transaction(() async {
+      final copia = await (_db.select(
+        _db.copie,
+      )..where((c) => c.id.equals(id))).getSingle();
+      await (_db.delete(_db.copie)..where((c) => c.id.equals(id))).go();
+
+      final rimanenti = await (_db.select(
+        _db.copie,
+      )..where((c) => c.edizioneId.equals(copia.edizioneId))).get();
+      if (rimanenti.isEmpty) {
+        await _eliminaEdizioneSenzaCopie(copia.edizioneId);
+        return true;
+      }
+      return false;
+    });
+  }
+
+  /// Elimina un'intera Edizione con tutte le sue Copie (§8.4) — il bottone
+  /// "Elimina edizione" sempre visibile deciso su #65/#68.
+  Future<void> eliminaEdizione(int edizioneId) {
+    return _db.transaction(() async {
+      await (_db.delete(
+        _db.copie,
+      )..where((c) => c.edizioneId.equals(edizioneId))).go();
+      await _eliminaEdizioneSenzaCopie(edizioneId);
+    });
+  }
+
+  /// Rimuove i collegamenti Autore e la riga `Edizioni` — presuppone che le
+  /// Copie siano già state eliminate dal chiamante ([rimuoviCopia],
+  /// [eliminaEdizione]).
+  Future<void> _eliminaEdizioneSenzaCopie(int edizioneId) async {
+    await (_db.delete(
+      _db.comicCreator,
+    )..where((c) => c.edizioneId.equals(edizioneId))).go();
+    await (_db.delete(
+      _db.edizioni,
+    )..where((e) => e.id.equals(edizioneId))).go();
   }
 }
