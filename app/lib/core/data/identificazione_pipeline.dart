@@ -70,7 +70,6 @@ class IdentificazionePipeline {
           issueNumberLabel: candidato.issueNumberLabel,
           publisher: candidato.publisher,
           coverImageUrl: candidato.coverImageUrl,
-          description: candidato.description,
         );
       }
 

@@ -360,7 +360,7 @@ void main() {
         expect(uri.queryParameters['resources'], 'issue');
         expect(
           uri.queryParameters['field_list'],
-          'id,name,issue_number,volume,image,site_detail_url,description',
+          'id,name,issue_number,volume,image,site_detail_url',
         );
       },
     );
@@ -430,44 +430,6 @@ void main() {
         expect(match.coverImageUrl, isNull);
       },
     );
-  });
-
-  group('campo description (§6.4/§8.1)', () {
-    test("ripulisce l'HTML restituito da ComicVine in testo semplice", () async {
-      final issue = {
-        ..._issueCompleta,
-        'description':
-            '<p>Il primo apparire di <b>Spider-Man</b>.</p><p>Seconda riga.</p>',
-      };
-      final fake = _FakeHttpClient(risultatiTestoLibero: [issue]);
-      final client = ComicVineHttpClient(httpClient: fake);
-
-      final risultati = await client.cercaIssue(
-        title: 'Amazing Fantasy',
-        seriesName: null,
-        issueNumberLabel: null,
-        publisher: null,
-      );
-
-      expect(
-        risultati.single.description,
-        'Il primo apparire di Spider-Man.\n\nSeconda riga.',
-      );
-    });
-
-    test('description assente resta null', () async {
-      final fake = _FakeHttpClient(risultatiTestoLibero: [_issueCompleta]);
-      final client = ComicVineHttpClient(httpClient: fake);
-
-      final risultati = await client.cercaIssue(
-        title: 'Amazing Fantasy',
-        seriesName: null,
-        issueNumberLabel: null,
-        publisher: null,
-      );
-
-      expect(risultati.single.description, isNull);
-    });
   });
 
   group('errori', () {

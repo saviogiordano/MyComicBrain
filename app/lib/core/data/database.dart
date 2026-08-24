@@ -298,10 +298,12 @@ class CandidatiTable extends Table {
   RealColumn get punteggio => real()();
   BoolColumn get scelto => boolean().withDefault(const Constant(false))();
 
-  /// Descrizione dell'albo (§6.4/§8.1, deciso su #70) — valorizzata solo
-  /// per `source = esterno` (ComicVine restituisce `description` nella
-  /// stessa chiamata già fatta per gli altri campi grezzi); portata
-  /// sull'Edizione creata alla conferma del Candidato.
+  /// Colonna morta (deciso su #70, rimossa su #73): il supporto description
+  /// di ComicVine è stato eliminato — nessuna Edizione lo usa più come fonte
+  /// (vedi `AnalisiCopertinaTable.description`, generata dall'AI). Non
+  /// rimossa dallo schema: la rimozione di una colonna SQLite via drift
+  /// richiede la ricostruzione della tabella, più rischiosa di lasciarla
+  /// inutilizzata.
   TextColumn get description => text().nullable()();
 }
 

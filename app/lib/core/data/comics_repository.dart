@@ -416,7 +416,6 @@ class ComicsRepository {
     String? publisher,
     int? year,
     String? coverImageUrl,
-    String? description,
   }) {
     return _db
         .into(_db.candidatiTable)
@@ -432,7 +431,6 @@ class ComicsRepository {
             publisher: Value(publisher),
             year: Value(year),
             coverImageUrl: Value(coverImageUrl),
-            description: Value(description),
           ),
         );
   }
@@ -543,7 +541,6 @@ class ComicsRepository {
       publisher: riga.publisher,
       year: riga.year,
       coverImageUrl: await risolviCoverImage(riga.coverImageUrl),
-      description: riga.description,
     );
   }
 
@@ -579,9 +576,10 @@ class ComicsRepository {
   /// (nemmeno l'editore, vedi commento su `MatchingEngine.candidatiEsterni`)
   /// — usarla come unica fonte lasciava l'Edizione quasi vuota (bug
   /// osservato, deciso su #70). ComicVine resta la fonte per titolo/serie/
-  /// numero solo come ripiego quando l'AI non li ha letti, per la cover
-  /// (sempre, [_coverImagePerCandidato]) e per la descrizione (unica fonte
-  /// disponibile oggi).
+  /// numero solo come ripiego quando l'AI non li ha letti, e per la cover
+  /// (sempre, [_coverImagePerCandidato]). ComicVine non è più una fonte per
+  /// la descrizione (deciso su #71/§73): quel campo arriva dall'Analisi
+  /// Copertina (AI), non da questo metodo.
   Future<int> _creaEdizioneDaCandidato(
     Candidato candidato,
     int scansioneId,
@@ -623,7 +621,6 @@ class ComicsRepository {
       language: _nonVuoto(analisi.language),
       color: _nonVuoto(analisi.color),
       ean: ean,
-      description: candidato.description,
     );
   }
 

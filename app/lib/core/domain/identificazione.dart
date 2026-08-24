@@ -32,7 +32,6 @@ class Candidato {
     this.publisher,
     this.year,
     this.coverImageUrl,
-    this.description,
   });
 
   final int id;
@@ -46,10 +45,6 @@ class Candidato {
   final String? publisher;
   final int? year;
   final String? coverImageUrl;
-
-  /// Descrizione dell'albo (§6.4/§8.1) — valorizzata solo per `source =
-  /// esterno` (ComicVine); portata sull'Edizione creata alla conferma.
-  final String? description;
 }
 
 /// Esito osservabile dell'Identificazione di una Scansione, per lo schermo
