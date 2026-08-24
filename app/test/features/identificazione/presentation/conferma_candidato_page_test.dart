@@ -137,6 +137,53 @@ void main() {
   );
 
   testWidgets(
+    "l'icona info apre un popup con i dettagli del Candidato, senza "
+    'cambiare la selezione',
+    (tester) async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repository.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repository.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'Amazing Spider-Man',
+        seriesName: 'The Amazing Spider-Man',
+        issueNumberLabel: '700',
+        publisher: 'Marvel',
+        year: 2013,
+      );
+      await repository.completaIdentificazione(id: identificazioneId);
+
+      await pumpConfermaCandidato(tester, scansioneId: scansioneId);
+
+      expect(find.byType(Dialog), findsNothing);
+      // Lascia esaurire la transizione di push della route (~300ms): senza
+      // questo pump aggiuntivo la riga è ancora a metà dello slide-in e
+      // l'icona risulta fuori dal viewport per il tap, pur essendo
+      // semanticamente presente nell'albero.
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.byIcon(Icons.info_outline));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.text('Amazing Spider-Man'), findsWidgets);
+      expect(find.text('700'), findsOneWidget);
+      expect(find.text('Marvel'), findsOneWidget);
+      expect(find.text('2013'), findsOneWidget);
+      expect(find.text('78%'), findsWidgets);
+
+      await tester.tap(find.text('Chiudi'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Dialog), findsNothing);
+      // La selezione non è cambiata: l'unico candidato resta preselezionato.
+      expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     '"Conferma" collega la Copia al candidato selezionato e torna indietro',
     (tester) async {
       final scansioneId = await scansione();

@@ -94,6 +94,47 @@ void main() {
   );
 
   test(
+    'watchIdentificazione risolve il coverImageUrl locale di un Candidato '
+    'interno sulla cartella base corrente (bug osservato: la cover del '
+    'candidato "già in collezione" non si vedeva mai in "Possibile '
+    'corrispondenza")',
+    () async {
+      final tempBase = await Directory.systemTemp.createTemp(
+        'watchIdentificazione_cover_interno_test_',
+      );
+      addTearDown(() => tempBase.delete(recursive: true));
+      final repoConBase = ComicsRepository(
+        db,
+        copertinaDownloader: CopertinaDownloader(
+          baseDirectory: () async => tempBase,
+        ),
+      );
+
+      final scansioneId = await repoConBase.aggiungiScansione(
+        image: '/scansioni/1.jpg',
+      );
+      final identificazioneId = await repoConBase.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final operaId = await repoConBase.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repoConBase.aggiungiEdizione(operaId: operaId);
+      await repoConBase.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.interno,
+        punteggio: 96,
+        edizioneId: edizioneId,
+        coverImageUrl: p.join('copertine', '1.jpg'),
+      );
+
+      final esito = await repoConBase.watchIdentificazione(scansioneId).first;
+      expect(
+        esito.candidati.single.coverImageUrl,
+        p.join(tempBase.path, 'copertine', '1.jpg'),
+      );
+    },
+  );
+
+  test(
     'aggiungiCandidato persiste un candidato esterno con i campi grezzi ComicVine',
     () async {
       final scansioneId = await scansione();

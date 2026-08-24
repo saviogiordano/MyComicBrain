@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -199,6 +201,111 @@ class _RigaCandidato extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.xs),
           _ConfidenzaBadge(punteggio: candidato.punteggio),
+          IconButton(
+            icon: Icon(Icons.info_outline, color: AppColors.textMuted),
+            iconSize: 20,
+            tooltip: 'Dettagli',
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => _DettagliCandidatoDialog(candidato: candidato),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Popup dei dettagli di un Candidato (§6.3): cover a piena larghezza e
+/// tutti i campi grezzi, comprese le informazioni non mostrate nella riga
+/// compatta (anno, sorgente per esteso). Sola lettura — la selezione
+/// resta un'azione separata sulla riga, non duplicata qui (deciso in
+/// sessione: icona info dedicata, il tap sulla riga continua a
+/// selezionare come prima).
+class _DettagliCandidatoDialog extends StatelessWidget {
+  const _DettagliCandidatoDialog({required this.candidato});
+
+  final Candidato candidato;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppColors.surfaceRaised,
+      shape: RoundedRectangleBorder(borderRadius: AppRadii.lgRadius),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: _CoverThumb(
+                url: candidato.coverImageUrl,
+                width: 140,
+                height: 210,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              candidato.title ??
+                  candidato.seriesName ??
+                  'Titolo non riconosciuto',
+              style: AppTypography.titleLarge.copyWith(
+                color: candidato.title == null
+                    ? AppColors.textMuted
+                    : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _SourceTag(source: candidato.source),
+            const SizedBox(height: AppSpacing.md),
+            _rigaDettaglio('Serie', candidato.seriesName),
+            _rigaDettaglio('Numero', candidato.issueNumberLabel),
+            _rigaDettaglio('Editore', candidato.publisher),
+            _rigaDettaglio(
+              'Anno',
+              candidato.year != null ? '${candidato.year}' : null,
+            ),
+            _rigaDettaglio('Confidenza', '${candidato.punteggio.round()}%'),
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Chiudi'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _rigaDettaglio(String label, String? valore) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textTertiary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              valore ?? '—',
+              style: AppTypography.bodyMedium.copyWith(
+                color: valore == null
+                    ? AppColors.textMuted
+                    : AppColors.textPrimary,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -288,20 +395,32 @@ class _CoverThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final url = this.url;
     return ClipRRect(
       borderRadius: AppRadii.mdRadius,
       child: SizedBox(
         width: width,
         height: height,
-        child: url != null
-            ? Image.network(
-                url!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _placeholder(),
-                loadingBuilder: (_, child, progress) =>
-                    progress == null ? child : _placeholder(loading: true),
-              )
-            : _placeholder(),
+        child: switch (url) {
+          null => _placeholder(),
+          // Un Candidato `interno` porta il percorso locale già scaricato
+          // dell'Edizione catalogata (§6.3) — solo un Candidato `esterno`
+          // porta un vero URL remoto ComicVine. Stessa distinzione di
+          // `_Cover` in dashboard_page.dart.
+          _ when url.startsWith('http://') || url.startsWith('https://') =>
+            Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _placeholder(),
+              loadingBuilder: (_, child, progress) =>
+                  progress == null ? child : _placeholder(loading: true),
+            ),
+          _ => Image.file(
+            File(url),
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _placeholder(),
+          ),
+        },
       ),
     );
   }

@@ -379,7 +379,7 @@ class ComicsRepository {
           ..where(_db.identificazioneTable.scansioneId.equals(scansioneId))
           ..orderBy([OrderingTerm.desc(_db.candidatiTable.punteggio)]);
 
-    return query.watch().map((rows) {
+    return query.watch().asyncMap((rows) async {
       if (rows.isEmpty) {
         return (
           stato: StatoIdentificazione.pending,
@@ -391,7 +391,7 @@ class ComicsRepository {
       final candidati = [
         for (final row in rows)
           if (row.readTableOrNull(_db.candidatiTable) case final c?)
-            _candidatoDaRiga(c),
+            await _candidatoDaRiga(c),
       ];
       return (
         stato: identificazione.status,
@@ -401,7 +401,14 @@ class ComicsRepository {
     });
   }
 
-  Candidato _candidatoDaRiga(CandidatiTableData riga) {
+  /// Un Candidato `interno` porta la cover già nota dell'Edizione
+  /// catalogata (`Edizioni.coverImage`, snapshot preso da `catalogoPerMatching`
+  /// al momento dell'Identificazione) — stesso valore soggetto alla
+  /// migrazione di container di `watchAggiuntiDiRecente`/
+  /// `percorso_locale.dart`, va risolto qui allo stesso modo. Un Candidato
+  /// `esterno` porta invece sempre un vero URL remoto ComicVine, passato
+  /// invariato da [_coverImageAssoluto].
+  Future<Candidato> _candidatoDaRiga(CandidatiTableData riga) async {
     return Candidato(
       id: riga.id,
       source: riga.source,
@@ -413,7 +420,7 @@ class ComicsRepository {
       issueNumberLabel: riga.issueNumberLabel,
       publisher: riga.publisher,
       year: riga.year,
-      coverImageUrl: riga.coverImageUrl,
+      coverImageUrl: await _coverImageAssoluto(riga.coverImageUrl),
     );
   }
 
