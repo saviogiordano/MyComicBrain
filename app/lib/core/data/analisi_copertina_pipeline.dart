@@ -103,6 +103,9 @@ class AnalisiCopertinaPipeline {
         visualElementTags: risultato.visualElementTags,
         recognizedPublisherLogo: risultato.recognizedPublisherLogo,
         recognizedSeriesLogo: risultato.recognizedSeriesLogo,
+        printingType: risultato.printingType,
+        classificazione: risultato.classificazione,
+        description: risultato.description,
         rawResponse: jsonEncode(risultato.raw),
       );
     } on Object catch (e) {

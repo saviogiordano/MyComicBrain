@@ -87,6 +87,9 @@ void main() {
         coverStyleTags: const ['stile realistico'],
         visualElementTags: const ['sfondo con esplosione'],
         recognizedPublisherLogo: 'Marvel',
+        printingType: 'Direct Edition',
+        classificazione: 'Rated T+',
+        description: 'Peter Parker affronta Venom in un confronto decisivo.',
       );
 
       final riga = await (db.select(
@@ -100,6 +103,9 @@ void main() {
       expect(riga.visualElementTags, ['sfondo con esplosione']);
       expect(riga.recognizedPublisherLogo, 'Marvel');
       expect(riga.recognizedSeriesLogo, isNull);
+      expect(riga.printingType, 'Direct Edition');
+      expect(riga.classificazione, 'Rated T+');
+      expect(riga.description, 'Peter Parker affronta Venom in un confronto decisivo.');
       expect(riga.completedAt, isNotNull);
     },
   );
@@ -120,6 +126,9 @@ void main() {
       expect(riga.characters, isEmpty);
       expect(riga.coverStyleTags, isEmpty);
       expect(riga.visualElementTags, isEmpty);
+      expect(riga.printingType, isNull);
+      expect(riga.classificazione, isNull);
+      expect(riga.description, isNull);
     },
   );
 

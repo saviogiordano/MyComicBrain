@@ -39,6 +39,7 @@ const _issueSpiderMan = ComicVineIssueMatch(
   volumeName: 'Amazing Fantasy',
   coverImageUrl: 'https://comicvine.example/15.jpg',
   siteDetailUrl: 'https://comicvine.example/15',
+  description: 'Il primo apparire di Spider-Man.',
 );
 
 void main() {
@@ -120,6 +121,7 @@ void main() {
     expect(candidati.single.source, FonteCandidato.esterno);
     expect(candidati.single.edizioneId, isNull);
     expect(candidati.single.title, 'Amazing Fantasy');
+    expect(candidati.single.description, 'Il primo apparire di Spider-Man.');
   });
 
   test('zero candidati (interno vuoto, ComicVine senza risultati): completata senza righe', () async {

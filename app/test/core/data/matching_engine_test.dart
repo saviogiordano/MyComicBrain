@@ -221,6 +221,7 @@ void main() {
         volumeName: 'Amazing Fantasy',
         coverImageUrl: 'https://comicvine.example/15.jpg',
         siteDetailUrl: 'https://comicvine.example/15',
+        description: 'Il primo apparire di Spider-Man.',
       );
 
       final candidati = motore.candidatiEsterni(
@@ -234,6 +235,7 @@ void main() {
       expect(candidati.single.source, FonteCandidato.esterno);
       expect(candidati.single.edizioneId, isNull);
       expect(candidati.single.coverImageUrl, 'https://comicvine.example/15.jpg');
+      expect(candidati.single.description, 'Il primo apparire di Spider-Man.');
       expect(candidati.single.punteggio, 100);
     });
 
@@ -251,6 +253,7 @@ void main() {
           volumeName: 'Spider-Man',
           coverImageUrl: null,
           siteDetailUrl: 'https://comicvine.example/1',
+          description: null,
         );
         const issueLontana = ComicVineIssueMatch(
           id: 2,
@@ -259,6 +262,7 @@ void main() {
           volumeName: 'Spider-Man',
           coverImageUrl: null,
           siteDetailUrl: 'https://comicvine.example/2',
+          description: null,
         );
         final catalogo = [_edizione(seriesName: 'Spider-Man', serieId: 10)];
 

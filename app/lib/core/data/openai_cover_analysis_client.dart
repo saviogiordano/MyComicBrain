@@ -122,6 +122,9 @@ class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
       visualElementTags: (extracted['visualElementTags'] as List<dynamic>).cast<String>(),
       recognizedPublisherLogo: extracted['recognizedPublisherLogo'] as String?,
       recognizedSeriesLogo: extracted['recognizedSeriesLogo'] as String?,
+      printingType: extracted['printingType'] as String?,
+      classificazione: extracted['classificazione'] as String?,
+      description: extracted['description'] as String?,
       raw: extracted,
     );
   }

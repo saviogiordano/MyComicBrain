@@ -11,7 +11,8 @@ const _issuesUrl = 'https://comicvine.gamespot.com/api/issues/';
 /// coerente con la raccomandazione della documentazione ufficiale di fare
 /// caching/uso parsimonioso dell'API (rate limit 200 richieste/risorsa/ora,
 /// vedi `docs/research/comics-external-database.md` §1.2).
-const _fieldList = 'id,name,issue_number,volume,image,site_detail_url';
+const _fieldList =
+    'id,name,issue_number,volume,image,site_detail_url,description';
 
 /// Campi della risorsa `volume` che servono a scegliere quali volumi
 /// interrogare per numero (#60): `count_of_issues` è la chiave — un volume
@@ -47,6 +48,7 @@ class ComicVineIssueMatch {
     required this.volumeName,
     required this.coverImageUrl,
     required this.siteDetailUrl,
+    required this.description,
   });
 
   final int id;
@@ -55,6 +57,10 @@ class ComicVineIssueMatch {
   final String? volumeName;
   final String? coverImageUrl;
   final String siteDetailUrl;
+
+  /// Descrizione dell'albo (§6.4/§8.1) — testo semplice, già ripulito
+  /// dall'HTML restituito da ComicVine (vedi [_testoDaHtml]).
+  final String? description;
 }
 
 /// Una chiamata all'API ComicVine fallita o con risposta inattesa (rete,
@@ -284,8 +290,29 @@ class ComicVineHttpClient implements ComicVineClient {
       volumeName: volume?['name'] as String?,
       coverImageUrl: image?['medium_url'] as String?,
       siteDetailUrl: issue['site_detail_url'] as String,
+      description: _testoDaHtml(issue['description'] as String?),
     );
   }
+}
+
+/// `description` di ComicVine è HTML (paragrafi, link all'attribuzione,
+/// talvolta liste) — non testo semplice: senza ripulirlo, la Scheda (§8.1)
+/// mostrerebbe i tag grezzi invece di una descrizione leggibile. Sostituisce
+/// i tag di blocco più comuni con un a-capo prima di scartare il resto dei
+/// tag, così i paragrafi restano separati; nessuna libreria HTML dedicata
+/// per un caso d'uso così minimale.
+String? _testoDaHtml(String? html) {
+  if (html == null) return null;
+  final testo = html
+      .replaceAll(RegExp(r'<\s*br\s*/?\s*>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<\s*/\s*p\s*>', caseSensitive: false), '\n\n')
+      .replaceAll(RegExp('<[^>]*>'), '')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .trim();
+  return testo.isEmpty ? null : testo;
 }
 
 /// L'etichetta di numero letta da una copertina (es. `"#700"`), ripulita

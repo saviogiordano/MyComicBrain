@@ -295,7 +295,8 @@ Ogni fumetto (edizione) deve avere una propria scheda, punto di accesso a tutte 
 - lingua;
 - ISBN/UPC;
 - autori;
-- descrizione.
+- descrizione;
+- classificazione.
 
 ## 8.2 Informazioni personali
 

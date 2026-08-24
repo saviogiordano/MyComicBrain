@@ -281,6 +281,9 @@ class ComicsRepository {
     List<String> visualElementTags = const [],
     String? recognizedPublisherLogo,
     String? recognizedSeriesLogo,
+    String? printingType,
+    String? classificazione,
+    String? description,
     DateTime? completedAt,
   }) {
     return (_db.update(
@@ -304,6 +307,9 @@ class ComicsRepository {
         visualElementTags: Value(visualElementTags),
         recognizedPublisherLogo: Value(recognizedPublisherLogo),
         recognizedSeriesLogo: Value(recognizedSeriesLogo),
+        printingType: Value(printingType),
+        classificazione: Value(classificazione),
+        description: Value(description),
         rawResponse: Value(rawResponse),
         status: const Value(StatoAnalisiCopertina.completata),
         completedAt: Value(completedAt ?? DateTime.now()),
@@ -410,6 +416,7 @@ class ComicsRepository {
     String? publisher,
     int? year,
     String? coverImageUrl,
+    String? description,
   }) {
     return _db
         .into(_db.candidatiTable)
@@ -425,6 +432,7 @@ class ComicsRepository {
             publisher: Value(publisher),
             year: Value(year),
             coverImageUrl: Value(coverImageUrl),
+            description: Value(description),
           ),
         );
   }
@@ -535,6 +543,7 @@ class ComicsRepository {
       publisher: riga.publisher,
       year: riga.year,
       coverImageUrl: await risolviCoverImage(riga.coverImageUrl),
+      description: riga.description,
     );
   }
 
@@ -553,7 +562,7 @@ class ComicsRepository {
 
     final edizioneId = candidato.source == FonteCandidato.interno
         ? candidato.edizioneId!
-        : await _creaEdizioneDaCandidato(candidato);
+        : await _creaEdizioneDaCandidato(candidato, scansioneId);
 
     return aggiungiCopia(
       edizioneId: edizioneId,
@@ -562,26 +571,70 @@ class ComicsRepository {
     );
   }
 
-  Future<int> _creaEdizioneDaCandidato(Candidato candidato) async {
-    final operaId = await aggiungiOpera(
-      title: candidato.title ?? candidato.seriesName ?? 'Senza titolo',
-    );
+  /// Crea Opera/Serie/Edizione per un Candidato `esterno` (ComicVine). I
+  /// campi bibliografici (§8.1) vengono presi dall'Analisi Copertina di
+  /// questa Scansione quando disponibili — l'estrazione AI (OCR §6.1 /
+  /// computer vision §6.2) legge la copertina scansionata stessa, mentre la
+  /// risorsa `issue` di ComicVine non espone quasi nessuno di questi campi
+  /// (nemmeno l'editore, vedi commento su `MatchingEngine.candidatiEsterni`)
+  /// — usarla come unica fonte lasciava l'Edizione quasi vuota (bug
+  /// osservato, deciso su #70). ComicVine resta la fonte per titolo/serie/
+  /// numero solo come ripiego quando l'AI non li ha letti, per la cover
+  /// (sempre, [_coverImagePerCandidato]) e per la descrizione (unica fonte
+  /// disponibile oggi).
+  Future<int> _creaEdizioneDaCandidato(
+    Candidato candidato,
+    int scansioneId,
+  ) async {
+    final analisi = await analisiCopertinaPerScansione(scansioneId);
 
+    final title =
+        _nonVuoto(analisi.title) ??
+        candidato.title ??
+        candidato.seriesName ??
+        'Senza titolo';
+    final operaId = await aggiungiOpera(title: title);
+
+    final seriesName = _nonVuoto(analisi.seriesName) ?? candidato.seriesName;
     int? serieId;
-    if (candidato.seriesName != null) {
-      serieId = await aggiungiSerie(name: candidato.seriesName!);
+    if (seriesName != null) {
+      serieId = await aggiungiSerie(name: seriesName);
     }
+
+    final issueNumberLabel =
+        _nonVuoto(analisi.issueNumberLabel) ?? candidato.issueNumberLabel;
+    // `barcode` prima di `isbn`, stessa priorità di
+    // `InserisciManualmentePage._prefill`: sulle edizioni italiane da
+    // edicola è quasi sempre l'EAN periodico quello riportato in copertina.
+    final ean = _nonVuoto(analisi.barcode) ?? _nonVuoto(analisi.isbn);
 
     return aggiungiEdizione(
       operaId: operaId,
       serieId: serieId,
-      publisher: candidato.publisher,
-      issueNumber: candidato.issueNumberLabel != null
-          ? int.tryParse(candidato.issueNumberLabel!.trim())
+      publisher: _nonVuoto(analisi.publisher) ?? candidato.publisher,
+      issueNumber: issueNumberLabel != null
+          ? int.tryParse(issueNumberLabel.trim())
           : null,
-      issueNumberLabel: candidato.issueNumberLabel,
+      issueNumberLabel: issueNumberLabel,
       coverImage: await _coverImagePerCandidato(candidato),
+      releaseDate: _nonVuoto(analisi.releaseDate),
+      coverPrice: _nonVuoto(analisi.price),
+      pageCount: analisi.pageCount,
+      language: _nonVuoto(analisi.language),
+      color: _nonVuoto(analisi.color),
+      ean: ean,
+      description: candidato.description,
     );
+  }
+
+  /// `null`/stringa vuota o di soli spazi normalizzati a `null` — stesso
+  /// trattamento di `InserisciManualmentePage._valore`: Claude a volte
+  /// restituisce una stringa vuota invece di `null` nonostante il prompt
+  /// (osservato empiricamente), che altrimenti scavalcherebbe il ripiego su
+  /// ComicVine come se fosse un valore valido.
+  String? _nonVuoto(String? v) {
+    final t = v?.trim();
+    return (t == null || t.isEmpty) ? null : t;
   }
 
   /// La cover da salvare sull'Edizione creata da un Candidato esterno: una

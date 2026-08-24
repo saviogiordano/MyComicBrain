@@ -65,6 +65,9 @@ const _risultatoCompleto = CoverAnalysisResult(
   visualElementTags: ['sfondo con esplosione'],
   recognizedPublisherLogo: 'Marvel',
   recognizedSeriesLogo: null,
+  printingType: 'Direct Edition',
+  classificazione: 'Rated T+',
+  description: 'Peter Parker affronta Venom in un confronto decisivo.',
   raw: {
     'authors': ['David Michelinie'],
   },
@@ -131,6 +134,9 @@ void main() {
     expect(analisi.visualElementTags, ['sfondo con esplosione']);
     expect(analisi.recognizedPublisherLogo, 'Marvel');
     expect(analisi.recognizedSeriesLogo, isNull);
+    expect(analisi.printingType, 'Direct Edition');
+    expect(analisi.classificazione, 'Rated T+');
+    expect(analisi.description, 'Peter Parker affronta Venom in un confronto decisivo.');
     expect(analisi.rawResponse, contains('David Michelinie'));
     expect(analisi.errorMessage, isNull);
     expect(analisi.completedAt, isNotNull);

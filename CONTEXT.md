@@ -40,7 +40,7 @@ Una fotografia di una cover, acquisita e confermata dall'utente (dopo eventuale 
 _Avoid_: Scan (usare il termine italiano nel dominio; ok come nome di classe/tabella nel codice), foto, cover (ambiguo con l'immagine di un'edizione già catalogata)
 
 **Analisi Copertina**:
-Il risultato dell'estrazione automatica via Claude dei campi leggibili (OCR, §6.1) e riconosciuti visivamente (computer vision, §6.2) sulla cover di una Scansione — titolo, numero (come letto, non parsato), editore, nome collana (come letto — non è ancora un legame con una Serie catalogata), autori, ISBN, barcode, prezzo, codici identificativi, personaggi raffigurati, tag di stile copertina, tag di elementi visivi caratteristici, logo editore riconosciuto, logo serie riconosciuto. Una lettura grezza, non verificata: non diventa un'Edizione finché il riconoscimento (§6.3, fuori scope qui) non la conferma. Relazione 1:1 con la Scansione che l'ha generata; stato pending/in corso/completata/fallita, nessun retry automatico. Si chiamava "Analisi OCR" prima di coprire anche la computer vision (rinominata su #48/#49).
+Il risultato dell'estrazione automatica via Claude dei campi leggibili (OCR, §6.1) e riconosciuti visivamente (computer vision, §6.2) sulla cover di una Scansione — titolo, numero (come letto, non parsato), editore, nome collana (come letto — non è ancora un legame con una Serie catalogata), autori, ISBN, barcode, prezzo, codici identificativi, personaggi raffigurati, tag di stile copertina, tag di elementi visivi caratteristici, logo editore riconosciuto, logo serie riconosciuto, Tipo di stampa, Classificazione, Descrizione. Una lettura grezza, non verificata: non diventa un'Edizione finché il riconoscimento (§6.3, fuori scope qui) non la conferma. Relazione 1:1 con la Scansione che l'ha generata; stato pending/in corso/completata/fallita, nessun retry automatico. Si chiamava "Analisi OCR" prima di coprire anche la computer vision (rinominata su #48/#49).
 _Avoid_: OCR/computer vision da soli come nome di entità (ok in prosa tecnica) — usare "Analisi Copertina" per il record persistito; "collana"/nome campo `serie` per il valore letto — collide con l'entità Serie già catalogata, che è un concetto diverso
 
 **Personaggi raffigurati** / **Tag di stile copertina** / **Tag di elementi visivi caratteristici**:
@@ -48,6 +48,10 @@ Liste di tag liberi (stringhe), campi di computer vision (§6.2) dell'Analisi Co
 
 **Logo editore riconosciuto** / **Logo serie riconosciuto**:
 Campi di computer vision (§6.2) dell'Analisi Copertina: il logo dell'editore/della serie riconosciuto visivamente sulla copertina, `null` se non riconoscibile. Paralleli ai campi OCR omologhi (`publisher`/nome collana) ma distinti — un logo può essere riconosciuto anche quando il nome testuale non è leggibile, e viceversa.
+
+**Tipo di stampa**:
+Campo `printingType` (§6.4/§8.1, deciso su [Mappa — Campi bibliografici AI](https://github.com/saviogiordano/MyComicBrain/issues/71)) di Analisi Copertina/Edizione: testo libero letto in copertina/indicia (es. "Direct Edition"), unifica le tre nozioni distinte di §6.4 (edizione/ristampa/variant) in un solo campo — sono la stessa domanda vista da angolazioni diverse.
+_Avoid_: Edizione (già l'entità stessa nel glossario — questo campo descrive una proprietà testuale della stampa, non l'unità catalogata)
 
 **Sessione di acquisizione**:
 Un raggruppamento temporaneo, non persistito, di più Scansioni prodotte consecutivamente (fotocamera e/o galleria) prima che l'utente termini con "Fine". Esiste solo come stato della UI: non sopravvive a un riavvio e non ha una propria riga nel database — solo le Scansioni che produce vengono salvate.

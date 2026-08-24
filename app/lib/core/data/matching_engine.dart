@@ -20,6 +20,7 @@ class CandidatoProposto {
     this.issueNumberLabel,
     this.publisher,
     this.coverImageUrl,
+    this.description,
   });
 
   final FonteCandidato source;
@@ -30,6 +31,7 @@ class CandidatoProposto {
   final String? issueNumberLabel;
   final String? publisher;
   final String? coverImageUrl;
+  final String? description;
 }
 
 /// Motore di matching e punteggio di confidenza per i candidati di
@@ -146,6 +148,7 @@ class MatchingEngine {
           seriesName: issue.volumeName,
           issueNumberLabel: issue.issueNumber,
           coverImageUrl: issue.coverImageUrl,
+          description: issue.description,
         ),
       );
     }

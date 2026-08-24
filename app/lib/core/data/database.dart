@@ -102,6 +102,14 @@ class Edizioni extends Table {
 
   /// Descrizione libera dell'edizione (§8.1).
   TextColumn get description => text().nullable()();
+
+  /// Tipo di stampa (§6.4/§8.1, deciso su #71) — vedi il commento gemello su
+  /// `AnalisiCopertinaTable.printingType` per il perché del nome.
+  TextColumn get printingType => text().nullable()();
+
+  /// Classificazione/rating (§8.1, deciso su #71) — vedi il commento
+  /// gemello su `AnalisiCopertinaTable.classificazione`.
+  TextColumn get classificazione => text().nullable()();
 }
 
 /// `Copia`: un esemplare fisico posseduto di un'edizione. `status` guida
@@ -212,6 +220,24 @@ class AnalisiCopertinaTable extends Table {
   /// distinzione di [recognizedPublisherLogo].
   TextColumn get recognizedSeriesLogo => text().nullable()();
 
+  /// Tipo di stampa (§6.4 "edizione/ristampa/variant", deciso su #71) —
+  /// testo libero letto in copertina/indicia (es. "Direct Edition"), non un
+  /// enum: unifica le tre nozioni di §6.4 in un solo campo. Non collide con
+  /// "Edizione", già l'entità stessa nel glossario (vedi `CONTEXT.md`).
+  TextColumn get printingType => text().nullable()();
+
+  /// Classificazione/rating (es. "Rated T+", deciso su #71) — testo libero,
+  /// stesso pattern di [color]/`volume` su `Edizioni`. Nuovo concetto, non
+  /// letto da ComicVine: l'AI è l'unica fonte.
+  TextColumn get classificazione => text().nullable()();
+
+  /// Descrizione della storia generata dall'AI dalla propria conoscenza del
+  /// fumetto specifico (deciso su #71) — non OCR: a differenza degli altri
+  /// campi di questa tabella, rischia di allucinare su fumetti meno noti.
+  /// `null` se l'AI non riconosce il fumetto con sufficiente sicurezza,
+  /// nessun ripiego su ComicVine.
+  TextColumn get description => text().nullable()();
+
   /// L'intera risposta JSON strutturata di Claude (autori, codici
   /// identificativi, posizione qualitativa/bounding box del testo).
   TextColumn get rawResponse => text().nullable()();
@@ -271,6 +297,12 @@ class CandidatiTable extends Table {
   TextColumn get coverImageUrl => text().nullable()();
   RealColumn get punteggio => real()();
   BoolColumn get scelto => boolean().withDefault(const Constant(false))();
+
+  /// Descrizione dell'albo (§6.4/§8.1, deciso su #70) — valorizzata solo
+  /// per `source = esterno` (ComicVine restituisce `description` nella
+  /// stessa chiamata già fatta per gli altri campi grezzi); portata
+  /// sull'Edizione creata alla conferma del Candidato.
+  TextColumn get description => text().nullable()();
 }
 
 /// `Creator`: un autore/artista, condiviso tra Edizioni diverse. Nessun
@@ -323,11 +355,21 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from7To8: (m, schema) async {
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.printingType);
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.classificazione);
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.description);
+        await m.addColumn(schema.edizioni, schema.edizioni.printingType);
+        await m.addColumn(schema.edizioni, schema.edizioni.classificazione);
+      },
+      from6To7: (m, schema) async {
+        await m.addColumn(schema.candidati, schema.candidati.description);
+      },
       from5To6: (m, schema) async {
         await m.createTable(schema.creator);
         await m.createTable(schema.comicCreator);

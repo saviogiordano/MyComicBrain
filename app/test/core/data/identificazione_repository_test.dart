@@ -45,6 +45,47 @@ void main() {
 
   Future<int> scansione() => repo.aggiungiScansione(image: '/scansioni/1.jpg');
 
+  /// Una Scansione con un'Analisi Copertina già `completata` — invariante
+  /// richiesto da `confermaCandidato` per un Candidato `esterno` (deciso su
+  /// #70: i campi bibliografici vengono presi da qui, non più solo dal
+  /// Candidato ComicVine). Nessun campo valorizzato di default: i test che
+  /// non passano parametri esercitano il ripiego sui campi grezzi del
+  /// Candidato quando l'AI non ha letto nulla.
+  Future<int> scansioneConAnalisi({
+    String? title,
+    String? issueNumberLabel,
+    String? publisher,
+    String? seriesName,
+    String? isbn,
+    String? barcode,
+    String? price,
+    String? releaseDate,
+    int? pageCount,
+    String? language,
+    String? color,
+  }) async {
+    final scansioneId = await scansione();
+    final analisiId = await repo.avviaAnalisiCopertina(
+      scansioneId: scansioneId,
+    );
+    await repo.completaAnalisiCopertina(
+      id: analisiId,
+      rawResponse: '{}',
+      title: title,
+      issueNumberLabel: issueNumberLabel,
+      publisher: publisher,
+      seriesName: seriesName,
+      isbn: isbn,
+      barcode: barcode,
+      price: price,
+      releaseDate: releaseDate,
+      pageCount: pageCount,
+      language: language,
+      color: color,
+    );
+    return scansioneId;
+  }
+
   test('avviaIdentificazione crea una riga in stato inCorso', () async {
     final scansioneId = await scansione();
 
@@ -469,7 +510,7 @@ void main() {
         ),
       );
 
-      final scansioneId = await scansione();
+      final scansioneId = await scansioneConAnalisi();
       final identificazioneId = await repo.avviaIdentificazione(
         scansioneId: scansioneId,
       );
@@ -542,7 +583,7 @@ void main() {
         ),
       );
 
-      final scansioneId = await scansione();
+      final scansioneId = await scansioneConAnalisi();
       final identificazioneId = await repo.avviaIdentificazione(
         scansioneId: scansioneId,
       );
@@ -568,6 +609,107 @@ void main() {
         db.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.coverImage, 'https://comicvine.example/1.jpg');
+    },
+  );
+
+  test(
+    "confermaCandidato esterno: i campi bibliografici vengono dall'Analisi "
+    'Copertina (AI), non da ComicVine — deciso su #70: la risorsa `issue` '
+    'di ComicVine non espone editore/data/prezzo/pagine/lingua/colore/EAN, '
+    "solo l'AI che ha letto la copertina scansionata li fornisce",
+    () async {
+      final scansioneId = await scansioneConAnalisi(
+        publisher: 'Marvel Worldwide Inc.',
+        releaseDate: 'febbraio 2013',
+        price: r'$7,99',
+        pageCount: 104,
+        language: 'inglese',
+        color: 'a colori',
+        barcode: '75960604716170011',
+      );
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'The Amazing Spider-Man',
+        issueNumberLabel: '700',
+        coverImageUrl: 'https://comicvine.example/700.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(edizione.publisher, 'Marvel Worldwide Inc.');
+      expect(edizione.releaseDate, 'febbraio 2013');
+      expect(edizione.coverPrice, r'$7,99');
+      expect(edizione.pageCount, 104);
+      expect(edizione.language, 'inglese');
+      expect(edizione.color, 'a colori');
+      expect(edizione.ean, '75960604716170011');
+      // Titolo/numero: nessun conflitto in questo caso, ma verificati per
+      // completezza — arrivano comunque dal Candidato quando l'AI non li
+      // sovrascrive con un valore proprio.
+      expect(edizione.issueNumberLabel, '700');
+    },
+  );
+
+  test(
+    "confermaCandidato esterno: un campo letto dall'AI vince sullo stesso "
+    'campo del Candidato ComicVine quando entrambi sono valorizzati',
+    () async {
+      final scansioneId = await scansioneConAnalisi(
+        title: 'Amazing Fantasy 15',
+        seriesName: 'Amazing Fantasy',
+        issueNumberLabel: '15',
+      );
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'Amazing Fantasy #15',
+        seriesName: 'Amazing Fantasy (Marvel)',
+        issueNumberLabel: '015',
+        coverImageUrl: 'https://comicvine.example/15.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      final opera = await (db.select(
+        db.opere,
+      )..where((o) => o.id.equals(edizione.operaId))).getSingle();
+      final serie = await (db.select(
+        db.serieTable,
+      )..where((s) => s.id.equals(edizione.serieId!))).getSingle();
+      expect(opera.title, 'Amazing Fantasy 15');
+      expect(serie.name, 'Amazing Fantasy');
+      expect(edizione.issueNumberLabel, '15');
     },
   );
 

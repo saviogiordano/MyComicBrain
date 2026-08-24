@@ -44,6 +44,9 @@ const Map<String, dynamic> _campiCompleti = {
   'visualElementTags': <String>['sfondo con esplosione'],
   'recognizedPublisherLogo': 'Marvel',
   'recognizedSeriesLogo': null,
+  'printingType': 'Direct Edition',
+  'classificazione': 'Rated T+',
+  'description': 'Peter Parker affronta Venom in un confronto decisivo.',
 };
 
 void main() {
@@ -67,12 +70,18 @@ void main() {
     expect(risultato.visualElementTags, ['sfondo con esplosione']);
     expect(risultato.recognizedPublisherLogo, 'Marvel');
     expect(risultato.recognizedSeriesLogo, isNull);
+    expect(risultato.printingType, 'Direct Edition');
+    expect(risultato.classificazione, 'Rated T+');
+    expect(risultato.description, 'Peter Parker affronta Venom in un confronto decisivo.');
   });
 
   test("un campo non trovato da Claude resta null, non genera un'eccezione", () async {
     final campi = Map<String, dynamic>.from(_campiCompleti)
       ..['title'] = null
-      ..['publisher'] = null;
+      ..['publisher'] = null
+      ..['printingType'] = null
+      ..['classificazione'] = null
+      ..['description'] = null;
     final client = ClaudeCoverAnalysisClient(
       httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaClaude(campi)),
     );
@@ -81,6 +90,13 @@ void main() {
 
     expect(risultato.title, isNull);
     expect(risultato.publisher, isNull);
+    expect(risultato.printingType, isNull);
+    expect(risultato.classificazione, isNull);
+    expect(
+      risultato.description,
+      isNull,
+      reason: "l'AI ammette incertezza sul fumetto invece di indovinare la descrizione",
+    );
   });
 
   test(

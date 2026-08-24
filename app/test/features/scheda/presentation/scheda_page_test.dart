@@ -220,7 +220,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byType(AlertDialog),
-          matching: find.text('Elimina edizione'),
+          matching: find.text('Conferma'),
         ),
       );
       await tester.pumpAndSettle();

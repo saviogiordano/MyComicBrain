@@ -35,7 +35,19 @@ const coverAnalysisPrompt =
     "descrivono uno stile generale (es. 'sfondo con esplosione', 'cornice "
     "dorata decorata') — non ripetere lo stesso concetto in entrambe le "
     'liste. Per recognizedPublisherLogo/recognizedSeriesLogo restituisci '
-    'null se il logo non è visivamente riconoscibile o non sei sicuro.';
+    'null se il logo non è visivamente riconoscibile o non sei sicuro. '
+    'printingType è il tipo di stampa/edizione così come riportato in '
+    "copertina o sull'indicia (es. 'Direct Edition', 'ristampa', 'variant "
+    "cover'), null se non specificato o non leggibile. classificazione è "
+    "la classificazione/rating del fumetto se riportata (es. 'Rated T+'), "
+    'null se assente. description è una sintesi in italiano della storia '
+    'raccontata in questo albo, basata sulla tua conoscenza di questo '
+    'fumetto specifico (non sulla sola lettura della copertina): '
+    'restituisci null se non riconosci con sufficiente sicurezza di quale '
+    'fumetto si tratti, invece di indovinare o generalizzare dal genere — '
+    'stesso principio di ammettere incertezza già richiesto per i campi di '
+    'computer vision, qui applicato alla tua conoscenza pregressa invece '
+    "che all'immagine.";
 
 const _posizioniQualitative = [
   'alto',
@@ -143,6 +155,15 @@ const Map<String, Object?> coverAnalysisJsonSchema = {
     'recognizedSeriesLogo': {
       'type': ['string', 'null'],
     },
+    'printingType': {
+      'type': ['string', 'null'],
+    },
+    'classificazione': {
+      'type': ['string', 'null'],
+    },
+    'description': {
+      'type': ['string', 'null'],
+    },
   },
   'required': [
     'title',
@@ -165,6 +186,9 @@ const Map<String, Object?> coverAnalysisJsonSchema = {
     'visualElementTags',
     'recognizedPublisherLogo',
     'recognizedSeriesLogo',
+    'printingType',
+    'classificazione',
+    'description',
   ],
   'additionalProperties': false,
 };
@@ -195,6 +219,9 @@ class CoverAnalysisResult {
     required this.visualElementTags,
     required this.recognizedPublisherLogo,
     required this.recognizedSeriesLogo,
+    required this.printingType,
+    required this.classificazione,
+    required this.description,
     required this.raw,
   });
 
@@ -215,6 +242,19 @@ class CoverAnalysisResult {
   final List<String> visualElementTags;
   final String? recognizedPublisherLogo;
   final String? recognizedSeriesLogo;
+
+  /// Tipo di stampa (§6.4, deciso su #71) — vedi il commento gemello su
+  /// `AnalisiCopertinaTable.printingType`.
+  final String? printingType;
+
+  /// Classificazione/rating (deciso su #71) — vedi il commento gemello su
+  /// `AnalisiCopertinaTable.classificazione`.
+  final String? classificazione;
+
+  /// Descrizione della storia generata dall'AI dalla propria conoscenza del
+  /// fumetto specifico (deciso su #71), non OCR — vedi il commento gemello
+  /// su `AnalisiCopertinaTable.description`.
+  final String? description;
   final Map<String, dynamic> raw;
 }
 

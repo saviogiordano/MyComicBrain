@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -121,7 +123,7 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(ultima ? 'Elimina edizione' : 'Rimuovi'),
+            child: Text(ultima ? 'Conferma' : 'Rimuovi'),
           ),
         ],
       ),
@@ -172,7 +174,7 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Elimina edizione'),
+            child: const Text('Conferma'),
           ),
         ],
       ),
@@ -286,21 +288,7 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: ClipRRect(
-              borderRadius: AppRadii.mdRadius,
-              child: Container(
-                width: 120,
-                height: 180,
-                color: AppColors.overlayCardHover,
-                child: Icon(
-                  Icons.menu_book_outlined,
-                  color: AppColors.textMuted,
-                  size: 32,
-                ),
-              ),
-            ),
-          ),
+          Center(child: _cover(e.coverImage)),
           const SizedBox(height: AppSpacing.md),
           Text(
             e.titolo,
@@ -314,14 +302,13 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
             crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 4,
+            childAspectRatio: 3.2,
             children: [
               _griglia(
-                'Serie',
-                e.serieName != null
-                    ? '${e.serieName}${e.issueNumberLabel != null ? ' #${e.issueNumberLabel}' : ''}'
-                    : null,
+                'Numero',
+                e.issueNumberLabel != null ? '#${e.issueNumberLabel}' : null,
               ),
+              _griglia('Serie', e.serieName),
               _griglia('Editore', e.publisher),
               _griglia('Data', e.releaseDate),
               _griglia('Lingua', e.language),
@@ -365,12 +352,54 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
     );
   }
 
+  /// La cover reale dell'Edizione se nota (percorso locale scaricato da
+  /// `CopertinaDownloader`, o in fallback l'URL remoto originale), altrimenti
+  /// un segnaposto — stesso schema di `_Cover` in `dashboard_page.dart`. Un
+  /// percorso locale ma ormai mancante su disco ricade sullo stesso
+  /// segnaposto invece di un errore visibile.
+  Widget _cover(String? coverImage) {
+    final segnaposto = Container(
+      width: 120,
+      height: 180,
+      color: AppColors.overlayCardHover,
+      child: Icon(
+        Icons.menu_book_outlined,
+        color: AppColors.textMuted,
+        size: 32,
+      ),
+    );
+    if (coverImage == null) {
+      return ClipRRect(borderRadius: AppRadii.mdRadius, child: segnaposto);
+    }
+
+    final isRemote =
+        coverImage.startsWith('http://') || coverImage.startsWith('https://');
+    return ClipRRect(
+      borderRadius: AppRadii.mdRadius,
+      child: SizedBox(
+        width: 120,
+        height: 180,
+        child: isRemote
+            ? Image.network(
+                coverImage,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => segnaposto,
+              )
+            : Image.file(
+                File(coverImage),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => segnaposto,
+              ),
+      ),
+    );
+  }
+
   Widget _griglia(String label, String? valore) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: RichText(
-        text: TextSpan(
-          style: AppTypography.bodySmall.copyWith(
+      child: Text.rich(
+        TextSpan(
+          style: AppTypography.bodyLarge.copyWith(
             color: AppColors.textSecondary,
           ),
           children: [
@@ -381,6 +410,8 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
             TextSpan(text: valore ?? '—'),
           ],
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
