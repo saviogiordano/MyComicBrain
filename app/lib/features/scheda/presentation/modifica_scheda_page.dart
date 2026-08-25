@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
@@ -38,6 +39,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
   final _volume = TextEditingController();
   final _description = TextEditingController();
   final _nuovoAutoreNome = TextEditingController();
+  final _nuovoAutoreFocusNode = FocusNode();
 
   bool _faParteDiSerie = false;
   bool _prefillFatto = false;
@@ -46,8 +48,24 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
   String? _serieNomeOriginale;
   RuoloCreator _nuovoAutoreRuolo = RuoloCreator.sceneggiatore;
 
+  // Autocomplete sui Creator esistenti nel campo "Nuovo autore" (#78, UX
+  // decisa su #77): un tocco su un suggerimento riempie il campo e ricorda
+  // qui il Creator esatto, cosicché "Aggiungi autore" possa collegarlo senza
+  // ripassare da un'altra ricerca per nome.
+  CreatorData? _autoreSelezionato;
+  List<CreatorData> _ultimeOpzioniAutore = const [];
+  late final _Debounceable<List<CreatorData>?, String> _cercaCreatorDebounced;
+
   String? _coverImageRelativo;
   String? _coverImageAssoluto;
+
+  @override
+  void initState() {
+    super.initState();
+    _cercaCreatorDebounced = _debounce<List<CreatorData>?, String>(
+      (query) => ref.read(comicsRepositoryProvider).cercaCreator(query),
+    );
+  }
 
   @override
   void dispose() {
@@ -64,6 +82,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     _volume.dispose();
     _description.dispose();
     _nuovoAutoreNome.dispose();
+    _nuovoAutoreFocusNode.dispose();
     super.dispose();
   }
 
@@ -120,16 +139,24 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     if (nome.isEmpty) return;
 
     final repository = ref.read(comicsRepositoryProvider);
-    // Nessun autocomplete in UI (deciso su #67), ma un match esatto sul
-    // nome riusa il Creator esistente invece di crearne uno identico ogni
-    // volta che lo stesso autore viene aggiunto a un'altra Edizione.
-    final esistenti = await repository.cercaCreator(nome);
-    final match = esistenti.where(
-      (c) => c.name.toLowerCase() == nome.toLowerCase(),
-    );
-    final creatorId = match.isNotEmpty
-        ? match.first.id
-        : await repository.aggiungiCreator(nome);
+    int creatorId;
+    if (_autoreSelezionato != null && _autoreSelezionato!.name == nome) {
+      // Suggerimento toccato in #78: collega il Creator selezionato,
+      // saltando aggiungiCreator.
+      creatorId = _autoreSelezionato!.id;
+    } else {
+      // Testo libero senza selezione (comportamento invariato da #67): un
+      // match esatto sul nome riusa il Creator esistente invece di crearne
+      // uno identico ogni volta che lo stesso autore viene aggiunto a
+      // un'altra Edizione.
+      final esistenti = await repository.cercaCreator(nome);
+      final match = esistenti.where(
+        (c) => c.name.toLowerCase() == nome.toLowerCase(),
+      );
+      creatorId = match.isNotEmpty
+          ? match.first.id
+          : await repository.aggiungiCreator(nome);
+    }
 
     await repository.collegaCreatorAEdizione(
       edizioneId: widget.edizioneId,
@@ -137,6 +164,24 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
       ruolo: _nuovoAutoreRuolo,
     );
     _nuovoAutoreNome.clear();
+    setState(() => _autoreSelezionato = null);
+  }
+
+  Future<Iterable<CreatorData>> _opzioniAutore(TextEditingValue value) async {
+    final query = value.text.trim();
+    if (query.length < 2) {
+      _ultimeOpzioniAutore = const [];
+      return const Iterable<CreatorData>.empty();
+    }
+
+    final risultati = await _cercaCreatorDebounced(query);
+    if (risultati == null) {
+      // Ricerca superata da una più recente (debounce): tieni le ultime
+      // opzioni finché quella nuova non risolve.
+      return _ultimeOpzioniAutore;
+    }
+    _ultimeOpzioniAutore = risultati;
+    return risultati;
   }
 
   Future<void> _rimuoviAutore(CreatorConRuolo autore) {
@@ -376,11 +421,53 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
         Row(
           children: [
             Expanded(
-              child: _campo(
-                _nuovoAutoreNome,
-                'Nuovo autore',
-                'es. Stan Lee',
-                key: const Key('campo-nuovo-autore'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Nuovo autore',
+                    style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Autocomplete<CreatorData>(
+                    focusNode: _nuovoAutoreFocusNode,
+                    textEditingController: _nuovoAutoreNome,
+                    displayStringForOption: (c) => c.name,
+                    optionsBuilder: _opzioniAutore,
+                    onSelected: (selection) =>
+                        setState(() => _autoreSelezionato = selection),
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onFieldSubmitted) {
+                          return TextField(
+                            key: const Key('campo-nuovo-autore'),
+                            controller: controller,
+                            focusNode: focusNode,
+                            style: AppTypography.bodyLarge.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'es. Stan Lee',
+                              hintStyle: AppTypography.bodyLarge.copyWith(
+                                color: AppColors.textMuted,
+                              ),
+                              isDense: true,
+                              border: OutlineInputBorder(
+                                borderRadius: AppRadii.smRadius,
+                              ),
+                            ),
+                            onChanged: (text) {
+                              if (_autoreSelezionato != null &&
+                                  text != _autoreSelezionato!.name) {
+                                setState(() => _autoreSelezionato = null);
+                              }
+                            },
+                            onSubmitted: (_) => onFieldSubmitted(),
+                          );
+                        },
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: AppSpacing.xs),
@@ -491,4 +578,56 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
       ],
     );
   }
+}
+
+const Duration _autoreDebounceDuration = Duration(milliseconds: 250);
+
+typedef _Debounceable<S, T> = Future<S?> Function(T parameter);
+
+/// Restituisce una versione debounced della funzione data: la funzione
+/// originale viene invocata solo dopo che non arrivano nuove chiamate per
+/// `_autoreDebounceDuration` (soglia decisa su #77/#78 per l'autocomplete
+/// Creator). Adattato dall'esempio ufficiale Flutter per `Autocomplete`
+/// asincrono con debounce.
+_Debounceable<S, T> _debounce<S, T>(_Debounceable<S?, T> function) {
+  _DebounceTimer? debounceTimer;
+
+  return (T parameter) async {
+    if (debounceTimer != null && !debounceTimer!.isCompleted) {
+      debounceTimer!.cancel();
+    }
+    debounceTimer = _DebounceTimer();
+    try {
+      await debounceTimer!.future;
+    } on _CancelException {
+      return null;
+    }
+    return function(parameter);
+  };
+}
+
+class _DebounceTimer {
+  _DebounceTimer() {
+    _timer = Timer(_autoreDebounceDuration, _onComplete);
+  }
+
+  late final Timer _timer;
+  final Completer<void> _completer = Completer<void>();
+
+  void _onComplete() {
+    _completer.complete();
+  }
+
+  Future<void> get future => _completer.future;
+
+  bool get isCompleted => _completer.isCompleted;
+
+  void cancel() {
+    _timer.cancel();
+    _completer.completeError(const _CancelException());
+  }
+}
+
+class _CancelException implements Exception {
+  const _CancelException();
 }
