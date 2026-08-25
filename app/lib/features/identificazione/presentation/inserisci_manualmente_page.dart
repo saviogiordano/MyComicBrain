@@ -36,7 +36,6 @@ class _InserisciManualmentePageState
     extends ConsumerState<InserisciManualmentePage> {
   final _titolo = TextEditingController();
   final _serie = TextEditingController();
-  final _issn = TextEditingController();
   final _editore = TextEditingController();
   final _numero = TextEditingController();
   final _releaseDate = TextEditingController();
@@ -65,7 +64,6 @@ class _InserisciManualmentePageState
   void dispose() {
     _titolo.dispose();
     _serie.dispose();
-    _issn.dispose();
     _editore.dispose();
     _numero.dispose();
     _releaseDate.dispose();
@@ -114,7 +112,6 @@ class _InserisciManualmentePageState
       _faParteDiSerie = true;
       _serie.text = seriesName;
     }
-    _issn.text = _valore(analisi.issn);
     _editore.text = _valore(analisi.publisher);
     _numero.text = _valore(analisi.issueNumberLabel);
     _releaseDate.text = _valore(analisi.releaseDate);
@@ -151,11 +148,7 @@ class _InserisciManualmentePageState
     int? serieId;
     final nomeSerie = _serie.text.trim();
     if (_faParteDiSerie && nomeSerie.isNotEmpty) {
-      final issn = _issn.text.trim();
-      serieId = await repository.aggiungiSerie(
-        name: nomeSerie,
-        issn: issn.isEmpty ? null : issn,
-      );
+      serieId = await repository.aggiungiSerie(name: nomeSerie);
     }
 
     final numero = _numero.text.trim();
@@ -246,13 +239,6 @@ class _InserisciManualmentePageState
                 'Nome collana',
                 'es. Marvel Mega',
                 key: const Key('campo-collana'),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              _campo(
-                _issn,
-                'ISSN della collana',
-                'es. 9771124218909',
-                key: const Key('campo-issn'),
               ),
             ],
             const SizedBox(height: AppSpacing.lg),

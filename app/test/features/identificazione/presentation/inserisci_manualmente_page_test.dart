@@ -292,7 +292,6 @@ void main() {
 
       expect(testoDi(const Key('campo-titolo')), 'X-Men Forever – Parte 2');
       expect(testoDi(const Key('campo-collana')), 'Marvel Mega');
-      expect(testoDi(const Key('campo-issn')), '9771124218909');
       expect(
         testoDi(const Key('campo-editore')),
         'Marvel Italia / Panini Comics',
@@ -334,7 +333,9 @@ void main() {
 
       final serie = await db.select(db.serieTable).get();
       expect(serie.single.name, 'Marvel Mega');
-      expect(serie.single.issn, '9771124218909');
+      // Il campo ISSN è stato tolto dal form (ridondante con EAN/ISBN): non
+      // viene più raccolto né salvato su Serie.
+      expect(serie.single.issn, isNull);
     },
   );
 

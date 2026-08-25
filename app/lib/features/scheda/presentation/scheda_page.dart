@@ -298,11 +298,8 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 3.2,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _griglia(
                 'Numero',
@@ -369,8 +366,8 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
   /// segnaposto invece di un errore visibile.
   Widget _cover(String? coverImage) {
     final segnaposto = Container(
-      width: 120,
-      height: 180,
+      width: 200,
+      height: 300,
       color: AppColors.overlayCardHover,
       child: Icon(
         Icons.menu_book_outlined,
@@ -387,8 +384,8 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
     return ClipRRect(
       borderRadius: AppRadii.mdRadius,
       child: SizedBox(
-        width: 120,
-        height: 180,
+        width: 200,
+        height: 300,
         child: isRemote
             ? Image.network(
                 coverImage,
