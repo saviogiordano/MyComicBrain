@@ -20,7 +20,7 @@ _Avoid_: Esemplare (ok in prosa), item
 Una copia con `status = posseduta`. Solo le copie posseduta contano nei KPI di volume della Dashboard (totale fumetti, duplicati, speso finora). `status = prestata` conta ancora come posseduta; `status = venduta` o `persa` no.
 
 **Edizione posseduta**:
-Un'edizione che ha almeno una copia posseduta. Il possesso è sempre relativo allo stato attuale, in cascata: copia posseduta → edizione posseduta → conta per serie e numerazione. Vendere l'unica copia di un'edizione la rende non posseduta, e il suo numero torna "mancante" nella serie.
+Un'edizione che ha almeno una copia posseduta. Il possesso è sempre relativo allo stato attuale, in cascata: copia posseduta → edizione posseduta → conta per serie e numerazione. Vendere l'unica copia di un'edizione la rende non posseduta, e il suo numero torna "mancante" nella serie. Stessa regola per l'Organizzazione della collezione (§9, deciso su [Mappa — Organizzazione della collezione](https://github.com/saviogiordano/MyComicBrain/issues/79)): la vista Collezione elenca Edizioni, e per gli assi che vivono sulla Copia (stato di lettura, condizione, posizione) un'Edizione soddisfa il filtro se almeno una delle sue copie possedute lo soddisfa.
 
 **Duplicato**:
 Un'edizione con due o più copie posseduta contemporaneamente. Non riguarda edizioni diverse della stessa opera (quello è riconoscimento, non duplicazione) — vedi Opera/Edizione.
@@ -45,6 +45,7 @@ _Avoid_: OCR/computer vision da soli come nome di entità (ok in prosa tecnica) 
 
 **Personaggi raffigurati** / **Tag di stile copertina** / **Tag di elementi visivi caratteristici**:
 Liste di tag liberi (stringhe), campi di computer vision (§6.2) dell'Analisi Copertina — mai `null`, lista vuota se Claude non riconosce nulla con sufficiente sicurezza. "Tag di stile copertina" descrive lo stile/genere artistico o la tipologia editoriale della copertina nel suo complesso (es. "manga", "variant cover"); "tag di elementi visivi caratteristici" elenca elementi visivi concreti e specifici che non descrivono uno stile generale (es. "sfondo con esplosione") — i due insiemi non si sovrappongono per costruzione del prompt, ma restano tag liberi non verificati.
+_Avoid_: confondere "Personaggi raffigurati" con Personaggio (§9, voce distinta — entità catalogabile collegata all'Edizione, senza collegamento automatico a questo campo)
 
 **Logo editore riconosciuto** / **Logo serie riconosciuto**:
 Campi di computer vision (§6.2) dell'Analisi Copertina: il logo dell'editore/della serie riconosciuto visivamente sulla copertina, `null` se non riconoscibile. Paralleli ai campi OCR omologhi (`publisher`/nome collana) ma distinti — un logo può essere riconosciuto anche quando il nome testuale non è leggibile, e viceversa.
@@ -52,6 +53,17 @@ Campi di computer vision (§6.2) dell'Analisi Copertina: il logo dell'editore/de
 **Tipo di stampa**:
 Campo `printingType` (§6.4/§8.1, deciso su [Mappa — Campi bibliografici AI](https://github.com/saviogiordano/MyComicBrain/issues/71)) di Analisi Copertina/Edizione: testo libero letto in copertina/indicia (es. "Direct Edition"), unifica le tre nozioni distinte di §6.4 (edizione/ristampa/variant) in un solo campo — sono la stessa domanda vista da angolazioni diverse.
 _Avoid_: Edizione (già l'entità stessa nel glossario — questo campo descrive una proprietà testuale della stampa, non l'unità catalogata)
+
+**Formato**:
+Campo `format` (§9, deciso su [Formato: valori esatti dell'enum](https://github.com/saviogiordano/MyComicBrain/issues/83)) di Edizione: enum chiuso, valore singolo, nullable — Spillato, Bonellide, Brossurato, Cartonato, Tankōbon, Omnibus. Descrive la forma fisica di stampa dell'edizione, distinto da Tipo di stampa (che copre prima stampa/ristampa/variant, non il formato fisico). Il digitale non è un valore dell'enum — resta fuori scope (asse concettualmente diverso: rompe le assunzioni di possesso fisico su cui si basano Copia, Condizione e Posizione).
+_Avoid_: confondere con Tipo di stampa (proprietà diversa dello stesso oggetto — vedi sopra)
+
+**Personaggio**:
+Campo di Edizione (§9, deciso su [Mappa — Organizzazione della collezione](https://github.com/saviogiordano/MyComicBrain/issues/79) via [#84](https://github.com/saviogiordano/MyComicBrain/issues/84)): relazione many-to-many con una nuova entità catalogabile `Character`, condivisa fra Edizioni diverse — stesso pattern di Creator (#64), nessun vincolo UNIQUE su `name` (dedup lasciato all'autocomplete in UI). Aggiunto manualmente dall'utente, senza collegamento automatico con "Personaggi raffigurati": stesso principio già valido per gli autori, che pure hanno un'entità dedicata (Creator) ma non si auto-collegano dai campi letti dall'AI alla conferma del Candidato.
+_Avoid_: confondere con Personaggi raffigurati (voce distinta — quel campo vive sulla Scansione/Analisi Copertina, libero e non verificato, senza collegamento a questa entità catalogata)
+
+**Genere**:
+Campo di Edizione (§9, deciso su [Mappa — Organizzazione della collezione](https://github.com/saviogiordano/MyComicBrain/issues/79) via [#84](https://github.com/saviogiordano/MyComicBrain/issues/84)): enum chiuso, multi-valore (relazione many-to-many, a differenza di Formato che è singolo) — Supereroi, Azione/Avventura, Fantascienza, Fantasy, Horror, Giallo/Noir, Commedia, Drammatico, Romantico, Storico, Slice of life, Erotico/Adulti.
 
 **Sessione di acquisizione**:
 Un raggruppamento temporaneo, non persistito, di più Scansioni prodotte consecutivamente (fotocamera e/o galleria) prima che l'utente termini con "Fine". Esiste solo come stato della UI: non sopravvive a un riavvio e non ha una propria riga nel database — solo le Scansioni che produce vengono salvate.

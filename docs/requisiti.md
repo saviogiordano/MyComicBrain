@@ -165,7 +165,7 @@ Il punteggio di confidenza di ciascun candidato è calcolato **combinando più s
 
 - **segnale testuale dominante**: somiglianza tra i campi letti (titolo, numero, editore, nome collana) e i campi del candidato;
 - **boost secondario da computer vision**: personaggi raffigurati, tag di stile copertina, tag di elementi visivi caratteristici, loghi riconosciuti — corrobora un match testuale già presente, non lo genera da solo;
-- **bonus di contesto**: la stessa serie è già presente in collezione con un numero adiacente o mancante tra le copie possedute (vedi esempio in §13).
+- **bonus di contesto**: la stessa serie è già presente in collezione con un numero adiacente o mancante tra le copie possedute (vedi esempio in §11).
 
 Barcode/ISBN letti in fase di OCR non contribuiscono oggi al punteggio come chiave di ricerca autonoma.
 
@@ -192,7 +192,7 @@ Confidenza: 96%
 [ Inserisci manualmente ]
 ```
 
-L'AI non deve modificare automaticamente la collezione senza controllo dell'utente: ogni candidato richiede conferma esplicita, e l'utente deve poter modificare qualsiasi campo prima del salvataggio, scegliere un'alternativa tra i candidati proposti o inserire i dati manualmente (vedi anche le soglie di confidenza in §24).
+L'AI non deve modificare automaticamente la collezione senza controllo dell'utente: ogni candidato richiede conferma esplicita, e l'utente deve poter modificare qualsiasi campo prima del salvataggio, scegliere un'alternativa tra i candidati proposti o inserire i dati manualmente (vedi anche le soglie di confidenza in §22).
 
 ## 6.4 Acquisizione dei metadati
 
@@ -332,7 +332,7 @@ Oltre alla sola visualizzazione, la scheda deve permettere:
 
 **Gestione delle copie**
 
-- aggiungere una nuova copia alla stessa edizione (§9);
+- aggiungere una nuova copia alla stessa edizione (§8.5);
 - modificare condizione, prezzo, data di acquisto, venditore e posizione di ogni singola copia;
 - cambiare lo stato di una copia (§8.3);
 - rimuovere una singola copia, mantenendo l'edizione se restano altre copie.
@@ -343,9 +343,7 @@ Oltre alla sola visualizzazione, la scheda deve permettere:
 - eliminare l'intera edizione (tutte le copie), con richiesta di conferma esplicita se sono presenti più copie o dati personali già inseriti (prezzo, note, ...);
 - l'app deve avvisare chiaramente prima di un'eliminazione, in quanto non è garantito poterla annullare.
 
----
-
-# 9. Gestione delle copie
+## 8.5 Gestione delle copie
 
 Il modello dati deve distinguere il **fumetto/edizione** dalla **copia fisica**.
 
@@ -367,9 +365,7 @@ Spider-Man #42
 
 Questo permette di gestire correttamente i duplicati.
 
----
-
-# 10. Condizione del fumetto
+## 8.6 Condizione del fumetto
 
 Deve essere possibile selezionare una condizione standardizzata.
 
@@ -390,11 +386,13 @@ In una fase successiva l'AI potrebbe stimare automaticamente la condizione della
 
 ---
 
-# 11. Organizzazione della collezione
+# 9. Organizzazione della collezione
 
-L'utente deve poter organizzare i fumetti attraverso:
+La schermata "Collezione" è la vista di sfoglio del catalogo: una voce fissa della navigazione principale (accanto a Dashboard, Scansione, Cerca, Statistiche) che mostra tutte le Edizioni possedute in una griglia di copertine, filtrabile e ordinabile. Dalla Dashboard, i punti di accesso con un intento esplicito (es. "aggiunti nel mese corrente") aprono la Collezione già pre-filtrata di conseguenza; aperta senza un intento, mostra l'intero catalogo.
 
-- serie;
+L'utente deve poter filtrare e ordinare i fumetti attraverso:
+
+- serie (incluse le edizioni senza serie, come valore filtrabile a parte);
 - editore;
 - autore;
 - personaggio;
@@ -407,9 +405,17 @@ L'utente deve poter organizzare i fumetti attraverso:
 - posizione;
 - tag personalizzati.
 
+I filtri attivi restano visibili come chip rimovibili sotto l'intestazione; un pannello dedicato permette di comporne di nuovi e di scegliere l'ordinamento (di default per titolo). Ogni card mostra copertina, titolo, numero ed eventuale indicatore di copie duplicate; toccarla apre la Scheda del fumetto (§8). Se il catalogo non contiene fumetti, la schermata invita a scansionare il primo; se un filtro non produce risultati, invita a rimuoverlo.
+
+Esempio:
+
+> Collezione — 42 di 187 fumetti
+> Filtri attivi: Serie: Batman × · Formato: Spillato ×
+> [griglia di copertine]
+
 ---
 
-# 12. Ricerca
+# 10. Ricerca
 
 La ricerca deve supportare:
 
@@ -431,7 +437,7 @@ L'AI dovrebbe poter trasformare la richiesta in un filtro strutturato.
 
 ---
 
-# 13. Serie e numeri mancanti
+# 11. Serie e numeri mancanti
 
 Una funzionalità importante è la gestione delle serie.
 
@@ -463,7 +469,7 @@ L'app deve poter calcolare automaticamente:
 
 ---
 
-# 14. Rilevamento duplicati
+# 12. Rilevamento duplicati
 
 Durante una nuova scansione il sistema deve verificare se l'edizione è già presente.
 
@@ -486,7 +492,7 @@ L'utente può scegliere:
 
 ---
 
-# 15. AI Assistant
+# 13. AI Assistant
 
 L'app può includere un assistente conversazionale.
 
@@ -508,7 +514,7 @@ L'assistente deve operare sui dati della collezione dell'utente e non inventare 
 
 ---
 
-# 16. Statistiche
+# 14. Statistiche
 
 Dashboard statistiche:
 
@@ -527,7 +533,7 @@ Dashboard statistiche:
 
 ---
 
-# 17. Posizione fisica
+# 15. Posizione fisica
 
 L'utente deve poter indicare dove è conservato ogni fumetto.
 
@@ -545,7 +551,7 @@ La posizione deve essere ricercabile.
 
 ---
 
-# 18. Importazione ed esportazione
+# 16. Importazione ed esportazione
 
 L'app deve supportare:
 
@@ -565,7 +571,7 @@ L'app deve supportare:
 
 ---
 
-# 19. Sincronizzazione
+# 17. Sincronizzazione
 
 La collezione deve essere sincronizzata tra:
 
@@ -582,7 +588,7 @@ Il sistema deve supportare:
 
 ---
 
-# 20. Offline mode
+# 18. Offline mode
 
 Le funzioni fondamentali devono essere utilizzabili offline:
 
@@ -598,7 +604,7 @@ Le operazioni effettuate offline devono essere sincronizzate successivamente.
 
 ---
 
-# 21. Privacy
+# 19. Privacy
 
 L'utente deve avere il controllo sulle proprie fotografie e sui propri dati.
 
@@ -617,7 +623,7 @@ Per utenti europei sarebbe inoltre opportuno prevedere una configurazione dell'i
 
 ---
 
-# 22. Architettura tecnica
+# 20. Architettura tecnica
 
 Una possibile architettura:
 
@@ -649,7 +655,7 @@ Una possibile architettura:
 
 ---
 
-# 23. Modello dati principale
+# 21. Modello dati principale
 
 ## Comic
 
@@ -760,7 +766,7 @@ matched_fields
 
 ---
 
-# 24. Requisiti AI
+# 22. Requisiti AI
 
 Il sistema AI deve:
 
@@ -794,7 +800,7 @@ Le soglie dovranno essere calibrate con dati reali durante il beta testing.
 
 ---
 
-# 25. Learning loop
+# 23. Learning loop
 
 Il sistema deve poter imparare dalle correzioni dell'utente.
 
@@ -819,7 +825,7 @@ Importante: il sistema deve distinguere tra apprendimento globale del modello e 
 
 ---
 
-# 26. Gestione degli errori
+# 24. Gestione degli errori
 
 L'app deve gestire:
 
@@ -847,7 +853,7 @@ Azioni:
 
 ---
 
-# 27. Performance
+# 25. Performance
 
 Obiettivi MVP:
 
@@ -869,7 +875,7 @@ Scan 4 → waiting
 
 ---
 
-# 28. Sicurezza
+# 26. Sicurezza
 
 Il backend deve prevedere:
 
@@ -886,7 +892,7 @@ Il backend deve prevedere:
 
 ---
 
-# 29. MVP
+# 27. MVP
 
 Per la prima versione eviterei di implementare tutto.
 
@@ -937,7 +943,7 @@ Per la prima versione eviterei di implementare tutto.
 
 ---
 
-# 30. Funzioni per la versione 2
+# 28. Funzioni per la versione 2
 
 Dopo aver validato il flusso principale:
 
@@ -958,7 +964,7 @@ Dopo aver validato il flusso principale:
 
 ---
 
-# 31. Funzioni avanzate future
+# 29. Funzioni avanzate future
 
 ## Riconoscimento della variant
 
@@ -991,7 +997,7 @@ Il database deve quindi trattare **edizione** e **storia/opera** come concetti d
 
 ---
 
-# 32. Requisito fondamentale: separare opera, edizione e copia
+# 30. Requisito fondamentale: separare opera, edizione e copia
 
 Questa è una scelta architetturale molto importante.
 
@@ -1014,7 +1020,7 @@ In questo modo l'app non considera erroneamente due versioni diverse dello stess
 
 ---
 
-# 33. Criteri di successo del prodotto
+# 31. Criteri di successo del prodotto
 
 Il progetto può essere considerato riuscito se un utente riesce a:
 
@@ -1054,7 +1060,7 @@ Altri KPI:
 
 ---
 
-# 34. Priorità delle funzionalità
+# 32. Priorità delle funzionalità
 
 | Funzionalità | Priorità |
 |---|---|
@@ -1081,7 +1087,7 @@ Altri KPI:
 
 ---
 
-# 35. Principio UX principale
+# 33. Principio UX principale
 
 L'app non dovrebbe sembrare un database da compilare.
 
