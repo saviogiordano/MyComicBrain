@@ -320,6 +320,49 @@ void main() {
       expect(analisi[1].status, StatoAnalisiCopertina.completata);
     },
   );
+
+  test(
+    'la rielaborazione di una Scansione già completata non blocca le Scansioni successive del batch (bug #86)',
+    () async {
+      // Riproduce il bug segnalato da utente: `ScansionePage` teneva nel
+      // filmstrip una Scansione già inviata a una pipeline precedente (fix
+      // in `ScansionePage._fine`, #86) — quando rientrava in un batch
+      // successivo, `avviaAnalisiCopertina` creava una seconda riga
+      // `AnalisiCopertina` per lo stesso scansioneId, e `identifica()` (via
+      // `analisiCopertinaPerScansione`, che usa `getSingle()`) andava in
+      // errore trovandone due. Senza il try/catch attorno a `identifica()`
+      // in `_eseguiAnalisi`, quell'eccezione risaliva fuori dal `for` di
+      // `avviaBatch`, e la Scansione successiva del batch non veniva mai
+      // nemmeno presa in carico.
+      final vecchia = await scansioneConImmagine('vecchia.jpg');
+      final nuova = await scansioneConImmagine('nuova.jpg');
+
+      final pipelinePrimoGiro = AnalisiCopertinaPipeline(
+        repository: repo,
+        client: _FakeCoverAnalysisClient(risultato: _risultatoCompleto),
+      );
+      await pipelinePrimoGiro.avviaBatch([vecchia]);
+      expect((await unicaAnalisi()).status, StatoAnalisiCopertina.completata);
+
+      final pipelineSecondoGiro = AnalisiCopertinaPipeline(
+        repository: repo,
+        client: _FakeCoverAnalysisClient(risultato: _risultatoCompleto),
+      );
+      await pipelineSecondoGiro.avviaBatch([vecchia, nuova]);
+
+      final scansioneIdNuova = await repo.idScansionePerImmagine(nuova);
+      final analisiNuova = await (db.select(
+        db.analisiCopertinaTable,
+      )..where((a) => a.scansioneId.equals(scansioneIdNuova))).getSingle();
+      expect(
+        analisiNuova.status,
+        StatoAnalisiCopertina.completata,
+        reason:
+            'la Scansione davvero nuova deve essere processata anche se '
+            'quella duplicata prima nel batch fa fallire la sua Identificazione',
+      );
+    },
+  );
 }
 
 class _CoverAnalysisClientAlternante implements CoverAnalysisClient {

@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 const _cartellaScansioni = 'scansioni';
+const _cartellaGrezziScanner = 'scansioni_grezze';
 
 /// Copia il file confermato (già ritagliato/ruotato) di una Scansione nella
 /// directory `<ApplicationSupportDirectory>/scansioni/` (creata se assente),
@@ -19,6 +20,29 @@ class ScansioneStorage {
     : _baseDirectory = baseDirectory ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _baseDirectory;
+
+  /// Copia subito i file appena restituiti da uno scanner di terze parti
+  /// (`cunning_document_scanner`, #89) nella directory
+  /// `<ApplicationSupportDirectory>/scansioni_grezze/` — vivono in una cache
+  /// non garantita del plugin, soggetta a rimozione di sistema, quindi vanno
+  /// spostati in storage permanente prima di ogni elaborazione successiva
+  /// (stesso pattern di [salva] per l'output di `image_cropper`, #17).
+  /// Ritorna i nuovi percorsi permanenti nello stesso ordine; il chiamante
+  /// resta responsabile di ripulirli una volta consumati, come già oggi per
+  /// un grezzo da fotocamera/Galleria (`RevisionePage`, #24).
+  Future<List<String>> salvaGrezzi(List<String> percorsiOriginali) async {
+    final base = await _baseDirectory();
+    final dir = Directory(p.join(base.path, _cartellaGrezziScanner));
+    await dir.create(recursive: true);
+
+    final risultato = <String>[];
+    for (var i = 0; i < percorsiOriginali.length; i++) {
+      final destPath = p.join(dir.path, '${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
+      final salvato = await File(percorsiOriginali[i]).copy(destPath);
+      risultato.add(salvato.path);
+    }
+    return risultato;
+  }
 
   Future<File> salva(File fileConfermato) async {
     final base = await _baseDirectory();

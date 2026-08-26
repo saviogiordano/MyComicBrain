@@ -41,13 +41,48 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
   late final _scansioni = List<XFile>.of(widget.scansioni);
   bool _avviato = false;
 
+  /// Solo le righe ancora `In sospeso` (nessuna `AnalisiCopertina` già
+  /// creata per quella Scansione) entrano in `avviaBatch` — anche col
+  /// filmstrip di `ScansionePage` correttamente svuotato tra un batch e
+  /// l'altro (#86), questo stesso riepilogo può comunque mostrare righe già
+  /// `Completata`/`In corso`/`Fallita` (es. uscita col back fisico invece di
+  /// "Aggiungi altre"/"Vai alla Dashboard" mentre la pipeline di un "Fine"
+  /// precedente è già partita). Rimandarle ad `avviaAnalisiCopertina`
+  /// creerebbe una seconda riga `AnalisiCopertina` per lo stesso
+  /// scansioneId, mandando in errore `identifica()` a valle (`getSingle` su
+  /// due righe) e bloccando il resto del batch (stesso meccanismo del bug
+  /// segnalato da utente su #86) — oltre a richiamare `estraiCopertina` una
+  /// seconda volta a vuoto. Le righe `Fallita` hanno il proprio retry
+  /// manuale dalla chip (`riprova`), non passano da qui.
   void _fine() {
     setState(() => _avviato = true);
+    final daInviare = _scansioni.where((s) {
+      final stato = ref.read(statoAnalisiCopertinaProvider(s.path)).valueOrNull?.stato;
+      return stato == null || stato == StatoAnalisiCopertina.pending;
+    });
     unawaited(
       ref.read(analisiCopertinaPipelineProvider).avviaBatch([
-        for (final s in _scansioni) s.path,
+        for (final s in daInviare) s.path,
       ]),
     );
+  }
+
+  /// `ScansionePage` resta montato (tab dentro l'`IndexedStack` dello shell,
+  /// #86) mentre questo riepilogo è in primo piano: se non gli segnaliamo
+  /// che il batch è stato inviato alla pipeline, il suo filmstrip locale
+  /// resta popolato e una scansione successiva ci si aggiunge — la Scansione
+  /// già `completata` viene rimandata ad `avviaBatch`, che crea una seconda
+  /// riga `AnalisiCopertina` per lo stesso id e manda in errore
+  /// l'Identificazione a valle (`getSingle` su due righe), bloccando l'intero
+  /// batch prima di arrivare alla scansione davvero nuova (segnalato da
+  /// utente). Il valore del pop (`true` = batch inviato) dice a
+  /// `ScansionePage._fine` di svuotare il proprio filmstrip: vale sia
+  /// "Aggiungi altre" (anche dopo l'invio: quelle righe sono già irrevocabili,
+  /// vedi sopra) sia "Vai alla Dashboard".
+  void _vaiAllaDashboard() {
+    context
+      ..pop(true)
+      ..go('/dashboard');
   }
 
   Future<bool> _confermaEliminazione(BuildContext context) async {
@@ -151,7 +186,7 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => context.pop(),
+                      onPressed: () => context.pop(_avviato),
                       child: const Text('Aggiungi altre'),
                     ),
                   ),
@@ -159,7 +194,7 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                   Expanded(
                     child: FilledButton(
                       onPressed: _avviato
-                          ? () => context.go('/dashboard')
+                          ? _vaiAllaDashboard
                           : _scansioni.isEmpty
                           ? null
                           : _fine,

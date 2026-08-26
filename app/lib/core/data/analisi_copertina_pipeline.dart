@@ -115,6 +115,18 @@ class AnalisiCopertinaPipeline {
       );
       return;
     }
-    await _identificazionePipeline.identifica(scansioneId: scansioneId);
+    try {
+      await _identificazionePipeline.identifica(scansioneId: scansioneId);
+    } on Object {
+      // Un fallimento imprevisto qui (non un `ComicVineException`, già
+      // gestito dentro `identifica`) non deve interrompere `avviaBatch`:
+      // l'Analisi Copertina di questa Scansione è già persistita
+      // `completata` sopra, e ogni Scansione del batch è indipendente —
+      // un'eccezione non catturata qui si propagherebbe fuori dal `for` di
+      // `avviaBatch`, saltando tutte le Scansioni successive del batch
+      // (segnalato da utente: capitava rielaborando una Scansione già
+      // `completata`, dove una seconda riga `AnalisiCopertina` per lo
+      // stesso id fa fallire `getSingle()` dentro `identifica`).
+    }
   }
 }

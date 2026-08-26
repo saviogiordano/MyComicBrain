@@ -1,176 +1,136 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:camera/camera.dart';
+import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
-import 'package:mycomicbrain/core/domain/scansione.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// I 6 suggerimenti statici (deciso su #22): ordine per fasi logiche
-/// (distanza → allineamento → illuminazione → riflessi → messa a fuoco),
-/// nessun feedback in tempo reale — solo testo fisso, avanzamento al tocco.
-class _GuideHint {
-  const _GuideHint(this.icon, this.label);
+/// Stato di errore dello scanner (deciso su #25, riusato su #89): "permanente"
+/// copre i dinieghi che richiedono di passare dalle Impostazioni di sistema —
+/// mostrato come messaggio persistente perché ritentare non cambierebbe
+/// nulla. Ogni altro fallimento (diniego riprovabile, scanner già attivo,
+/// nessuna Activity, plugin non disponibile) resta transitorio: uno SnackBar
+/// basta, l'utente può semplicemente ritoccare "Fotocamera".
+enum _ErroreScanner { permanente }
 
-  final IconData icon;
-  final String label;
-}
-
-const _guideHints = <_GuideHint>[
-  _GuideHint(Icons.social_distance_outlined, 'Inquadra tutta la copertina'),
-  _GuideHint(Icons.crop_free, 'Allinea la copertina dritta'),
-  _GuideHint(Icons.wb_sunny_outlined, 'Cerca più luce'),
-  _GuideHint(Icons.flare_outlined, 'Evita i riflessi'),
-  _GuideHint(Icons.center_focus_strong_outlined, 'Tieni ferma la fotocamera'),
-  // Distanza minima di messa a fuoco (#35): sotto i ~10cm l'autofocus non
-  // riesce a convergere su molti device e il tap-to-focus non ha effetto.
-  _GuideHint(Icons.zoom_out, "Allontana un po' se è sfocata"),
-];
-
-/// Stato di errore della fotocamera (deciso su #25): "riprovabile" copre
-/// l'assenza di hardware e i dinieghi risolvibili con un nuovo tentativo;
-/// "permanente" copre i dinieghi che richiedono di passare dalle Impostazioni
-/// di sistema.
-enum _ErroreFotocamera { riprovabile, permanente }
-
-/// Schermata `/scansione` (requisito 5.1, Variante B — Corner brackets,
-/// decisa su #19): fotocamera live con overlay a 4 angoli, pillola di
-/// suggerimento, filmstrip del batch in corso, Galleria e "Fine".
+/// Schermata `/scansione` (requisito 5.1, deciso su #88/#89): il bottone
+/// "Fotocamera" apre la UI nativa di scansione di `cunning_document_scanner`
+/// (rilevamento bordi, cattura multi-pagina, raddrizzamento prospettico —
+/// tutto on-device, scelto su #87); il bottone Galleria (#17) e
+/// l'impalcatura di riepilogo — filmstrip del batch in corso e "Fine" (#24)
+/// — restano invariati.
 ///
-/// Ogni scatto/selezione da galleria apre la revisione ritaglio/rotazione
+/// A differenza della versione precedente (preview camera live con overlay a
+/// 4 angoli, Variante B su #19), non c'è più una fotocamera custom né le 5
+/// pillole di guida (#22): la UI di scansione è quella nativa a schermo
+/// intero del plugin, che gestisce da sé anche il loop multi-scatto.
+///
+/// Ogni scansione/selezione da galleria apre la revisione ritaglio/rotazione
 /// (#24): solo le foto confermate lì entrano nel filmstrip. "Fine" apre il
 /// riepilogo di fine batch (#24) col batch confermato finora.
-class ScansionePage extends StatefulWidget {
+class ScansionePage extends ConsumerStatefulWidget {
   const ScansionePage({super.key});
 
   @override
-  State<ScansionePage> createState() => _ScansionePageState();
+  ConsumerState<ScansionePage> createState() => _ScansionePageState();
 }
 
-class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserver {
-  CameraController? _controller;
-  _ErroreFotocamera? _erroreFotocamera;
-  bool _scattando = false;
-  int _hintIndex = 0;
+class _ScansionePageState extends ConsumerState<ScansionePage> {
+  // "Alto" per #89: un batch tipico di cover è di poche unità, ma niente
+  // vieta all'utente di scansionarne molte in una sessione — il loop
+  // multi-pagina è gestito nativamente dal plugin, non da un ciclo Dart.
+  static const _maxPagineBatch = 30;
+
+  bool _scansionando = false;
+  _ErroreScanner? _errore;
   final _captures = <XFile>[];
-
-  // #36: distingue "l'abbiamo appena sospesa noi per inactive" da "non
-  // l'abbiamo mai inizializzata / errore permanente" (dove il resume non
-  // deve riprovare da solo, serve "Riprova"). Senza questo flag il solo
-  // controllo "controller == null" al resume era sempre vero anche subito
-  // dopo averlo azzerato noi nel ramo inactive, quindi il ramo resumed non
-  // veniva mai raggiunto e la fotocamera restava bloccata sullo spinner per
-  // sempre — capitava già solo aprendo l'editor di ritaglio nativo di #17,
-  // che su iOS fa risultare l'app momentaneamente inactive/resumed pur
-  // restando nella stessa app.
-  bool _fotocameraSospesa = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    unawaited(_initCamera());
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive) {
-      final controller = _controller;
-      if (controller == null || !controller.value.isInitialized) return;
-      unawaited(controller.dispose());
-      _controller = null;
-      _fotocameraSospesa = true;
-    } else if (state == AppLifecycleState.resumed && _fotocameraSospesa) {
-      _fotocameraSospesa = false;
-      unawaited(_initCamera());
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    unawaited(_controller?.dispose());
-    super.dispose();
-  }
-
-  Future<void> _initCamera() async {
-    if (mounted) setState(() => _erroreFotocamera = null);
-
-    // Check anticipato (deciso su #25): un diniego permanente non deve
-    // arrivare a `CameraController.initialize()`, che su Android non lo
-    // distingue da un diniego "riprovabile".
-    final status = await Permission.camera.status;
-    if (status.isPermanentlyDenied || status.isRestricted) {
-      if (mounted) setState(() => _erroreFotocamera = _ErroreFotocamera.permanente);
-      return;
-    }
-
-    final cameras = await availableCameras();
-    // Nessuna fotocamera (es. iOS Simulator, vedi docs/research/camera-package-flutter.md
-    // §6): mostra un fallback statico invece di bloccare la schermata.
-    if (cameras.isEmpty) {
-      if (mounted) setState(() => _erroreFotocamera = _ErroreFotocamera.riprovabile);
-      return;
-    }
-
-    final camera = cameras.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.back,
-      orElse: () => cameras.first,
-    );
-    final controller = CameraController(camera, ResolutionPreset.high, enableAudio: false);
-
-    try {
-      await controller.initialize();
-    } on CameraException catch (e) {
-      if (mounted) setState(() => _erroreFotocamera = _erroreDaEccezione(e));
-      return;
-    }
-
-    if (!mounted) {
-      await controller.dispose();
-      return;
-    }
-    setState(() {
-      _controller = controller;
-      _erroreFotocamera = null;
-    });
-  }
-
-  // Diniego iOS senza prompt (mai chiesto) o restrizione: equivale a un
-  // diniego permanente. Tutto il resto (nessun hardware residuo, errori
-  // sconosciuti, fotocamera occupata da un'altra app) è "riprovabile".
-  _ErroreFotocamera _erroreDaEccezione(CameraException e) {
-    switch (e.code) {
-      case 'CameraAccessDeniedWithoutPrompt':
-      case 'CameraAccessRestricted':
-        return _ErroreFotocamera.permanente;
-      default:
-        return _ErroreFotocamera.riprovabile;
-    }
-  }
 
   Future<void> _apriImpostazioni() => openAppSettings();
 
-  Future<void> _scatta() async {
-    final controller = _controller;
-    if (controller == null || _scattando) return;
+  Future<void> _scansiona() async {
+    if (_scansionando) return;
+    setState(() {
+      _scansionando = true;
+      _errore = null;
+    });
 
-    setState(() => _scattando = true);
-    try {
-      final foto = await controller.takePicture();
-      if (!mounted) return;
-      await _apriRevisione([foto.path]);
-    } on CameraException {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Scatto non riuscito, riprova')),
-      );
-    } finally {
-      if (mounted) setState(() => _scattando = false);
+    // Check anticipato (stesso pattern di #25): un diniego permanente non
+    // deve arrivare al plugin, che lo segnala solo con lo stesso codice
+    // generico 'permission_denied' di un diniego riprovabile.
+    final status = await Permission.camera.status;
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      if (mounted) {
+        setState(() {
+          _errore = _ErroreScanner.permanente;
+          _scansionando = false;
+        });
+      }
+      return;
     }
+
+    try {
+      final percorsi = await CunningDocumentScanner.getPictures(noOfPages: _maxPagineBatch);
+      if (!mounted) return;
+      // null su ogni piattaforma se l'utente annulla: nessuna azione, come
+      // già oggi per l'annullamento della selezione da Galleria.
+      if (percorsi == null || percorsi.isEmpty) return;
+
+      // I file restituiti dal plugin vivono in una cache non garantita
+      // (ricerca #87): copiarli subito in storage permanente prima di
+      // qualunque elaborazione successiva, stesso pattern già in uso per
+      // l'output di `image_cropper` (#17).
+      final permanenti = await ref.read(scansioneStorageProvider).salvaGrezzi(percorsi);
+      await _ripulisciCacheScanner();
+      if (!mounted) return;
+      await _apriRevisione(permanenti);
+    } on CunningDocumentScannerException catch (e) {
+      // Il plugin lancia anche `ArgumentError` per un `noOfPages` non
+      // valido: non catturato qui, dato che `_maxPagineBatch` è una
+      // costante fissa sempre positiva — non un input utente.
+      if (!mounted) return;
+      await _gestisciErroreScanner(e);
+    } finally {
+      if (mounted) setState(() => _scansionando = false);
+    }
+  }
+
+  /// Il plugin espone un solo codice generico `permission_denied` sia per un
+  /// diniego riprovabile sia per uno permanente: la distinzione (#25) va
+  /// ricavata ricontrollando lo stato reale del permesso dopo il fallimento.
+  Future<void> _gestisciErroreScanner(CunningDocumentScannerException e) async {
+    if (e.code != 'permission_denied') {
+      _mostraErroreTransitorio();
+      return;
+    }
+    final status = await Permission.camera.status;
+    if (!mounted) return;
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      setState(() => _errore = _ErroreScanner.permanente);
+    } else {
+      _mostraErroreTransitorio();
+    }
+  }
+
+  /// Best-effort (README del plugin): libera i file temporanei dello
+  /// scanner ora che ne abbiamo già una copia permanente — un suo
+  /// fallimento non deve bloccare il passaggio alla revisione.
+  Future<void> _ripulisciCacheScanner() async {
+    try {
+      await CunningDocumentScanner.cleanCache();
+    } on CunningDocumentScannerException {
+      // Ignorato: le copie permanenti sono già state fatte.
+    }
+  }
+
+  void _mostraErroreTransitorio() {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Scansione non riuscita, riprova')));
   }
 
   Future<void> _aggiungiDaGalleria() async {
@@ -187,55 +147,66 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
     setState(() => _captures.addAll(confermate));
   }
 
-  void _prossimoSuggerimento() => setState(() => _hintIndex = (_hintIndex + 1) % _guideHints.length);
-
-  void _fine() => context.push('/scansione/riepilogo', extra: List<XFile>.of(_captures));
+  /// `ScansionePage` resta montato mentre il riepilogo è in primo piano
+  /// (tab dentro l'`IndexedStack` dello shell): se il batch è stato inviato
+  /// alla pipeline (pop con `true` — sia da "Aggiungi altre" sia da "Vai
+  /// alla Dashboard", vedi `RiepilogoPage._vaiAllaDashboard`), il filmstrip
+  /// locale va svuotato — altrimenti una scansione già `completata`
+  /// resterebbe nel prossimo batch e ne bloccherebbe l'elaborazione
+  /// (segnalato da utente).
+  Future<void> _fine() async {
+    final inviato = await context.push<bool>('/scansione/riepilogo', extra: List<XFile>.of(_captures));
+    if ((inviato ?? false) && mounted) setState(_captures.clear);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final messaggio = _errore == _ErroreScanner.permanente
+        ? _PermessoNegatoMessage(onApriImpostazioni: _apriImpostazioni)
+        : const _ScannerIdleMessage();
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
-      body: Stack(
-        fit: StackFit.expand,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _Filmstrip(captures: _captures, onFine: _fine),
+            const Spacer(),
+            messaggio,
+            const SizedBox(height: AppSpacing.md),
+            _BottomBar(
+              lastCapture: _captures.isEmpty ? null : _captures.last,
+              scansioneAbilitata: !_scansionando,
+              onScansiona: _scansiona,
+              onGalleria: _aggiungiDaGalleria,
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Messaggio neutro mostrato finché l'utente non ha ancora avviato una
+/// scansione (nessun errore in corso).
+class _ScannerIdleMessage extends StatelessWidget {
+  const _ScannerIdleMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _CameraBackground(
-            controller: _controller,
-            errore: _erroreFotocamera,
-            onRiprova: _initCamera,
-            onApriImpostazioni: _apriImpostazioni,
-          ),
-          if (_controller != null)
-            const IgnorePointer(
-              // Puro overlay decorativo: senza IgnorePointer, CustomPaint
-              // assorbe ogni tocco nel suo riquadro (RenderCustomPaint.hitTestSelf
-              // è true di default senza un hitTest custom), bloccando il
-              // tap-to-focus (#35) proprio al centro dello schermo.
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: coverAspectRatio,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
-                    child: CustomPaint(painter: _CornerBracketsPainter()),
-                  ),
-                ),
-              ),
-            ),
-          SafeArea(
-            child: Column(
-              children: [
-                _Filmstrip(captures: _captures, onFine: _fine),
-                const Spacer(),
-                _HintPill(hint: _guideHints[_hintIndex], index: _hintIndex, onTap: _prossimoSuggerimento),
-                const SizedBox(height: AppSpacing.md),
-                _BottomBar(
-                  lastCapture: _captures.isEmpty ? null : _captures.last,
-                  scattoAbilitato: _controller != null && !_scattando,
-                  onScatta: _scatta,
-                  onGalleria: _aggiungiDaGalleria,
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-            ),
+          Icon(Icons.document_scanner_outlined, size: 40, color: AppColors.textDisabled),
+          const SizedBox(height: AppSpacing.xs),
+          Text('Scansiona una cover', style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted)),
+          const SizedBox(height: 2),
+          Text(
+            'Tocca "Fotocamera" per aprire lo scanner',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
           ),
         ],
       ),
@@ -243,167 +214,32 @@ class _ScansionePageState extends State<ScansionePage> with WidgetsBindingObserv
   }
 }
 
-class _CameraBackground extends StatefulWidget {
-  const _CameraBackground({
-    required this.controller,
-    required this.errore,
-    required this.onRiprova,
-    required this.onApriImpostazioni,
-  });
+class _PermessoNegatoMessage extends StatelessWidget {
+  const _PermessoNegatoMessage({required this.onApriImpostazioni});
 
-  final CameraController? controller;
-  final _ErroreFotocamera? errore;
-  final VoidCallback onRiprova;
-  final VoidCallback onApriImpostazioni;
-
-  @override
-  State<_CameraBackground> createState() => _CameraBackgroundState();
-}
-
-class _CameraBackgroundState extends State<_CameraBackground> {
-  Offset? _puntoFocus;
-
-  /// Tap-to-focus (#35): normalizza il tocco alle coordinate (0,0)-(1,1)
-  /// richieste dall'API `camera`, usando le dimensioni reali del riquadro
-  /// di preview (ottenute tramite lo slot `child` di `CameraPreview`, non
-  /// dello schermo intero) per restare precisi anche col letterboxing.
-  Future<void> _gestisciTocco(TapUpDetails details, Size areaPreview) async {
-    final controller = widget.controller;
-    if (controller == null || !controller.value.isInitialized) return;
-
-    final locale = details.localPosition;
-    setState(() => _puntoFocus = locale);
-
-    final normalizzato = Offset(
-      (locale.dx / areaPreview.width).clamp(0.0, 1.0),
-      (locale.dy / areaPreview.height).clamp(0.0, 1.0),
-    );
-    try {
-      await controller.setExposurePoint(normalizzato);
-      await controller.setFocusPoint(normalizzato);
-    } on CameraException {
-      // Alcuni device non supportano il focus manuale: nessun errore da mostrare.
-    }
-
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    if (mounted && _puntoFocus == locale) setState(() => _puntoFocus = null);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = widget.controller;
-    if (controller != null && controller.value.isInitialized) {
-      return ColoredBox(
-        color: Colors.black,
-        child: Center(
-          child: CameraPreview(
-            controller,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final areaPreview = constraints.biggest;
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapUp: (details) => _gestisciTocco(details, areaPreview),
-                  child: Stack(
-                    children: [if (_puntoFocus != null) _ReticoloFocus(centro: _puntoFocus!)],
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-    }
-
-    final errore = widget.errore;
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          radius: 1.1,
-          colors: [AppColors.surfaceRaised, AppColors.surfaceDeepest],
-        ),
-      ),
-      child: errore == null
-          ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
-          : Center(
-              child: _CameraErrorMessage(
-                errore: errore,
-                onRiprova: widget.onRiprova,
-                onApriImpostazioni: widget.onApriImpostazioni,
-              ),
-            ),
-    );
-  }
-}
-
-/// Reticolo che compare brevemente nel punto toccato per il tap-to-focus (#35).
-class _ReticoloFocus extends StatelessWidget {
-  const _ReticoloFocus({required this.centro});
-
-  final Offset centro;
-
-  static const _lato = 64.0;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: centro.dx - _lato / 2,
-      top: centro.dy - _lato / 2,
-      child: IgnorePointer(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 1, end: 0),
-          duration: const Duration(milliseconds: 700),
-          curve: Curves.easeOut,
-          builder: (context, opacity, child) => Opacity(opacity: opacity, child: child),
-          child: Container(
-            width: _lato,
-            height: _lato,
-            decoration: BoxDecoration(border: Border.all(color: AppColors.accent, width: 2), borderRadius: AppRadii.smRadius),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CameraErrorMessage extends StatelessWidget {
-  const _CameraErrorMessage({
-    required this.errore,
-    required this.onRiprova,
-    required this.onApriImpostazioni,
-  });
-
-  final _ErroreFotocamera errore;
-  final VoidCallback onRiprova;
   final VoidCallback onApriImpostazioni;
 
   @override
   Widget build(BuildContext context) {
-    final permanente = errore == _ErroreFotocamera.permanente;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.videocam_off_outlined, size: 32, color: AppColors.textDisabled),
+          Icon(Icons.no_photography_outlined, size: 32, color: AppColors.textDisabled),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            permanente ? 'Permesso fotocamera negato' : 'Fotocamera non disponibile',
+            'Permesso fotocamera negato',
             style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
           ),
           const SizedBox(height: 2),
           Text(
-            permanente
-                ? 'Attivalo dalle Impostazioni, oppure usa la Galleria'
-                : 'Puoi riprovare o usare la Galleria',
+            'Attivalo dalle Impostazioni, oppure usa la Galleria',
             textAlign: TextAlign.center,
             style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
           ),
           const SizedBox(height: AppSpacing.md),
-          FilledButton(
-            onPressed: permanente ? onApriImpostazioni : onRiprova,
-            child: Text(permanente ? 'Apri Impostazioni' : 'Riprova'),
-          ),
+          FilledButton(onPressed: onApriImpostazioni, child: const Text('Apri Impostazioni')),
         ],
       ),
     );
@@ -464,70 +300,42 @@ class _Filmstrip extends StatelessWidget {
   }
 }
 
-class _HintPill extends StatelessWidget {
-  const _HintPill({required this.hint, required this.index, required this.onTap});
+class _BottomBar extends StatelessWidget {
+  const _BottomBar({
+    required this.lastCapture,
+    required this.scansioneAbilitata,
+    required this.onScansiona,
+    required this.onGalleria,
+  });
 
-  final _GuideHint hint;
-  final int index;
-  final VoidCallback onTap;
+  final XFile? lastCapture;
+  final bool scansioneAbilitata;
+  final VoidCallback onScansiona;
+  final VoidCallback onGalleria;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceDeepest.withValues(alpha: 0.72),
-            borderRadius: AppRadii.pillRadius,
-            border: Border.all(color: AppColors.borderDefault),
+      child: Row(
+        children: [
+          _GalleryThumbButton(lastCapture: lastCapture, onTap: onGalleria),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: scansioneAbilitata ? onScansiona : null,
+              icon: scansioneAbilitata
+                  ? const Icon(Icons.document_scanner_outlined)
+                  : const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onAccent),
+                    ),
+              label: const Text('Fotocamera'),
+            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(hint.icon, size: 15, color: AppColors.accentLight),
-              const SizedBox(width: AppSpacing.xs),
-              Flexible(
-                child: Text(
-                  hint.label,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Text('${index + 1}/${_guideHints.length}', style: AppTypography.monoLabel.copyWith(color: AppColors.textMuted)),
-            ],
-          ),
-        ),
+        ],
       ),
-    );
-  }
-}
-
-class _BottomBar extends StatelessWidget {
-  const _BottomBar({
-    required this.lastCapture,
-    required this.scattoAbilitato,
-    required this.onScatta,
-    required this.onGalleria,
-  });
-
-  final XFile? lastCapture;
-  final bool scattoAbilitato;
-  final VoidCallback onScatta;
-  final VoidCallback onGalleria;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _GalleryThumbButton(lastCapture: lastCapture, onTap: onGalleria),
-        _ShutterButton(enabled: scattoAbilitato, onTap: onScatta),
-        const SizedBox(width: 48),
-      ],
     );
   }
 }
@@ -553,7 +361,7 @@ class _GalleryThumbButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.overlayCardHover,
             borderRadius: AppRadii.smRadius,
-            border: Border.all(color: Colors.white70, width: 2),
+            border: Border.all(color: AppColors.borderStrong, width: 2),
           ),
           child: lastCapture == null
               ? Icon(Icons.photo_library_outlined, color: AppColors.textSecondary)
@@ -562,65 +370,4 @@ class _GalleryThumbButton extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ShutterButton extends StatelessWidget {
-  const _ShutterButton({required this.enabled, required this.onTap});
-
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 76,
-          height: 76,
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.fromBorderSide(
-              BorderSide(color: enabled ? Colors.white : Colors.white38, width: 3),
-            ),
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(shape: BoxShape.circle, color: enabled ? Colors.white : Colors.white38),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CornerBracketsPainter extends CustomPainter {
-  const _CornerBracketsPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.accent
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    final len = size.shortestSide * 0.12;
-
-    void bracket(Offset corner, Offset dx, Offset dy) {
-      canvas
-        ..drawLine(corner, corner + dx * len, paint)
-        ..drawLine(corner, corner + dy * len, paint);
-    }
-
-    bracket(Offset.zero, const Offset(1, 0), const Offset(0, 1));
-    bracket(Offset(size.width, 0), const Offset(-1, 0), const Offset(0, 1));
-    bracket(Offset(0, size.height), const Offset(1, 0), const Offset(0, -1));
-    bracket(Offset(size.width, size.height), const Offset(-1, 0), const Offset(0, -1));
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

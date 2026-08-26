@@ -32,6 +32,15 @@ class _FakeAnalisiCopertinaPipeline implements AnalisiCopertinaPipeline {
   }
 }
 
+/// Cattura il valore con cui lo stub `/scansione` sotto viene ripopato dopo
+/// il push a `/scansione/riepilogo` — usato per verificare il contratto tra
+/// `RiepilogoPage` e `ScansionePage._fine` (bugfix su #86: `ScansionePage`
+/// deve svuotare il proprio filmstrip solo quando il batch è stato
+/// davvero inviato alla pipeline, non ad ogni ritorno).
+class _RisultatoPop {
+  bool? valore;
+}
+
 // PNG 1x1 valido: basta a far decodere `Image.file` senza errori nei test.
 const _pngMinimo = <int>[
   0x89,
@@ -122,12 +131,13 @@ void main() {
       ),
   ];
 
-  Future<GoRouter> pumpRiepilogo(
+  Future<_RisultatoPop> pumpRiepilogo(
     WidgetTester tester,
     List<XFile> scansioni, {
     AnalisiCopertinaPipeline? pipeline,
     ComicsRepository? repository,
   }) async {
+    final risultato = _RisultatoPop();
     final router = GoRouter(
       initialLocation: '/scansione',
       routes: [
@@ -136,8 +146,12 @@ void main() {
           builder: (context, state) => Scaffold(
             body: Center(
               child: ElevatedButton(
-                onPressed: () =>
-                    context.push('/scansione/riepilogo', extra: scansioni),
+                onPressed: () async {
+                  risultato.valore = await context.push<bool>(
+                    '/scansione/riepilogo',
+                    extra: scansioni,
+                  );
+                },
                 child: const Text('vai al riepilogo'),
               ),
             ),
@@ -176,7 +190,7 @@ void main() {
     );
     await tester.tap(find.text('vai al riepilogo'));
     await tester.pumpAndSettle();
-    return router;
+    return risultato;
   }
 
   testWidgets('mostra una riga per Scansione con chip "In sospeso"', (
@@ -196,19 +210,26 @@ void main() {
   testWidgets('"Aggiungi altre" torna allo scanner (batch preservato)', (
     tester,
   ) async {
-    await pumpRiepilogo(tester, scansioniFinte(1));
+    final risultato = await pumpRiepilogo(tester, scansioniFinte(1));
 
     await tester.tap(find.text('Aggiungi altre'));
     await tester.pumpAndSettle();
 
     expect(find.text('vai al riepilogo'), findsOneWidget);
     expect(find.text('Riepilogo batch'), findsNothing);
+    expect(
+      risultato.valore,
+      isFalse,
+      reason:
+          'prima di "Fine" il batch non è ancora inviato alla pipeline: '
+          'ScansionePage non deve svuotare il proprio filmstrip (#86)',
+    );
   });
 
   testWidgets(
     '"Fine" avvia la pipeline ma resta sul riepilogo; "Vai alla Dashboard" naviga davvero (#59)',
     (tester) async {
-      await pumpRiepilogo(
+      final risultato = await pumpRiepilogo(
         tester,
         scansioniFinte(1),
         pipeline: _FakeAnalisiCopertinaPipeline(),
@@ -231,6 +252,41 @@ void main() {
 
       expect(find.text('Dashboard'), findsOneWidget);
       expect(find.text('Riepilogo batch'), findsNothing);
+      expect(
+        risultato.valore,
+        isTrue,
+        reason:
+            'il batch è stato inviato alla pipeline: ScansionePage deve '
+            'svuotare il proprio filmstrip prima della prossima sessione, '
+            'altrimenti una Scansione già completata rientra nel batch '
+            "successivo e ne blocca l'elaborazione (bug segnalato da utente, #86)",
+      );
+    },
+  );
+
+  testWidgets(
+    '"Aggiungi altre" dopo "Fine" segnala comunque il batch come inviato (righe ormai irrevocabili)',
+    (tester) async {
+      final risultato = await pumpRiepilogo(
+        tester,
+        scansioniFinte(1),
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+      );
+
+      await tester.tap(find.text('Fine'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Aggiungi altre'));
+      await tester.pumpAndSettle();
+
+      expect(
+        risultato.valore,
+        isTrue,
+        reason:
+            'dopo "Fine" le righe sono già passate ad avviaBatch (irrevocabili, '
+            'vedi doc di RiepilogoPage): tornare indietro deve comunque far '
+            'partire un batch nuovo in ScansionePage, non riaggiungersi a '
+            'quello già inviato',
+      );
     },
   );
 
@@ -457,6 +513,62 @@ void main() {
       expect(pipeline.batchRicevuti, [
         [for (final s in scansioni) s.path],
       ]);
+    },
+  );
+
+  testWidgets(
+    '"Fine" invia ad avviaBatch solo le righe In sospeso, non quelle già Completata (bug #86)',
+    (tester) async {
+      // Anche con `ScansionePage` che svuota il filmstrip tra un batch e
+      // l'altro (#86), questo stesso riepilogo può mostrare righe già in
+      // uno stato diverso da `pending` (es. uscita col back fisico invece
+      // di "Aggiungi altre"/"Vai alla Dashboard" mentre la pipeline di un
+      // "Fine" precedente era già partita) — rimandarle ad `avviaBatch`
+      // creerebbe una seconda riga `AnalisiCopertina` per lo stesso
+      // scansioneId, bloccando il resto del batch.
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = ComicsRepository(db);
+      final scansioni = scansioniFinte(2);
+      for (final s in scansioni) {
+        await repository.aggiungiScansione(image: s.path);
+      }
+      final scansioneIdCompletata = await repository.idScansionePerImmagine(
+        scansioni.first.path,
+      );
+      final analisiId = await repository.avviaAnalisiCopertina(
+        scansioneId: scansioneIdCompletata,
+      );
+      await repository.completaAnalisiCopertina(
+        id: analisiId,
+        rawResponse: '{}',
+      );
+
+      final pipeline = _FakeAnalisiCopertinaPipeline();
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        pipeline: pipeline,
+        repository: repository,
+      );
+      expect(find.text('Completata'), findsOneWidget);
+      expect(find.text('In sospeso'), findsOneWidget);
+
+      await tester.tap(find.text('Fine'));
+      await tester.pumpAndSettle();
+
+      expect(
+        pipeline.batchRicevuti,
+        [
+          [scansioni[1].path],
+        ],
+        reason: 'solo la Scansione ancora In sospeso deve entrare in avviaBatch',
+      );
     },
   );
 }
