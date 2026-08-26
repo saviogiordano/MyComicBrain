@@ -36,20 +36,80 @@ class ComicsRepository {
         );
   }
 
+  /// Riusa una Serie esistente con lo stesso nome (case-insensitive, a meno
+  /// di spazi iniziali/finali) se c'è, altrimenti ne crea una nuova — a
+  /// differenza di [aggiungiCreator] (nessun controllo di univocità, #64),
+  /// qui la deduplica è necessaria: una Serie è un raggruppamento e i KPI
+  /// "serie"/"serie complete"/"numeri mancanti" la contano per riga, quindi
+  /// una riga duplicata per scansione (es. più numeri della stessa collana)
+  /// gonfiava il conteggio serie invece di aggregarle.
   Future<int> aggiungiSerie({
     required String name,
     int? totalIssues,
     String? issn,
-  }) {
+  }) async {
+    final nomeNormalizzato = name.trim();
+    final esistente = await (_db.select(
+      _db.serieTable,
+    )..where((s) => s.name.lower().equals(nomeNormalizzato.toLowerCase()))).getSingleOrNull();
+    if (esistente != null) return esistente.id;
+
     return _db
         .into(_db.serieTable)
         .insert(
           SerieTableCompanion.insert(
-            name: name,
+            name: nomeNormalizzato,
             totalIssues: Value(totalIssues),
             issn: Value(issn),
           ),
         );
+  }
+
+  /// Ripara i dati creati prima della deduplica di [aggiungiSerie]: unisce
+  /// le Serie con lo stesso nome (case-insensitive, a meno di spazi) in
+  /// un'unica riga — quella con l'id più basso (la prima creata) — spostando
+  /// le Edizioni delle altre sulla superstite e cancellando le righe di
+  /// troppo. Idempotente e a costo trascurabile su una collezione personale,
+  /// va richiamata ad ogni avvio invece che tracciata come "già eseguita
+  /// una volta".
+  Future<void> unisciSerieDuplicate() {
+    return _db.transaction(() async {
+      final tutte = await _db.select(_db.serieTable).get();
+      final gruppi = <String, List<SerieTableData>>{};
+      for (final serie in tutte) {
+        gruppi.putIfAbsent(serie.name.trim().toLowerCase(), () => []).add(serie);
+      }
+
+      for (final gruppo in gruppi.values) {
+        if (gruppo.length < 2) continue;
+        gruppo.sort((a, b) => a.id.compareTo(b.id));
+        final superstite = gruppo.first;
+        final duplicate = gruppo.skip(1);
+
+        final totalIssues =
+            superstite.totalIssues ??
+            gruppo.map((s) => s.totalIssues).firstWhere((v) => v != null, orElse: () => null);
+        final issn =
+            superstite.issn ??
+            gruppo.map((s) => s.issn).firstWhere((v) => v != null, orElse: () => null);
+        if (totalIssues != superstite.totalIssues || issn != superstite.issn) {
+          await (_db.update(
+            _db.serieTable,
+          )..where((s) => s.id.equals(superstite.id))).write(
+            SerieTableCompanion(totalIssues: Value(totalIssues), issn: Value(issn)),
+          );
+        }
+
+        for (final dup in duplicate) {
+          await (_db.update(
+            _db.edizioni,
+          )..where((e) => e.serieId.equals(dup.id))).write(
+            EdizioniCompanion(serieId: Value(superstite.id)),
+          );
+          await (_db.delete(_db.serieTable)..where((s) => s.id.equals(dup.id))).go();
+        }
+      }
+    });
   }
 
   Future<int> aggiungiEdizione({

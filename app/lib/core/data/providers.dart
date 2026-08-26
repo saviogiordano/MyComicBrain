@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
 import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
@@ -26,10 +28,15 @@ final copertinaDownloaderProvider = Provider<CopertinaDownloader>(
 );
 
 final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
-  return ComicsRepository(
+  final repository = ComicsRepository(
     ref.watch(appDatabaseProvider),
     copertinaDownloader: ref.watch(copertinaDownloaderProvider),
   );
+  // Ripara le Serie duplicate create prima della deduplica di
+  // `aggiungiSerie` (bug osservato: il contatore "serie" della Dashboard
+  // contava una riga per scansione invece che per collana).
+  unawaited(repository.unisciSerieDuplicate());
+  return repository;
 });
 
 final imageCropServiceProvider = Provider<ImageCropService>(

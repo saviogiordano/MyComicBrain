@@ -110,6 +110,102 @@ void main() {
       final kpis = await repo.watchDashboardKpis().first;
       expect(kpis.numeroSerie, 1);
     });
+
+    test('più edizioni della stessa collana riusano la stessa Serie', () async {
+      final serieId1 = await repo.aggiungiSerie(name: 'Batman');
+      final serieId2 = await repo.aggiungiSerie(name: 'batman'); // stesso nome, case diverso
+      final serieId3 = await repo.aggiungiSerie(name: '  Batman  '); // spazi extra
+
+      expect(serieId2, serieId1);
+      expect(serieId3, serieId1);
+
+      for (var i = 1; i <= 3; i++) {
+        await edizioneConCopia(
+          titolo: 'Batman #$i',
+          serieId: serieId1,
+          issueNumber: i,
+          status: StatoCopia.posseduta,
+        );
+      }
+
+      final kpis = await repo.watchDashboardKpis().first;
+      expect(kpis.numeroSerie, 1);
+    });
+  });
+
+  group('unisciSerieDuplicate', () {
+    test('unisce Serie con lo stesso nome create prima della deduplica, riassegna le Edizioni '
+        'alla superstite (id più basso) e ne conserva "numeri totali"/ISSN se noti', () async {
+      // Simula i dati creati prima del fix su `aggiungiSerie`: più righe
+      // `serie` con lo stesso nome, inserite direttamente (bypassando la
+      // deduplica ora in `aggiungiSerie`).
+      final serieVecchia = await db
+          .into(db.serieTable)
+          .insert(SerieTableCompanion.insert(name: 'Batman'));
+      final serieNuova = await db
+          .into(db.serieTable)
+          .insert(
+            SerieTableCompanion.insert(
+              name: 'batman', // case diverso, stesso nome
+              totalIssues: const Value(12),
+            ),
+          );
+
+      final edizioneVecchia = await edizioneConCopia(
+        titolo: 'Batman #1',
+        serieId: serieVecchia,
+        issueNumber: 1,
+        status: StatoCopia.posseduta,
+      );
+      final edizioneNuova = await edizioneConCopia(
+        titolo: 'Batman #2',
+        serieId: serieNuova,
+        issueNumber: 2,
+        status: StatoCopia.posseduta,
+      );
+
+      await repo.unisciSerieDuplicate();
+
+      final serieRimaste = await db.select(db.serieTable).get();
+      expect(serieRimaste, hasLength(1));
+      expect(serieRimaste.single.id, serieVecchia);
+      expect(serieRimaste.single.totalIssues, 12); // recuperato dalla duplicata
+
+      final edizioni = await db.select(db.edizioni).get();
+      expect(
+        edizioni.map((e) => e.serieId),
+        everyElement(serieVecchia),
+        reason: 'entrambe le Edizioni devono puntare alla Serie superstite',
+      );
+      expect(edizioni.map((e) => e.id), containsAll([edizioneVecchia, edizioneNuova]));
+
+      final kpis = await repo.watchDashboardKpis().first;
+      expect(kpis.numeroSerie, 1);
+    });
+
+    test('non tocca Serie con nomi diversi', () async {
+      final serieA = await repo.aggiungiSerie(name: 'Batman');
+      final serieB = await db
+          .into(db.serieTable)
+          .insert(SerieTableCompanion.insert(name: 'Superman'));
+
+      await repo.unisciSerieDuplicate();
+
+      final serieRimaste = await db.select(db.serieTable).get();
+      expect(serieRimaste.map((s) => s.id), containsAll([serieA, serieB]));
+      expect(serieRimaste, hasLength(2));
+    });
+
+    test('è idempotente: una seconda chiamata non rompe nulla', () async {
+      await db.into(db.serieTable).insert(SerieTableCompanion.insert(name: 'Batman'));
+      await db.into(db.serieTable).insert(SerieTableCompanion.insert(name: 'Batman'));
+
+      await repo.unisciSerieDuplicate();
+      await repo.unisciSerieDuplicate();
+
+      final serieRimaste = await db.select(db.serieTable).get();
+      expect(serieRimaste, hasLength(1));
+    });
   });
 
   group('N duplicati', () {
