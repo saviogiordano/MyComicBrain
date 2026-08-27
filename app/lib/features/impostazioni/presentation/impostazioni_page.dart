@@ -1,28 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/impostazioni/application/ai_provider.dart';
 
 /// Schermo Impostazioni (§12, deciso su #104): elenco di righe stile
 /// impostazioni di sistema — il valore corrente in trailing, ogni riga apre
-/// una bottom sheet per modificarla. Stato ancora locale: la persistenza
-/// dietro `SettingsRepository` (deciso su #101/#102) non è ancora
-/// implementata.
-class ImpostazioniPage extends StatefulWidget {
+/// una bottom sheet per modificarla. Ogni modifica scrive subito nel
+/// `SettingsRepository` (#105): nessun pulsante "Salva" a livello di
+/// schermo, coerente col pattern "modifica singolo campo" del layout #104.
+class ImpostazioniPage extends ConsumerStatefulWidget {
   const ImpostazioniPage({super.key});
 
   @override
-  State<ImpostazioniPage> createState() => _ImpostazioniPageState();
+  ConsumerState<ImpostazioniPage> createState() => _ImpostazioniPageState();
 }
 
-class _ImpostazioniPageState extends State<ImpostazioniPage> {
+class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
+  bool _caricamento = true;
   AiProvider _provider = AiProvider.claude;
   String _apiKeyAi = '';
-  late String _modello = _provider.modelloDefault;
+  String _modello = '';
   String _urlLocale = '';
 
   String _apiKeyComics = '';
 
   ({bool loading, EsitoVerifica? esito}) _verifica = (loading: false, esito: null);
+
+  @override
+  void initState() {
+    super.initState();
+    _caricaImpostazioni();
+  }
+
+  /// Precarica lo stato dal `SettingsRepository` (#105): il provider AI e
+  /// il modello sono sincroni (`shared_preferences`), le API key passano
+  /// da `flutter_secure_storage` e vanno attese. Default a Claude quando
+  /// l'utente non ha ancora scelto un provider — stesso default di
+  /// `coverAnalysisClientProvider` (`core/data/providers.dart`).
+  Future<void> _caricaImpostazioni() async {
+    final repo = ref.read(settingsRepositoryProvider);
+    final provider = repo.providerAi ?? AiProvider.claude;
+    final apiKeyAi = await repo.apiKeyAi(provider);
+    final apiKeyComics = await repo.apiKeyComics;
+    if (!mounted) return;
+    setState(() {
+      _provider = provider;
+      _modello = repo.modello(provider) ?? provider.modelloDefault;
+      _apiKeyAi = apiKeyAi ?? '';
+      _urlLocale = repo.urlLocale ?? '';
+      _apiKeyComics = apiKeyComics ?? '';
+      _caricamento = false;
+    });
+  }
 
   Future<void> _verificaConfigurazione() async {
     setState(() => _verifica = (loading: true, esito: null));
@@ -44,17 +74,25 @@ class _ImpostazioniPageState extends State<ImpostazioniPage> {
         children: [
           for (final p in AiProvider.values)
             ListTile(
-              title: Text(p.label, style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary)),
+              title: Text(
+                p.label,
+                style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
+              ),
               trailing: p == _provider ? const Icon(Icons.check, color: AppColors.accent) : null,
               onTap: () => Navigator.pop(context, p),
             ),
         ],
       ),
     );
-    if (scelto == null) return;
+    if (scelto == null || scelto == _provider) return;
+    final repo = ref.read(settingsRepositoryProvider);
+    await repo.impostaProviderAi(scelto);
+    final apiKeyAi = await repo.apiKeyAi(scelto);
+    if (!mounted) return;
     setState(() {
       _provider = scelto;
-      _modello = scelto.modelloDefault;
+      _modello = repo.modello(scelto) ?? scelto.modelloDefault;
+      _apiKeyAi = apiKeyAi ?? '';
       _verifica = (loading: false, esito: null);
     });
   }
@@ -70,14 +108,17 @@ class _ImpostazioniPageState extends State<ImpostazioniPage> {
           children: [
             for (final m in curati)
               ListTile(
-                title: Text(m, style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary)),
+                title: Text(
+                  m,
+                  style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
+                ),
                 trailing: m == _modello ? const Icon(Icons.check, color: AppColors.accent) : null,
                 onTap: () => Navigator.pop(context, m),
               ),
           ],
         ),
       );
-      if (scelto != null) setState(() => _modello = scelto);
+      if (scelto != null) await _salvaModello(scelto);
       return;
     }
     final testo = await _apriSheetTestoLibero(
@@ -85,7 +126,13 @@ class _ImpostazioniPageState extends State<ImpostazioniPage> {
       valoreIniziale: _modello,
       hint: _provider == AiProvider.locale ? 'es. llama3' : null,
     );
-    if (testo != null) setState(() => _modello = testo);
+    if (testo != null) await _salvaModello(testo);
+  }
+
+  Future<void> _salvaModello(String modello) async {
+    await ref.read(settingsRepositoryProvider).impostaModello(_provider, modello);
+    if (!mounted) return;
+    setState(() => _modello = modello);
   }
 
   Future<String?> _apriSheetTestoLibero({
@@ -93,32 +140,55 @@ class _ImpostazioniPageState extends State<ImpostazioniPage> {
     required String valoreIniziale,
     String? hint,
     bool mascherato = false,
+    String? Function(String)? validatore,
   }) {
     final ctrl = TextEditingController(text: valoreIniziale);
+    String? errore;
     return showModalBottomSheet<String>(
       context: context,
       backgroundColor: AppColors.surfaceRaised,
       isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.md,
-          right: AppSpacing.md,
-          top: AppSpacing.md,
-          bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.md,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(titolo, style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary)),
-            const SizedBox(height: AppSpacing.sm),
-            TextField(controller: ctrl, obscureText: mascherato, autofocus: true, decoration: InputDecoration(hintText: hint)),
-            const SizedBox(height: AppSpacing.md),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, ctrl.text),
-              child: const Text('Salva'),
-            ),
-          ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: AppSpacing.md,
+            right: AppSpacing.md,
+            top: AppSpacing.md,
+            bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.md,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(titolo, style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary)),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: ctrl,
+                obscureText: mascherato,
+                autofocus: true,
+                decoration: InputDecoration(hintText: hint),
+              ),
+              if (errore != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  errore!,
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.amberStrong),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              FilledButton(
+                onPressed: () {
+                  final messaggio = validatore?.call(ctrl.text);
+                  if (messaggio != null) {
+                    setSheetState(() => errore = messaggio);
+                    return;
+                  }
+                  Navigator.pop(context, ctrl.text);
+                },
+                child: const Text('Salva'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -133,94 +203,128 @@ class _ImpostazioniPageState extends State<ImpostazioniPage> {
         title: const Text('Impostazioni'),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.xxl),
-          children: [
-            const SectionHeader(label: 'Provider AI'),
-            const SizedBox(height: AppSpacing.sm),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
+        child: _caricamento
+            ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                  AppSpacing.md,
+                  AppSpacing.xxl,
+                ),
                 children: [
-                  _Riga(titolo: 'Provider', valore: _provider.label, onTap: _apriSheetProvider),
-                  const _Divisore(),
-                  _Riga(
-                    titolo: 'API key',
-                    valore: _apiKeyAi.isEmpty ? 'Non impostata' : '••••••••',
-                    onTap: () async {
-                      final v = await _apriSheetTestoLibero(
-                        titolo: 'API key',
-                        valoreIniziale: _apiKeyAi,
-                        mascherato: true,
-                      );
-                      if (v != null) setState(() => _apiKeyAi = v);
-                    },
-                  ),
-                  const _Divisore(),
-                  _Riga(titolo: 'Modello', valore: _modello.isEmpty ? 'Non impostato' : _modello, onTap: _apriSheetModello),
-                  if (_provider.richiedeUrl) ...[
-                    const _Divisore(),
-                    _Riga(
-                      titolo: 'URL API',
-                      valore: _urlLocale.isEmpty ? 'Non impostato' : _urlLocale,
-                      onTap: () async {
-                        final v = await _apriSheetTestoLibero(
-                          titolo: 'URL API',
-                          valoreIniziale: _urlLocale,
-                          hint: 'http://localhost:11434/v1',
-                        );
-                        if (v != null) setState(() => _urlLocale = v);
-                      },
+                  const SectionHeader(label: 'Provider AI'),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        _Riga(
+                          titolo: 'Provider',
+                          valore: _provider.label,
+                          onTap: _apriSheetProvider,
+                        ),
+                        const _Divisore(),
+                        _Riga(
+                          titolo: 'API key',
+                          valore: _apiKeyAi.isEmpty ? 'Non impostata' : '••••••••',
+                          onTap: () async {
+                            final v = await _apriSheetTestoLibero(
+                              titolo: 'API key',
+                              valoreIniziale: _apiKeyAi,
+                              mascherato: true,
+                            );
+                            if (v == null) return;
+                            await ref
+                                .read(settingsRepositoryProvider)
+                                .impostaApiKeyAi(_provider, v);
+                            if (!mounted) return;
+                            setState(() => _apiKeyAi = v);
+                          },
+                        ),
+                        const _Divisore(),
+                        _Riga(
+                          titolo: 'Modello',
+                          valore: _modello.isEmpty ? 'Non impostato' : _modello,
+                          onTap: _apriSheetModello,
+                        ),
+                        if (_provider.richiedeUrl) ...[
+                          const _Divisore(),
+                          _Riga(
+                            titolo: 'URL API',
+                            valore: _urlLocale.isEmpty ? 'Non impostato' : _urlLocale,
+                            onTap: () async {
+                              final v = await _apriSheetTestoLibero(
+                                titolo: 'URL API',
+                                valoreIniziale: _urlLocale,
+                                hint: 'http://localhost:11434/v1',
+                                validatore: (testo) {
+                                  if (testo.trim().isEmpty) return null;
+                                  return urlLocaleValido(testo)
+                                      ? null
+                                      : 'URL non valido: usa un endpoint http/https completo.';
+                                },
+                              );
+                              if (v == null) return;
+                              await ref.read(settingsRepositoryProvider).impostaUrlLocale(v);
+                              if (!mounted) return;
+                              setState(() => _urlLocale = v);
+                            },
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            const SectionHeader(label: 'Provider fumetti'),
-            const SizedBox(height: AppSpacing.sm),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  const _Riga(titolo: 'Provider', valore: 'ComicVine'),
-                  const _Divisore(),
-                  _Riga(
-                    titolo: 'API key',
-                    valore: _apiKeyComics.isEmpty ? 'Non impostata' : '••••••••',
-                    onTap: () async {
-                      final v = await _apriSheetTestoLibero(
-                        titolo: 'API key',
-                        valoreIniziale: _apiKeyComics,
-                        mascherato: true,
-                      );
-                      if (v != null) setState(() => _apiKeyComics = v);
-                    },
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const SectionHeader(label: 'Provider fumetti'),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        const _Riga(titolo: 'Provider', valore: 'ComicVine'),
+                        const _Divisore(),
+                        _Riga(
+                          titolo: 'API key',
+                          valore: _apiKeyComics.isEmpty ? 'Non impostata' : '••••••••',
+                          onTap: () async {
+                            final v = await _apriSheetTestoLibero(
+                              titolo: 'API key',
+                              valoreIniziale: _apiKeyComics,
+                              mascherato: true,
+                            );
+                            if (v == null) return;
+                            await ref.read(settingsRepositoryProvider).impostaApiKeyComics(v);
+                            if (!mounted) return;
+                            setState(() => _apiKeyComics = v);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: _Riga(
+                      titolo: 'Verifica configurazione',
+                      valore: switch ((_verifica.loading, _verifica.esito)) {
+                        (true, _) => 'In corso…',
+                        (false, null) => 'Non verificata',
+                        (false, EsitoVerifica(:final ok, :final messaggio)) =>
+                          ok ? 'OK' : messaggio,
+                      },
+                      valoreColore: switch ((_verifica.loading, _verifica.esito)) {
+                        (true, _) => AppColors.textSecondary,
+                        (false, null) => AppColors.textMuted,
+                        (false, EsitoVerifica(:final ok)) =>
+                          ok ? AppColors.accent : AppColors.amberStrong,
+                      },
+                      onTap: _verifica.loading ? null : _verificaConfigurazione,
+                      mostraChevron: false,
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: _Riga(
-                titolo: 'Verifica configurazione',
-                valore: switch ((_verifica.loading, _verifica.esito)) {
-                  (true, _) => 'In corso…',
-                  (false, null) => 'Non verificata',
-                  (false, EsitoVerifica(:final ok, :final messaggio)) => ok ? 'OK' : messaggio,
-                },
-                valoreColore: switch ((_verifica.loading, _verifica.esito)) {
-                  (true, _) => AppColors.textSecondary,
-                  (false, null) => AppColors.textMuted,
-                  (false, EsitoVerifica(:final ok)) => ok ? AppColors.accent : AppColors.amberStrong,
-                },
-                onTap: _verifica.loading ? null : _verificaConfigurazione,
-                mostraChevron: false,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -240,8 +344,16 @@ class _SheetLista extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xs),
-            child: Text(titolo, style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary)),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.xs,
+            ),
+            child: Text(
+              titolo,
+              style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary),
+            ),
           ),
           ...children,
         ],
@@ -281,7 +393,9 @@ class _Riga extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
-                style: AppTypography.bodyMedium.copyWith(color: valoreColore ?? AppColors.textSecondary),
+                style: AppTypography.bodyMedium.copyWith(
+                  color: valoreColore ?? AppColors.textSecondary,
+                ),
               ),
             ),
             if (onTap != null && mostraChevron) ...[
@@ -300,6 +414,11 @@ class _Divisore extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Divider(height: 1, color: AppColors.borderSubtle, indent: AppSpacing.md, endIndent: AppSpacing.md);
+    return const Divider(
+      height: 1,
+      color: AppColors.borderSubtle,
+      indent: AppSpacing.md,
+      endIndent: AppSpacing.md,
+    );
   }
 }
