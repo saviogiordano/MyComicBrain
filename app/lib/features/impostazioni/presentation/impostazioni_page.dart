@@ -25,7 +25,12 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
 
   String _apiKeyComics = '';
 
-  ({bool loading, EsitoVerifica? esito}) _verifica = (
+  ({bool loading, EsitoVerifica? esito}) _verificaAi = (
+    loading: false,
+    esito: null,
+  );
+
+  ({bool loading, EsitoVerifica? esito}) _verificaComicVine = (
     loading: false,
     esito: null,
   );
@@ -57,14 +62,46 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     });
   }
 
-  Future<void> _verificaConfigurazione() async {
-    setState(() => _verifica = (loading: true, esito: null));
-    final esito = await verificaConfigurazione(
+  Future<void> _verificaConnessioneAi() async {
+    setState(() => _verificaAi = (loading: true, esito: null));
+    final esito = await verificaProviderAi(
       aiClient: () => ref.read(coverAnalysisClientProvider),
+    );
+    if (!mounted) return;
+    setState(() => _verificaAi = (loading: false, esito: esito));
+    if (!esito.ok) await _mostraErroreVerifica('Provider AI', esito.messaggio);
+  }
+
+  Future<void> _verificaConnessioneComicVine() async {
+    setState(() => _verificaComicVine = (loading: true, esito: null));
+    final esito = await verificaProviderComicVine(
       comicVineClient: () => ref.read(comicVineClientProvider),
     );
     if (!mounted) return;
-    setState(() => _verifica = (loading: false, esito: esito));
+    setState(() => _verificaComicVine = (loading: false, esito: esito));
+    if (!esito.ok) await _mostraErroreVerifica('Provider fumetti', esito.messaggio);
+  }
+
+  /// Mostra il motivo del fallimento per esteso in un popup (§12, richiesto
+  /// dall'utente dopo #111: il valore in `_Riga` è su una riga sola con
+  /// ellissi — un messaggio d'errore lungo, tipico soprattutto per
+  /// "Configurazione mancante: ..." (`errore_configurazione.dart`), risultava
+  /// tagliato e illeggibile lì).
+  Future<void> _mostraErroreVerifica(String titolo, String messaggio) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surfaceRaised,
+        title: Text(titolo),
+        content: Text(messaggio),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _apriSheetProvider() async {
@@ -99,7 +136,7 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
       _provider = scelto;
       _modello = repo.modello(scelto) ?? scelto.modelloDefault;
       _apiKeyAi = apiKeyAi ?? '';
-      _verifica = (loading: false, esito: null);
+      _verificaAi = (loading: false, esito: null);
     });
   }
 
@@ -299,6 +336,35 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                             },
                           ),
                         ],
+                        const _Divisore(),
+                        _Riga(
+                          titolo: 'Verifica connessione',
+                          valore: switch ((
+                            _verificaAi.loading,
+                            _verificaAi.esito,
+                          )) {
+                            (true, _) => 'In corso…',
+                            (false, null) => 'Non verificata',
+                            (
+                              false,
+                              EsitoVerifica(:final ok, :final messaggio),
+                            ) =>
+                              ok ? 'OK' : messaggio,
+                          },
+                          valoreColore: switch ((
+                            _verificaAi.loading,
+                            _verificaAi.esito,
+                          )) {
+                            (true, _) => AppColors.textSecondary,
+                            (false, null) => AppColors.textMuted,
+                            (false, EsitoVerifica(:final ok)) =>
+                              ok ? AppColors.accent : AppColors.amberStrong,
+                          },
+                          onTap: _verificaAi.loading
+                              ? null
+                              : _verificaConnessioneAi,
+                          mostraChevron: false,
+                        ),
                       ],
                     ),
                   ),
@@ -330,31 +396,36 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                             setState(() => _apiKeyComics = v);
                           },
                         ),
+                        const _Divisore(),
+                        _Riga(
+                          titolo: 'Verifica connessione',
+                          valore: switch ((
+                            _verificaComicVine.loading,
+                            _verificaComicVine.esito,
+                          )) {
+                            (true, _) => 'In corso…',
+                            (false, null) => 'Non verificata',
+                            (
+                              false,
+                              EsitoVerifica(:final ok, :final messaggio),
+                            ) =>
+                              ok ? 'OK' : messaggio,
+                          },
+                          valoreColore: switch ((
+                            _verificaComicVine.loading,
+                            _verificaComicVine.esito,
+                          )) {
+                            (true, _) => AppColors.textSecondary,
+                            (false, null) => AppColors.textMuted,
+                            (false, EsitoVerifica(:final ok)) =>
+                              ok ? AppColors.accent : AppColors.amberStrong,
+                          },
+                          onTap: _verificaComicVine.loading
+                              ? null
+                              : _verificaConnessioneComicVine,
+                          mostraChevron: false,
+                        ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  AppCard(
-                    padding: EdgeInsets.zero,
-                    child: _Riga(
-                      titolo: 'Verifica configurazione',
-                      valore: switch ((_verifica.loading, _verifica.esito)) {
-                        (true, _) => 'In corso…',
-                        (false, null) => 'Non verificata',
-                        (false, EsitoVerifica(:final ok, :final messaggio)) =>
-                          ok ? 'OK' : messaggio,
-                      },
-                      valoreColore: switch ((
-                        _verifica.loading,
-                        _verifica.esito,
-                      )) {
-                        (true, _) => AppColors.textSecondary,
-                        (false, null) => AppColors.textMuted,
-                        (false, EsitoVerifica(:final ok)) =>
-                          ok ? AppColors.accent : AppColors.amberStrong,
-                      },
-                      onTap: _verifica.loading ? null : _verificaConfigurazione,
-                      mostraChevron: false,
                     ),
                   ),
                 ],

@@ -27,33 +27,35 @@ bool urlLocaleValido(String url) {
       uri.host.isNotEmpty;
 }
 
-/// Verifica reale della configurazione corrente (§12, deciso su
-/// [Gestire l'assenza di configurazione: messaggi chiari quando manca provider/chiave](https://github.com/saviogiordano/MyComicBrain/issues/108)):
-/// interroga per davvero il provider AI e ComicVine con una chiamata minima
-/// ([CoverAnalysisClient.verificaConnessione]/[ComicVineClient.verificaConnessione]),
-/// invece del solo controllo sintattico di prima (raggiungibilità reale
-/// rimandata da #107 ai client, implementati su #106/#109 per tutti e
-/// quattro i provider AI). I client sono già risolti dalle Impostazioni
-/// correnti da chi chiama (`coverAnalysisClientProvider`/
-/// `comicVineClientProvider` in `core/data/providers.dart`).
-Future<EsitoVerifica> verificaConfigurazione({
+/// Verifica reale della configurazione del provider AI (§12, deciso su
+/// [Gestire l'assenza di configurazione: messaggi chiari quando manca provider/chiave](https://github.com/saviogiordano/MyComicBrain/issues/108),
+/// separata per sezione su richiesta esplicita dell'utente): interroga per
+/// davvero il provider AI configurato con una chiamata minima
+/// ([CoverAnalysisClient.verificaConnessione]), invece del solo controllo
+/// sintattico di prima (raggiungibilità reale rimandata da #107 al client,
+/// implementato su #106/#109 per tutti e quattro i provider AI). Il client è
+/// già risolto dalle Impostazioni correnti da chi chiama
+/// (`coverAnalysisClientProvider` in `core/data/providers.dart`).
+Future<EsitoVerifica> verificaProviderAi({
   required CoverAnalysisClient Function() aiClient,
+}) async {
+  final errore = await _verificaUna(() => aiClient().verificaConnessione());
+  return errore == null
+      ? const EsitoVerifica.successo()
+      : EsitoVerifica.errore(errore);
+}
+
+/// Verifica reale della configurazione ComicVine — vedi [verificaProviderAi],
+/// stessa logica applicata al provider fumetti.
+Future<EsitoVerifica> verificaProviderComicVine({
   required ComicVineClient Function() comicVineClient,
 }) async {
-  final erroreAi = await _verificaUna(() => aiClient().verificaConnessione());
-  final erroreComicVine = await _verificaUna(
+  final errore = await _verificaUna(
     () => comicVineClient().verificaConnessione(),
   );
-
-  if (erroreAi == null && erroreComicVine == null) {
-    return const EsitoVerifica.successo();
-  }
-  return EsitoVerifica.errore(
-    [
-      if (erroreAi != null) 'AI: $erroreAi',
-      if (erroreComicVine != null) 'ComicVine: $erroreComicVine',
-    ].join(' · '),
-  );
+  return errore == null
+      ? const EsitoVerifica.successo()
+      : EsitoVerifica.errore(errore);
 }
 
 Future<String?> _verificaUna(Future<void> Function() chiamata) async {

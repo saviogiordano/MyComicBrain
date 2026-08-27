@@ -98,11 +98,11 @@ abstract interface class ComicVineClient {
     required String? publisher,
   });
 
-  /// Verifica reale della configurazione corrente (§12, deciso su #108):
-  /// una ricerca minima per controllare che l'API key sia valida — usata dal
-  /// bottone "Verifica configurazione" delle Impostazioni. Ritorna
-  /// normalmente se la configurazione è valida, altrimenti solleva
-  /// [ComicVineException].
+  /// Verifica reale della configurazione corrente (§12, deciso su #108/#111):
+  /// una ricerca minima per controllare che l'API key sia valida — usata dalla
+  /// riga "Verifica connessione" della sezione "Provider fumetti" nelle
+  /// Impostazioni. Ritorna normalmente se la configurazione è valida,
+  /// altrimenti solleva [ComicVineException].
   Future<void> verificaConnessione();
 }
 

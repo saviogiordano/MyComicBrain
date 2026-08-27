@@ -11,7 +11,7 @@ import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
 
-/// [CoverAnalysisClient] finto per "Verifica configurazione" (#108): non
+/// [CoverAnalysisClient] finto per "Verifica connessione" (#108/#111): non
 /// implementa [estraiCopertina] (non usato da questo schermo).
 class _FakeCoverAnalysisClient implements CoverAnalysisClient {
   _FakeCoverAnalysisClient({this.eccezione});
@@ -29,7 +29,7 @@ class _FakeCoverAnalysisClient implements CoverAnalysisClient {
   }
 }
 
-/// [ComicVineClient] finto per "Verifica configurazione" (#108): non
+/// [ComicVineClient] finto per "Verifica connessione" (#108/#111): non
 /// implementa [cercaIssue] (non usato da questo schermo).
 class _FakeComicVineClient implements ComicVineClient {
   _FakeComicVineClient({this.eccezione});
@@ -168,8 +168,8 @@ void main() {
     expect(await repo.apiKeyComics, 'chiave-comicvine');
   });
 
-  group('"Verifica configurazione" (#108: test reale del provider)', () {
-    testWidgets('con AI e ComicVine entrambi raggiungibili mostra "OK"', (
+  group('"Verifica connessione" (#111: test reale del provider, per sezione)', () {
+    testWidgets('con AI raggiungibile mostra "OK" solo nella sezione AI', (
       tester,
     ) async {
       await pumpImpostazioni(
@@ -178,12 +178,13 @@ void main() {
         comicVineClient: _FakeComicVineClient(),
       );
 
-      expect(find.text('Non verificata'), findsOneWidget);
+      expect(find.text('Non verificata'), findsNWidgets(2));
 
-      await tester.tap(find.text('Verifica configurazione'));
+      await tester.tap(find.text('Verifica connessione').first);
       await tester.pumpAndSettle();
 
       expect(find.text('OK'), findsOneWidget);
+      expect(find.text('Non verificata'), findsOneWidget);
     });
 
     testWidgets('con la chiave AI non valida mostra il motivo del fallimento', (
@@ -199,13 +200,38 @@ void main() {
         comicVineClient: _FakeComicVineClient(),
       );
 
-      await tester.tap(find.text('Verifica configurazione'));
+      await tester.tap(find.text('Verifica connessione').first);
       await tester.pumpAndSettle();
 
+      // Il motivo del fallimento compare per esteso in un popup (oltre che,
+      // troncato, nella riga) — un messaggio lungo nella sola riga a una
+      // riga con ellissi risultava illeggibile.
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Provider AI'), findsOneWidget);
       expect(
-        find.textContaining('AI: Claude API 401: chiave non valida'),
-        findsOneWidget,
+        find.textContaining('Claude API 401: chiave non valida'),
+        findsNWidgets(2),
       );
+
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    });
+
+    testWidgets('con ComicVine raggiungibile mostra "OK" solo nella sezione ComicVine', (
+      tester,
+    ) async {
+      await pumpImpostazioni(
+        tester,
+        aiClient: _FakeCoverAnalysisClient(),
+        comicVineClient: _FakeComicVineClient(),
+      );
+
+      await tester.tap(find.text('Verifica connessione').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('OK'), findsOneWidget);
+      expect(find.text('Non verificata'), findsOneWidget);
     });
 
     testWidgets(
@@ -223,13 +249,19 @@ void main() {
           ),
         );
 
-        await tester.tap(find.text('Verifica configurazione'));
+        await tester.tap(find.text('Verifica connessione').last);
         await tester.pumpAndSettle();
 
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(find.text('Provider fumetti'), findsOneWidget);
         expect(
-          find.textContaining('ComicVine: ComicVine status_code 100'),
-          findsOneWidget,
+          find.textContaining('ComicVine status_code 100'),
+          findsNWidgets(2),
         );
+
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
       },
     );
   });
