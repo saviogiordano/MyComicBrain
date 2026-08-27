@@ -10,6 +10,7 @@ import 'package:mycomicbrain/features/dashboard/presentation/dashboard_page.dart
 import 'package:mycomicbrain/features/duplicati/presentation/duplicati_page.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/conferma_candidato_page.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/inserisci_manualmente_page.dart';
+import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
 import 'package:mycomicbrain/features/login/presentation/login_page.dart';
 import 'package:mycomicbrain/features/ricerca/presentation/ricerca_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/revisione_page.dart';
@@ -94,9 +95,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [
+              // Sostituisce Statistiche nella bottom bar (requisito 12,
+              // deciso su #100): Statistiche resta raggiungibile come rotta
+              // standalone finché non si decide dove riposizionarla nella UI.
               GoRoute(
-                path: '/statistiche',
-                builder: (context, state) => const StatistichePage(),
+                path: '/impostazioni',
+                builder: (context, state) => const ImpostazioniPage(),
               ),
             ],
           ),
@@ -160,6 +164,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/duplicati',
         builder: (context, state) => const DuplicatiPage(),
+      ),
+      // Rotta standalone: non più nella bottom bar dopo lo scambio con
+      // Impostazioni (requisito 12, deciso su #100) — resta raggiungibile
+      // finché non si decide un nuovo punto di ingresso in UI.
+      GoRoute(
+        path: '/statistiche',
+        builder: (context, state) => const StatistichePage(),
       ),
       GoRoute(
         path: '/assistente',

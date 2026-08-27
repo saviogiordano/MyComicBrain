@@ -192,7 +192,7 @@ Confidenza: 96%
 [ Inserisci manualmente ]
 ```
 
-L'AI non deve modificare automaticamente la collezione senza controllo dell'utente: ogni candidato richiede conferma esplicita, e l'utente deve poter modificare qualsiasi campo prima del salvataggio, scegliere un'alternativa tra i candidati proposti o inserire i dati manualmente (vedi anche le soglie di confidenza in §22).
+L'AI non deve modificare automaticamente la collezione senza controllo dell'utente: ogni candidato richiede conferma esplicita, e l'utente deve poter modificare qualsiasi campo prima del salvataggio, scegliere un'alternativa tra i candidati proposti o inserire i dati manualmente (vedi anche le soglie di confidenza in §23).
 
 ## 6.4 Acquisizione dei metadati
 
@@ -388,7 +388,7 @@ In una fase successiva l'AI potrebbe stimare automaticamente la condizione della
 
 # 9. Organizzazione della collezione
 
-La schermata "Collezione" è la vista di sfoglio del catalogo: una voce fissa della navigazione principale (accanto a Dashboard, Scansione, Cerca, Statistiche) che mostra tutte le Edizioni possedute in una griglia di copertine, filtrabile e ordinabile. Dalla Dashboard, i punti di accesso con un intento esplicito (es. "aggiunti nel mese corrente") aprono la Collezione già pre-filtrata di conseguenza; aperta senza un intento, mostra l'intero catalogo.
+La schermata "Collezione" è la vista di sfoglio del catalogo: una voce fissa della navigazione principale (accanto a Dashboard, Scansione, Cerca, Impostazioni) che mostra tutte le Edizioni possedute in una griglia di copertine, filtrabile e ordinabile. Dalla Dashboard, i punti di accesso con un intento esplicito (es. "aggiunti nel mese corrente") aprono la Collezione già pre-filtrata di conseguenza; aperta senza un intento, mostra l'intero catalogo.
 
 L'utente deve poter filtrare e ordinare i fumetti attraverso:
 
@@ -469,7 +469,42 @@ L'app deve poter calcolare automaticamente:
 
 ---
 
-# 12. Rilevamento duplicati
+# 12. Impostazioni
+
+L'app deve fornire una schermata di impostazioni personalizzate che permetta all'utente di configurare i provider esterni usati dall'AI e dal recupero metadati, senza dover modificare la build dell'app.
+
+## Provider AI
+
+- provider AI: OpenAI, Claude, OpenRouter, locale (LLM self-hosted);
+- API key del provider selezionato;
+- modello LLM da utilizzare (dipende dal provider scelto);
+- URL dell'API, richiesto solo quando il provider è locale.
+
+## Provider database fumetti
+
+- provider dei metadati bibliografici (default: ComicVine);
+- API key del provider selezionato.
+
+Le impostazioni sostituiscono, per l'utente finale, la configurazione oggi fissata a build-time (vedi §6.4). L'app deve continuare a funzionare senza richiedere una nuova build ogni volta che l'utente cambia provider o chiave.
+
+Esempio:
+
+```text
+Impostazioni
+
+Provider AI: [ Claude ▾ ]
+API key: ••••••••••••
+Modello: [ claude-sonnet-4.5 ▾ ]
+
+Provider fumetti: [ ComicVine ▾ ]
+API key: ••••••••••••
+```
+
+Le chiavi API sono dati sensibili e devono essere conservate in modo sicuro sul device (vedi §27 Sicurezza).
+
+---
+
+# 13. Rilevamento duplicati
 
 Durante una nuova scansione il sistema deve verificare se l'edizione è già presente.
 
@@ -492,7 +527,7 @@ L'utente può scegliere:
 
 ---
 
-# 13. AI Assistant
+# 14. AI Assistant
 
 L'app può includere un assistente conversazionale.
 
@@ -514,7 +549,7 @@ L'assistente deve operare sui dati della collezione dell'utente e non inventare 
 
 ---
 
-# 14. Statistiche
+# 15. Statistiche
 
 Dashboard statistiche:
 
@@ -533,7 +568,7 @@ Dashboard statistiche:
 
 ---
 
-# 15. Posizione fisica
+# 16. Posizione fisica
 
 L'utente deve poter indicare dove è conservato ogni fumetto.
 
@@ -551,7 +586,7 @@ La posizione deve essere ricercabile.
 
 ---
 
-# 16. Importazione ed esportazione
+# 17. Importazione ed esportazione
 
 L'app deve supportare:
 
@@ -571,7 +606,7 @@ L'app deve supportare:
 
 ---
 
-# 17. Sincronizzazione
+# 18. Sincronizzazione
 
 La collezione deve essere sincronizzata tra:
 
@@ -588,7 +623,7 @@ Il sistema deve supportare:
 
 ---
 
-# 18. Offline mode
+# 19. Offline mode
 
 Le funzioni fondamentali devono essere utilizzabili offline:
 
@@ -604,7 +639,7 @@ Le operazioni effettuate offline devono essere sincronizzate successivamente.
 
 ---
 
-# 19. Privacy
+# 20. Privacy
 
 L'utente deve avere il controllo sulle proprie fotografie e sui propri dati.
 
@@ -623,7 +658,7 @@ Per utenti europei sarebbe inoltre opportuno prevedere una configurazione dell'i
 
 ---
 
-# 20. Architettura tecnica
+# 21. Architettura tecnica
 
 Una possibile architettura:
 
@@ -655,7 +690,7 @@ Una possibile architettura:
 
 ---
 
-# 21. Modello dati principale
+# 22. Modello dati principale
 
 ## Comic
 
@@ -766,7 +801,7 @@ matched_fields
 
 ---
 
-# 22. Requisiti AI
+# 23. Requisiti AI
 
 Il sistema AI deve:
 
@@ -800,7 +835,7 @@ Le soglie dovranno essere calibrate con dati reali durante il beta testing.
 
 ---
 
-# 23. Learning loop
+# 24. Learning loop
 
 Il sistema deve poter imparare dalle correzioni dell'utente.
 
@@ -825,7 +860,7 @@ Importante: il sistema deve distinguere tra apprendimento globale del modello e 
 
 ---
 
-# 24. Gestione degli errori
+# 25. Gestione degli errori
 
 L'app deve gestire:
 
@@ -853,7 +888,7 @@ Azioni:
 
 ---
 
-# 25. Performance
+# 26. Performance
 
 Obiettivi MVP:
 
@@ -875,7 +910,7 @@ Scan 4 → waiting
 
 ---
 
-# 26. Sicurezza
+# 27. Sicurezza
 
 Il backend deve prevedere:
 
@@ -892,7 +927,7 @@ Il backend deve prevedere:
 
 ---
 
-# 27. MVP
+# 28. MVP
 
 Per la prima versione eviterei di implementare tutto.
 
@@ -943,7 +978,7 @@ Per la prima versione eviterei di implementare tutto.
 
 ---
 
-# 28. Funzioni per la versione 2
+# 29. Funzioni per la versione 2
 
 Dopo aver validato il flusso principale:
 
@@ -964,7 +999,7 @@ Dopo aver validato il flusso principale:
 
 ---
 
-# 29. Funzioni avanzate future
+# 30. Funzioni avanzate future
 
 ## Riconoscimento della variant
 
@@ -997,7 +1032,7 @@ Il database deve quindi trattare **edizione** e **storia/opera** come concetti d
 
 ---
 
-# 30. Requisito fondamentale: separare opera, edizione e copia
+# 31. Requisito fondamentale: separare opera, edizione e copia
 
 Questa è una scelta architetturale molto importante.
 
@@ -1020,7 +1055,7 @@ In questo modo l'app non considera erroneamente due versioni diverse dello stess
 
 ---
 
-# 31. Criteri di successo del prodotto
+# 32. Criteri di successo del prodotto
 
 Il progetto può essere considerato riuscito se un utente riesce a:
 
@@ -1060,7 +1095,7 @@ Altri KPI:
 
 ---
 
-# 32. Priorità delle funzionalità
+# 33. Priorità delle funzionalità
 
 | Funzionalità | Priorità |
 |---|---|
@@ -1079,6 +1114,7 @@ Altri KPI:
 | Posizione fisica | P1 |
 | Import/export | P1 |
 | Statistiche | P1 |
+| Impostazioni | P1 |
 | Assistente AI | P2 |
 | Scansione batch | P2 |
 | Stima valore | P2 |
@@ -1087,7 +1123,7 @@ Altri KPI:
 
 ---
 
-# 33. Principio UX principale
+# 34. Principio UX principale
 
 L'app non dovrebbe sembrare un database da compilare.
 

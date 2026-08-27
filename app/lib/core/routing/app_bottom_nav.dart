@@ -33,7 +33,7 @@ const _destinations = [
     raised: true,
   ),
   _NavDestination(icon: Icons.search_outlined, selectedIcon: Icons.search, label: 'Cerca'),
-  _NavDestination(icon: Icons.bar_chart_outlined, selectedIcon: Icons.bar_chart, label: 'Statistiche'),
+  _NavDestination(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Impostazioni'),
 ];
 
 /// Barra di navigazione a 5 voci con pulsante scan centrale rialzato —

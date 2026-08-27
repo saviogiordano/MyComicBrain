@@ -5,7 +5,7 @@ Catalogo personale di fumetti: cattura una collezione fisica con scansione/ricon
 ## Language
 
 **Opera**:
-La storia/testata a prescindere da come è stata pubblicata (es. "Spider-Man"). Distinta dall'edizione (§32 dei requisiti).
+La storia/testata a prescindere da come è stata pubblicata (es. "Spider-Man"). Distinta dall'edizione (§31 dei requisiti).
 _Avoid_: Titolo, fumetto (quando si intende l'opera e non l'edizione)
 
 **Edizione**:
