@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
@@ -462,6 +463,7 @@ class ComicsRepository {
     String? barcode,
     String? price,
     String? releaseDate,
+    int? year,
     int? pageCount,
     String? language,
     String? color,
@@ -488,6 +490,7 @@ class ComicsRepository {
         barcode: Value(barcode),
         price: Value(price),
         releaseDate: Value(releaseDate),
+        year: Value(year),
         pageCount: Value(pageCount),
         language: Value(language),
         color: Value(color),
@@ -791,7 +794,7 @@ class ComicsRepository {
     }
 
     final issueNumberLabel =
-        _nonVuoto(analisi.issueNumberLabel) ?? candidato.issueNumberLabel;
+        numeroPulito(analisi.issueNumberLabel) ?? candidato.issueNumberLabel;
     // `barcode` prima di `isbn`, stessa priorità di
     // `InserisciManualmentePage._prefill`: sulle edizioni italiane da
     // edicola è quasi sempre l'EAN periodico quello riportato in copertina.
@@ -807,6 +810,7 @@ class ComicsRepository {
       issueNumberLabel: issueNumberLabel,
       coverImage: await _coverImagePerCandidato(candidato),
       releaseDate: _nonVuoto(analisi.releaseDate),
+      year: analisi.year ?? candidato.year,
       coverPrice: _nonVuoto(analisi.price),
       pageCount: analisi.pageCount,
       language: _nonVuoto(analisi.language),
@@ -1372,6 +1376,7 @@ ORDER BY p.n
         issueNumberLabel: edizione.issueNumberLabel,
         coverImage: await risolviCoverImage(edizione.coverImage),
         releaseDate: edizione.releaseDate,
+        year: edizione.year,
         coverPrice: edizione.coverPrice,
         pageCount: edizione.pageCount,
         language: edizione.language,

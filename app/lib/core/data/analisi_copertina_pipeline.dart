@@ -94,6 +94,7 @@ class AnalisiCopertinaPipeline {
         barcode: risultato.barcode,
         price: risultato.price,
         releaseDate: risultato.releaseDate,
+        year: risultato.year,
         pageCount: risultato.pageCount,
         language: risultato.language,
         color: risultato.color,

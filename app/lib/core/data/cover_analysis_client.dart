@@ -19,8 +19,12 @@ const coverAnalysisPrompt =
     'pixel assolute [x1, y1, x2, y2] (angolo in alto a sinistra e in basso '
     "a destra) rispetto all'immagine ricevuta. Riporta releaseDate "
     "esattamente come stampato sulla copertina (es. 'dicembre 2010'), senza "
-    'normalizzarlo in una data ISO. pageCount è il numero di pagine se '
-    'riportato in copertina o su un\'etichetta di prezzo/formato. language è '
+    'normalizzarlo in una data ISO. year è il solo anno di pubblicazione '
+    "(numero a 4 cifre, es. 2010) se leggibile in copertina o sull'indicia, "
+    'null se non determinabile con sicurezza — non dedurlo da releaseDate '
+    'se releaseDate stesso è incerto o assente. pageCount è il numero di '
+    'pagine se riportato in copertina o su un\'etichetta di prezzo/formato. '
+    'language è '
     "la lingua del testo di copertina (es. 'italiano'). color è "
     "'a colori' o 'bianco e nero' se determinabile dalla copertina stessa. "
     'issn è il codice ISSN della collana/testata periodica se presente, '
@@ -102,6 +106,9 @@ const Map<String, Object?> coverAnalysisJsonSchema = {
     'releaseDate': {
       'type': ['string', 'null'],
     },
+    'year': {
+      'type': ['integer', 'null'],
+    },
     'pageCount': {
       'type': ['integer', 'null'],
     },
@@ -175,6 +182,7 @@ const Map<String, Object?> coverAnalysisJsonSchema = {
     'barcode',
     'price',
     'releaseDate',
+    'year',
     'pageCount',
     'language',
     'color',
@@ -210,6 +218,7 @@ class CoverAnalysisResult {
     required this.barcode,
     required this.price,
     required this.releaseDate,
+    required this.year,
     required this.pageCount,
     required this.language,
     required this.color,
@@ -233,6 +242,13 @@ class CoverAnalysisResult {
   final String? barcode;
   final String? price;
   final String? releaseDate;
+
+  /// Anno di pubblicazione (§9, deciso su #81) letto direttamente in
+  /// copertina/indicia dall'AI come campo strutturato a sé — non derivato a
+  /// runtime da [releaseDate] (testo grezzo tipo "mese/anno", troppo
+  /// fragile da parsare, vedi il commento gemello su
+  /// `AnalisiCopertinaTable.year`).
+  final int? year;
   final int? pageCount;
   final String? language;
   final String? color;

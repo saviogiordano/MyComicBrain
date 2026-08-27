@@ -308,6 +308,7 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
               _griglia('Serie', e.serieName),
               _griglia('Editore', e.publisher),
               _griglia('Data', e.releaseDate),
+              _griglia('Anno', e.year?.toString()),
               _griglia('Lingua', e.language),
               _griglia('EAN/ISBN', e.ean),
               _griglia('Volume', e.volume),

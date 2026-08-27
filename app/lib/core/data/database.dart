@@ -202,6 +202,11 @@ class AnalisiCopertinaTable extends Table {
   /// non parsati. Vedi i commenti gemelli su `Edizioni`/`SerieTable` per il
   /// perché di ciascun formato.
   TextColumn get releaseDate => text().nullable()();
+
+  /// Anno di pubblicazione (§9, deciso su #81) letto dall'AI come campo
+  /// strutturato a sé — vedi il commento gemello su `Edizioni.year` per il
+  /// perché non è derivato a runtime da [releaseDate].
+  IntColumn get year => integer().nullable()();
   IntColumn get pageCount => integer().nullable()();
   TextColumn get language => text().nullable()();
   TextColumn get color => text().nullable()();
@@ -448,11 +453,14 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from9To10: (m, schema) async {
+        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.year);
+      },
       from8To9: (m, schema) async {
         await m.addColumn(schema.edizioni, schema.edizioni.year);
         await m.addColumn(schema.edizioni, schema.edizioni.format);

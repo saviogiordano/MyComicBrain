@@ -55,6 +55,7 @@ class EdizioneDettaglio {
     this.issueNumberLabel,
     this.coverImage,
     this.releaseDate,
+    this.year,
     this.coverPrice,
     this.pageCount,
     this.language,
@@ -78,6 +79,10 @@ class EdizioneDettaglio {
   final String? issueNumberLabel;
   final String? coverImage;
   final String? releaseDate;
+
+  /// Anno di pubblicazione (§9, deciso su #81) — vedi il commento gemello
+  /// su `Edizioni.year`.
+  final int? year;
   final String? coverPrice;
   final int? pageCount;
   final String? language;

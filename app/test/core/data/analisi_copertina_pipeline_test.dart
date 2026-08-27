@@ -56,6 +56,7 @@ const _risultatoCompleto = CoverAnalysisResult(
   barcode: '076194130132500111',
   price: '€ 1,50',
   releaseDate: 'giugno 1988',
+  year: 1988,
   pageCount: 32,
   language: 'inglese',
   color: 'a colori',
@@ -125,6 +126,7 @@ void main() {
     expect(analisi.barcode, '076194130132500111');
     expect(analisi.price, '€ 1,50');
     expect(analisi.releaseDate, 'giugno 1988');
+    expect(analisi.year, 1988);
     expect(analisi.pageCount, 32);
     expect(analisi.language, 'inglese');
     expect(analisi.color, 'a colori');

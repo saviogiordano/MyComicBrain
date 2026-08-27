@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
@@ -39,6 +40,7 @@ class _InserisciManualmentePageState
   final _editore = TextEditingController();
   final _numero = TextEditingController();
   final _releaseDate = TextEditingController();
+  final _year = TextEditingController();
   final _coverPrice = TextEditingController();
   final _pageCount = TextEditingController();
   final _language = TextEditingController();
@@ -67,6 +69,7 @@ class _InserisciManualmentePageState
     _editore.dispose();
     _numero.dispose();
     _releaseDate.dispose();
+    _year.dispose();
     _coverPrice.dispose();
     _pageCount.dispose();
     _language.dispose();
@@ -113,8 +116,9 @@ class _InserisciManualmentePageState
       _serie.text = seriesName;
     }
     _editore.text = _valore(analisi.publisher);
-    _numero.text = _valore(analisi.issueNumberLabel);
+    _numero.text = numeroPulito(analisi.issueNumberLabel) ?? '';
     _releaseDate.text = _valore(analisi.releaseDate);
+    _year.text = analisi.year?.toString() ?? '';
     _coverPrice.text = _valore(analisi.price);
     _pageCount.text = analisi.pageCount?.toString() ?? '';
     _language.text = _valore(analisi.language);
@@ -151,9 +155,10 @@ class _InserisciManualmentePageState
       serieId = await repository.aggiungiSerie(name: nomeSerie);
     }
 
-    final numero = _numero.text.trim();
+    final numero = numeroPulito(_numero.text) ?? '';
     final editore = _editore.text.trim();
     final releaseDate = _releaseDate.text.trim();
+    final year = _year.text.trim();
     final coverPrice = _coverPrice.text.trim();
     final pageCount = _pageCount.text.trim();
     final language = _language.text.trim();
@@ -171,6 +176,7 @@ class _InserisciManualmentePageState
       issueNumberLabel: numero.isEmpty ? null : numero,
       coverImage: _coverImageRelativo,
       releaseDate: releaseDate.isEmpty ? null : releaseDate,
+      year: year.isEmpty ? null : int.tryParse(year),
       coverPrice: coverPrice.isEmpty ? null : coverPrice,
       pageCount: pageCount.isEmpty ? null : int.tryParse(pageCount),
       language: language.isEmpty ? null : language,
@@ -263,6 +269,14 @@ class _InserisciManualmentePageState
               'Data di pubblicazione',
               'es. dicembre 2010',
               key: const Key('campo-data-pubblicazione'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _campo(
+              _year,
+              'Anno',
+              'es. 2010',
+              key: const Key('campo-anno'),
+              keyboardType: TextInputType.number,
             ),
             const SizedBox(height: AppSpacing.xs),
             _campo(

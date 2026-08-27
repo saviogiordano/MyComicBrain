@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/comic_vine_api_config.dart';
+import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/text_similarity.dart';
 
 const _searchUrl = 'https://comicvine.gamespot.com/api/search/';
@@ -139,7 +140,7 @@ class ComicVineHttpClient implements ComicVineClient {
     required String? issueNumberLabel,
     required String? publisher,
   }) async {
-    final numeroLabel = _numeroPulito(issueNumberLabel);
+    final numeroLabel = numeroPulito(issueNumberLabel);
     final serieQuery = _campiNonVuoti([seriesName, title]).join(' ');
 
     if (serieQuery.isNotEmpty &&
@@ -286,18 +287,6 @@ class ComicVineHttpClient implements ComicVineClient {
       siteDetailUrl: issue['site_detail_url'] as String,
     );
   }
-}
-
-/// L'etichetta di numero letta da una copertina (es. `"#700"`), ripulita
-/// del prefisso `#` e degli spazi — `null`/vuota resta tale. `issue_number`
-/// su ComicVine non porta mai il `#` (verificato dal vivo): un'etichetta
-/// non ripulita non trova mai corrispondenza né nel filtro esatto per
-/// numero né nel parsing intero per [_selezionaVolumi], facendo fallire in
-/// silenzio la ricerca per volume introdotta su #60 per qualunque numero
-/// letto con il prefisso `#`, la convenzione più comune sulle copertine USA.
-String? _numeroPulito(String? label) {
-  final pulito = label?.trim().replaceFirst(RegExp(r'^#\s*'), '');
-  return pulito == null || pulito.isEmpty ? null : pulito;
 }
 
 /// Sceglie fino a [_massimoVolumiCandidati] volumi da interrogare per

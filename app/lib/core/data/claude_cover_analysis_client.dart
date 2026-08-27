@@ -95,6 +95,7 @@ class ClaudeCoverAnalysisClient implements CoverAnalysisClient {
       barcode: extracted['barcode'] as String?,
       price: extracted['price'] as String?,
       releaseDate: extracted['releaseDate'] as String?,
+      year: extracted['year'] as int?,
       pageCount: extracted['pageCount'] as int?,
       language: extracted['language'] as String?,
       color: extracted['color'] as String?,

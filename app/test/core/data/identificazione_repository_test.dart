@@ -60,6 +60,7 @@ void main() {
     String? barcode,
     String? price,
     String? releaseDate,
+    int? year,
     int? pageCount,
     String? language,
     String? color,
@@ -82,6 +83,7 @@ void main() {
       barcode: barcode,
       price: price,
       releaseDate: releaseDate,
+      year: year,
       pageCount: pageCount,
       language: language,
       color: color,
@@ -795,6 +797,108 @@ void main() {
       expect(opera.title, 'Amazing Fantasy 15');
       expect(serie.name, 'Amazing Fantasy');
       expect(edizione.issueNumberLabel, '15');
+    },
+  );
+
+  test(
+    'confermaCandidato esterno: il prefisso "#" letto dall\'AI nel numero '
+    'viene ripulito prima del salvataggio, altrimenti issueNumber resta '
+    'null (int.tryParse("#12") fallisce) e issueNumberLabel resta sporco',
+    () async {
+      final scansioneId = await scansioneConAnalisi(issueNumberLabel: '#12');
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'Some Comic',
+        coverImageUrl: 'https://comicvine.example/12.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(edizione.issueNumberLabel, '12');
+      expect(edizione.issueNumber, 12);
+    },
+  );
+
+  test(
+    "confermaCandidato esterno: l'anno letto dall'AI (campo strutturato a "
+    'sé, deciso su #81) viene salvato sull\'Edizione',
+    () async {
+      final scansioneId = await scansioneConAnalisi(year: 1988);
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'Some Comic',
+        coverImageUrl: 'https://comicvine.example/12.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(edizione.year, 1988);
+    },
+  );
+
+  test(
+    "confermaCandidato esterno: l'anno del Candidato è il ripiego quando "
+    "l'AI non l'ha letto",
+    () async {
+      final scansioneId = await scansioneConAnalisi();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'Some Comic',
+        year: 1988,
+        coverImageUrl: 'https://comicvine.example/12.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(edizione.year, 1988);
     },
   );
 
