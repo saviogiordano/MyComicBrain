@@ -1,21 +1,32 @@
+import 'package:mycomicbrain/core/data/preferences.dart';
 import 'package:mycomicbrain/core/data/secure_storage.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Unico punto di accesso alle Impostazioni (§12, schema deciso su
 /// [Persistenza e sicurezza delle impostazioni](https://github.com/saviogiordano/MyComicBrain/issues/101)):
 /// instrada i campi sensibili (API key) a [SecureStorage] e quelli non
-/// sensibili a `SharedPreferences`. I chiamanti (schermo Impostazioni #107,
-/// client AI/ComicVine migrati su #106) non sanno dove vive fisicamente
-/// ciascun campo.
+/// sensibili a [Preferences]. I chiamanti (schermo Impostazioni #107, client
+/// AI/ComicVine migrati su #106) non sanno dove vive fisicamente ciascun
+/// campo.
 class SettingsRepository {
   SettingsRepository({
-    required SharedPreferences preferences,
+    required Preferences preferences,
     SecureStorage secureStorage = const FlutterSecureStorageAdapter(),
   }) : _preferences = preferences,
        _secureStorage = secureStorage;
 
-  final SharedPreferences _preferences;
+  /// Repository in memoria, senza alcun plugin Flutter dietro — per i test
+  /// e per gli script `tool/verify_*.dart`, eseguiti con `dart run` fuori da
+  /// un binding Flutter (dove `SharedPreferences`/`flutter_secure_storage`
+  /// non funzionerebbero, essendo backed da platform channel).
+  factory SettingsRepository.inMemoria() {
+    return SettingsRepository(
+      preferences: _PreferenzeInMemoria(),
+      secureStorage: _SecureStorageInMemoria(),
+    );
+  }
+
+  final Preferences _preferences;
   final SecureStorage _secureStorage;
 
   static const _chiaveProviderAi = 'settings.aiProvider';
@@ -80,5 +91,32 @@ class SettingsRepository {
   /// `null` o stringa vuota cancella la chiave salvata.
   Future<void> impostaApiKeyComics(String? apiKey) {
     return _secureStorage.write(_chiaveApiKeyComics, apiKey);
+  }
+}
+
+class _PreferenzeInMemoria implements Preferences {
+  final Map<String, String> _valori = {};
+
+  @override
+  String? getString(String key) => _valori[key];
+
+  @override
+  Future<void> setString(String key, String value) async =>
+      _valori[key] = value;
+}
+
+class _SecureStorageInMemoria implements SecureStorage {
+  final Map<String, String> _valori = {};
+
+  @override
+  Future<String?> read(String key) async => _valori[key];
+
+  @override
+  Future<void> write(String key, String? value) async {
+    if (value == null || value.isEmpty) {
+      _valori.remove(key);
+    } else {
+      _valori[key] = value;
+    }
   }
 }

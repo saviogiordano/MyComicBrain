@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mycomicbrain/core/data/preferences.dart';
 import 'package:mycomicbrain/core/data/secure_storage.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
@@ -28,7 +29,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     secureStorage = _SecureStorageInMemoria();
     repo = SettingsRepository(
-      preferences: await SharedPreferences.getInstance(),
+      preferences: SharedPreferencesAdapter(
+        await SharedPreferences.getInstance(),
+      ),
       secureStorage: secureStorage,
     );
   });
@@ -73,13 +76,16 @@ void main() {
     expect(repo.urlLocale, 'http://localhost:11434/v1');
   });
 
-  test('apiKeyComics è uno scalare singolo indipendente dalle API key AI', () async {
-    await repo.impostaApiKeyComics('chiave-comicvine');
-    await repo.impostaApiKeyAi(AiProvider.claude, 'chiave-claude');
+  test(
+    'apiKeyComics è uno scalare singolo indipendente dalle API key AI',
+    () async {
+      await repo.impostaApiKeyComics('chiave-comicvine');
+      await repo.impostaApiKeyAi(AiProvider.claude, 'chiave-claude');
 
-    expect(await repo.apiKeyComics, 'chiave-comicvine');
-    expect(await repo.apiKeyAi(AiProvider.claude), 'chiave-claude');
-  });
+      expect(await repo.apiKeyComics, 'chiave-comicvine');
+      expect(await repo.apiKeyAi(AiProvider.claude), 'chiave-claude');
+    },
+  );
 
   test('impostare apiKeyComics a stringa vuota la cancella', () async {
     await repo.impostaApiKeyComics('chiave-comicvine');

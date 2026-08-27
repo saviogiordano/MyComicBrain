@@ -7,13 +7,14 @@ import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
-import 'package:mycomicbrain/core/data/cover_analysis_provider_config.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/identificazione_pipeline.dart';
 import 'package:mycomicbrain/core/data/image_crop_service.dart';
 import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
+import 'package:mycomicbrain/core/data/preferences.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
+import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
@@ -46,7 +47,9 @@ final copertinaDownloaderProvider = Provider<CopertinaDownloader>(
 /// #105): unico punto di accesso alle Impostazioni per lo schermo omonimo
 /// (#107) e per i client AI/ComicVine migrati su #106.
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
-  return SettingsRepository(preferences: ref.watch(sharedPreferencesProvider));
+  return SettingsRepository(
+    preferences: SharedPreferencesAdapter(ref.watch(sharedPreferencesProvider)),
+  );
 });
 
 final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
@@ -70,29 +73,39 @@ final scansioneStorageProvider = Provider<ScansioneStorage>(
 );
 
 final claudeCoverAnalysisClientProvider = Provider<ClaudeCoverAnalysisClient>(
-  (ref) => ClaudeCoverAnalysisClient(),
+  (ref) => ClaudeCoverAnalysisClient(
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  ),
 );
 
 final openAiCoverAnalysisClientProvider = Provider<OpenAiCoverAnalysisClient>(
-  (ref) => OpenAiCoverAnalysisClient(),
+  (ref) => OpenAiCoverAnalysisClient(
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  ),
 );
 
-/// Il client del provider AI configurato per l'Analisi Copertina — Claude di
-/// default, OpenAI se `--dart-define=COVER_ANALYSIS_PROVIDER=openai` (vedi
-/// `CoverAnalysisProviderConfig`). Nessuna UI per la scelta.
+/// Il client del provider AI configurato per l'Analisi Copertina, letto a
+/// runtime dalle Impostazioni (§12, deciso su #101/#102, migrato su #106) —
+/// non più a build-time. Default a Claude quando l'utente non ha ancora
+/// scelto un provider (nessuno schermo Impostazioni funzionante prima di
+/// #107). OpenRouter/Locale non hanno ancora un client implementato (#109):
+/// selezionarli fa fallire l'Analisi Copertina con un errore esplicito
+/// invece di usare in silenzio il provider sbagliato.
 final coverAnalysisClientProvider = Provider<CoverAnalysisClient>((ref) {
-  return switch (CoverAnalysisProviderConfig.kind) {
-    CoverAnalysisProviderKind.openai => ref.watch(
-      openAiCoverAnalysisClientProvider,
-    ),
-    CoverAnalysisProviderKind.claude => ref.watch(
-      claudeCoverAnalysisClientProvider,
+  final providerAi = ref.watch(settingsRepositoryProvider).providerAi;
+  return switch (providerAi) {
+    AiProvider.openai => ref.watch(openAiCoverAnalysisClientProvider),
+    AiProvider.claude || null => ref.watch(claudeCoverAnalysisClientProvider),
+    AiProvider.openRouter || AiProvider.locale => throw CoverAnalysisException(
+      'Provider AI "${providerAi.label}" non ancora supportato per l\'Analisi Copertina.',
     ),
   };
 });
 
 final comicVineClientProvider = Provider<ComicVineClient>(
-  (ref) => ComicVineHttpClient(),
+  (ref) => ComicVineHttpClient(
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  ),
 );
 
 /// Orchestratore dell'Identificazione (§6.3, #53/#57): genera e persiste i

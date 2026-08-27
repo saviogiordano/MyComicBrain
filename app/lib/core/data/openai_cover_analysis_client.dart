@@ -3,13 +3,10 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
-import 'package:mycomicbrain/core/data/openai_api_config.dart';
+import 'package:mycomicbrain/core/data/settings_repository.dart';
+import 'package:mycomicbrain/core/domain/ai_provider.dart';
 
 const _apiUrl = 'https://api.openai.com/v1/responses';
-
-/// Modello multimodale di fascia intermedia, comparabile a `claude-sonnet-5`
-/// per rapporto capacità/costo — vision + structured outputs strict mode.
-const _model = 'gpt-5.6-terra';
 
 /// `text.format` della Responses API di OpenAI (structured outputs, strict
 /// mode): incapsula lo schema condiviso [coverAnalysisJsonSchema]. Lo strict
@@ -27,40 +24,69 @@ const Map<String, Object?> _textFormat = {
 /// campi leggibili (§6.1) e di computer vision (§6.2) di una copertina —
 /// provider alternativo a Claude, stesso prompt/schema condivisi (vedi
 /// `cover_analysis_client.dart`) per restituire risultati comparabili.
-/// Nessun SDK Dart ufficiale: client HTTP generico verso l'API REST.
+/// Nessun SDK Dart ufficiale: client HTTP generico verso l'API REST. API key
+/// e modello letti a runtime da [SettingsRepository] (§12, deciso su
+/// #101/#102, migrato su #106) — non più a build-time. Modello di default
+/// `gpt-5.6-terra` (fascia intermedia, comparabile a `claude-sonnet-5` per
+/// rapporto capacità/costo — vision + structured outputs strict mode), vedi
+/// `AiProvider.openai.modelloDefault`.
 class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
-  OpenAiCoverAnalysisClient({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
+  OpenAiCoverAnalysisClient({
+    SettingsRepository? settingsRepository,
+    http.Client? httpClient,
+  }) : _settingsRepository = settingsRepository,
+       _httpClient = httpClient ?? http.Client();
 
+  final SettingsRepository? _settingsRepository;
   final http.Client _httpClient;
 
   @override
   Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
+    final settingsRepository = _settingsRepository;
+    if (settingsRepository == null) {
+      throw CoverAnalysisException(
+        'Nessuna API key configurata per OpenAI nelle Impostazioni.',
+      );
+    }
+    final apiKey = await settingsRepository.apiKeyAi(AiProvider.openai);
+    if (apiKey == null || apiKey.isEmpty) {
+      throw CoverAnalysisException(
+        'Nessuna API key configurata per OpenAI nelle Impostazioni.',
+      );
+    }
+    final modello =
+        settingsRepository.modello(AiProvider.openai) ??
+        AiProvider.openai.modelloDefault;
+
     final http.Response response;
     try {
-      response = await _httpClient.post(
-        Uri.parse(_apiUrl),
-        headers: {
-          'Authorization': 'Bearer ${OpenAiApiConfig.apiKey}',
-          'content-type': 'application/json',
-        },
-        body: jsonEncode({
-          'model': _model,
-          'input': [
-            {
-              'role': 'user',
-              'content': [
-                {'type': 'input_text', 'text': coverAnalysisPrompt},
+      response = await _httpClient
+          .post(
+            Uri.parse(_apiUrl),
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'content-type': 'application/json',
+            },
+            body: jsonEncode({
+              'model': modello,
+              'input': [
                 {
-                  'type': 'input_image',
-                  'image_url': 'data:image/jpeg;base64,${base64Encode(immagineJpeg)}',
-                  'detail': 'high',
+                  'role': 'user',
+                  'content': [
+                    {'type': 'input_text', 'text': coverAnalysisPrompt},
+                    {
+                      'type': 'input_image',
+                      'image_url':
+                          'data:image/jpeg;base64,${base64Encode(immagineJpeg)}',
+                      'detail': 'high',
+                    },
+                  ],
                 },
               ],
-            },
-          ],
-          'text': {'format': _textFormat},
-        }),
-      ).timeout(coverAnalysisTimeout);
+              'text': {'format': _textFormat},
+            }),
+          )
+          .timeout(coverAnalysisTimeout);
     } on Object catch (e) {
       throw CoverAnalysisException("Chiamata all'API OpenAI fallita: $e");
     }
@@ -68,7 +94,9 @@ class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
     final responseBody = utf8.decode(response.bodyBytes);
 
     if (response.statusCode != 200) {
-      throw CoverAnalysisException('OpenAI API ${response.statusCode}: $responseBody');
+      throw CoverAnalysisException(
+        'OpenAI API ${response.statusCode}: $responseBody',
+      );
     }
 
     return _leggiRisposta(responseBody);
@@ -82,7 +110,8 @@ class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
       final messaggio = output.cast<Map<String, dynamic>>().firstWhere(
         (o) => o['type'] == 'message',
       );
-      final content = (messaggio['content'] as List<dynamic>).cast<Map<String, dynamic>>();
+      final content = (messaggio['content'] as List<dynamic>)
+          .cast<Map<String, dynamic>>();
 
       // Un rifiuto del modello (structured outputs, strict mode) arriva
       // come blocco `refusal` distinto da `output_text` — non è JSON
@@ -93,7 +122,9 @@ class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
         orElse: () => const <String, dynamic>{},
       );
       if (rifiuto.isNotEmpty) {
-        throw CoverAnalysisException('OpenAI ha rifiutato la richiesta: ${rifiuto['refusal']}');
+        throw CoverAnalysisException(
+          'OpenAI ha rifiutato la richiesta: ${rifiuto['refusal']}',
+        );
       }
 
       final blocco = content.firstWhere((c) => c['type'] == 'output_text');
@@ -119,8 +150,10 @@ class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
       color: extracted['color'] as String?,
       issn: extracted['issn'] as String?,
       characters: (extracted['characters'] as List<dynamic>).cast<String>(),
-      coverStyleTags: (extracted['coverStyleTags'] as List<dynamic>).cast<String>(),
-      visualElementTags: (extracted['visualElementTags'] as List<dynamic>).cast<String>(),
+      coverStyleTags: (extracted['coverStyleTags'] as List<dynamic>)
+          .cast<String>(),
+      visualElementTags: (extracted['visualElementTags'] as List<dynamic>)
+          .cast<String>(),
       recognizedPublisherLogo: extracted['recognizedPublisherLogo'] as String?,
       recognizedSeriesLogo: extracted['recognizedSeriesLogo'] as String?,
       printingType: extracted['printingType'] as String?,

@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
+import 'package:mycomicbrain/core/data/settings_repository.dart';
+import 'package:mycomicbrain/core/domain/ai_provider.dart';
 
 /// `http.Client` finto: risponde con [risposta]/[statusCode] fissi e
 /// registra l'ultima richiesta inviata, senza rete reale.
@@ -18,7 +20,10 @@ class _FakeHttpClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     ultimaRichiesta = request;
-    return http.StreamedResponse(Stream.value(utf8.encode(risposta)), statusCode);
+    return http.StreamedResponse(
+      Stream.value(utf8.encode(risposta)),
+      statusCode,
+    );
   }
 }
 
@@ -46,6 +51,12 @@ String _rispostaRifiuto(String motivo) => jsonEncode({
   ],
 });
 
+Future<SettingsRepository> _settingsConApiKey() async {
+  final settings = SettingsRepository.inMemoria();
+  await settings.impostaApiKeyAi(AiProvider.openai, 'chiave-test');
+  return settings;
+}
+
 const Map<String, dynamic> _campiCompleti = {
   'title': 'Amazing Spider-Man',
   'issueNumberLabel': '300',
@@ -68,30 +79,40 @@ const Map<String, dynamic> _campiCompleti = {
 };
 
 void main() {
-  test('estrae i campi grezzi da una risposta 200 conforme allo schema', () async {
-    final client = OpenAiCoverAnalysisClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaOpenAi(_campiCompleti)),
-    );
+  test(
+    'estrae i campi grezzi da una risposta 200 conforme allo schema',
+    () async {
+      final client = OpenAiCoverAnalysisClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClient(
+          statusCode: 200,
+          risposta: _rispostaOpenAi(_campiCompleti),
+        ),
+      );
 
-    final risultato = await client.estraiCopertina(Uint8List(0));
+      final risultato = await client.estraiCopertina(Uint8List(0));
 
-    expect(risultato.title, 'Amazing Spider-Man');
-    expect(risultato.issueNumberLabel, '300');
-    expect(risultato.publisher, 'Marvel');
-    expect(risultato.seriesName, 'The Amazing Spider-Man');
-    expect(risultato.isbn, isNull);
-    expect(risultato.barcode, '076194130132500111');
-    expect(risultato.price, '€ 1,50');
-    expect(risultato.raw['authors'], ['David Michelinie']);
-    expect(risultato.characters, ['Spider-Man', 'Venom']);
-    expect(risultato.coverStyleTags, ['stile realistico']);
-    expect(risultato.visualElementTags, ['sfondo con esplosione']);
-    expect(risultato.recognizedPublisherLogo, 'Marvel');
-    expect(risultato.recognizedSeriesLogo, isNull);
-    expect(risultato.printingType, 'Direct Edition');
-    expect(risultato.classificazione, 'Rated T+');
-    expect(risultato.description, 'Peter Parker affronta Venom in un confronto decisivo.');
-  });
+      expect(risultato.title, 'Amazing Spider-Man');
+      expect(risultato.issueNumberLabel, '300');
+      expect(risultato.publisher, 'Marvel');
+      expect(risultato.seriesName, 'The Amazing Spider-Man');
+      expect(risultato.isbn, isNull);
+      expect(risultato.barcode, '076194130132500111');
+      expect(risultato.price, '€ 1,50');
+      expect(risultato.raw['authors'], ['David Michelinie']);
+      expect(risultato.characters, ['Spider-Man', 'Venom']);
+      expect(risultato.coverStyleTags, ['stile realistico']);
+      expect(risultato.visualElementTags, ['sfondo con esplosione']);
+      expect(risultato.recognizedPublisherLogo, 'Marvel');
+      expect(risultato.recognizedSeriesLogo, isNull);
+      expect(risultato.printingType, 'Direct Edition');
+      expect(risultato.classificazione, 'Rated T+');
+      expect(
+        risultato.description,
+        'Peter Parker affronta Venom in un confronto decisivo.',
+      );
+    },
+  );
 
   test("un campo non trovato resta null, non genera un'eccezione", () async {
     final campi = Map<String, dynamic>.from(_campiCompleti)
@@ -101,7 +122,11 @@ void main() {
       ..['classificazione'] = null
       ..['description'] = null;
     final client = OpenAiCoverAnalysisClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaOpenAi(campi)),
+      settingsRepository: await _settingsConApiKey(),
+      httpClient: _FakeHttpClient(
+        statusCode: 200,
+        risposta: _rispostaOpenAi(campi),
+      ),
     );
 
     final risultato = await client.estraiCopertina(Uint8List(0));
@@ -117,9 +142,12 @@ void main() {
     'un rifiuto del modello (blocco refusal) solleva CoverAnalysisException con il motivo',
     () async {
       final client = OpenAiCoverAnalysisClient(
+        settingsRepository: await _settingsConApiKey(),
         httpClient: _FakeHttpClient(
           statusCode: 200,
-          risposta: _rispostaRifiuto('non posso identificare persone reali in una foto'),
+          risposta: _rispostaRifiuto(
+            'non posso identificare persone reali in una foto',
+          ),
         ),
       );
 
@@ -138,6 +166,7 @@ void main() {
 
   test('una risposta HTTP non-2xx solleva CoverAnalysisException', () async {
     final client = OpenAiCoverAnalysisClient(
+      settingsRepository: await _settingsConApiKey(),
       httpClient: _FakeHttpClient(statusCode: 500, risposta: 'errore interno'),
     );
 
@@ -147,14 +176,41 @@ void main() {
     );
   });
 
-  test('una risposta senza messaggio in output solleva CoverAnalysisException', () async {
-    final client = OpenAiCoverAnalysisClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: jsonEncode({'output': <dynamic>[]})),
-    );
+  test(
+    'una risposta senza messaggio in output solleva CoverAnalysisException',
+    () async {
+      final client = OpenAiCoverAnalysisClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClient(
+          statusCode: 200,
+          risposta: jsonEncode({'output': <dynamic>[]}),
+        ),
+      );
 
-    await expectLater(
-      () => client.estraiCopertina(Uint8List(0)),
-      throwsA(isA<CoverAnalysisException>()),
-    );
-  });
+      await expectLater(
+        () => client.estraiCopertina(Uint8List(0)),
+        throwsA(isA<CoverAnalysisException>()),
+      );
+    },
+  );
+
+  test(
+    'senza API key configurata nelle Impostazioni solleva CoverAnalysisException senza chiamare la rete',
+    () async {
+      final fake = _FakeHttpClient(
+        statusCode: 200,
+        risposta: _rispostaOpenAi(_campiCompleti),
+      );
+      final client = OpenAiCoverAnalysisClient(
+        settingsRepository: SettingsRepository.inMemoria(),
+        httpClient: fake,
+      );
+
+      await expectLater(
+        () => client.estraiCopertina(Uint8List(0)),
+        throwsA(isA<CoverAnalysisException>()),
+      );
+      expect(fake.ultimaRichiesta, isNull);
+    },
+  );
 }

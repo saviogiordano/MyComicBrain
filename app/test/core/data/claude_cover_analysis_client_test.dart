@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
+import 'package:mycomicbrain/core/data/settings_repository.dart';
+import 'package:mycomicbrain/core/domain/ai_provider.dart';
 
 /// `http.Client` finto: risponde con [risposta]/[statusCode] fissi e
 /// registra l'ultima richiesta inviata, senza rete reale.
@@ -18,8 +20,17 @@ class _FakeHttpClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     ultimaRichiesta = request;
-    return http.StreamedResponse(Stream.value(utf8.encode(risposta)), statusCode);
+    return http.StreamedResponse(
+      Stream.value(utf8.encode(risposta)),
+      statusCode,
+    );
   }
+}
+
+Future<SettingsRepository> _settingsConApiKey() async {
+  final settings = SettingsRepository.inMemoria();
+  await settings.impostaApiKeyAi(AiProvider.claude, 'chiave-test');
+  return settings;
 }
 
 String _rispostaClaude(Map<String, dynamic> campi) => jsonEncode({
@@ -50,54 +61,72 @@ const Map<String, dynamic> _campiCompleti = {
 };
 
 void main() {
-  test('estrae i campi grezzi da una risposta 200 conforme allo schema', () async {
-    final client = ClaudeCoverAnalysisClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaClaude(_campiCompleti)),
-    );
+  test(
+    'estrae i campi grezzi da una risposta 200 conforme allo schema',
+    () async {
+      final client = ClaudeCoverAnalysisClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClient(
+          statusCode: 200,
+          risposta: _rispostaClaude(_campiCompleti),
+        ),
+      );
 
-    final risultato = await client.estraiCopertina(Uint8List(0));
+      final risultato = await client.estraiCopertina(Uint8List(0));
 
-    expect(risultato.title, 'Amazing Spider-Man');
-    expect(risultato.issueNumberLabel, '300');
-    expect(risultato.publisher, 'Marvel');
-    expect(risultato.seriesName, 'The Amazing Spider-Man');
-    expect(risultato.isbn, isNull);
-    expect(risultato.barcode, '076194130132500111');
-    expect(risultato.price, '€ 1,50');
-    expect(risultato.raw['authors'], ['David Michelinie']);
-    expect(risultato.characters, ['Spider-Man', 'Venom']);
-    expect(risultato.coverStyleTags, ['stile realistico']);
-    expect(risultato.visualElementTags, ['sfondo con esplosione']);
-    expect(risultato.recognizedPublisherLogo, 'Marvel');
-    expect(risultato.recognizedSeriesLogo, isNull);
-    expect(risultato.printingType, 'Direct Edition');
-    expect(risultato.classificazione, 'Rated T+');
-    expect(risultato.description, 'Peter Parker affronta Venom in un confronto decisivo.');
-  });
+      expect(risultato.title, 'Amazing Spider-Man');
+      expect(risultato.issueNumberLabel, '300');
+      expect(risultato.publisher, 'Marvel');
+      expect(risultato.seriesName, 'The Amazing Spider-Man');
+      expect(risultato.isbn, isNull);
+      expect(risultato.barcode, '076194130132500111');
+      expect(risultato.price, '€ 1,50');
+      expect(risultato.raw['authors'], ['David Michelinie']);
+      expect(risultato.characters, ['Spider-Man', 'Venom']);
+      expect(risultato.coverStyleTags, ['stile realistico']);
+      expect(risultato.visualElementTags, ['sfondo con esplosione']);
+      expect(risultato.recognizedPublisherLogo, 'Marvel');
+      expect(risultato.recognizedSeriesLogo, isNull);
+      expect(risultato.printingType, 'Direct Edition');
+      expect(risultato.classificazione, 'Rated T+');
+      expect(
+        risultato.description,
+        'Peter Parker affronta Venom in un confronto decisivo.',
+      );
+    },
+  );
 
-  test("un campo non trovato da Claude resta null, non genera un'eccezione", () async {
-    final campi = Map<String, dynamic>.from(_campiCompleti)
-      ..['title'] = null
-      ..['publisher'] = null
-      ..['printingType'] = null
-      ..['classificazione'] = null
-      ..['description'] = null;
-    final client = ClaudeCoverAnalysisClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaClaude(campi)),
-    );
+  test(
+    "un campo non trovato da Claude resta null, non genera un'eccezione",
+    () async {
+      final campi = Map<String, dynamic>.from(_campiCompleti)
+        ..['title'] = null
+        ..['publisher'] = null
+        ..['printingType'] = null
+        ..['classificazione'] = null
+        ..['description'] = null;
+      final client = ClaudeCoverAnalysisClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClient(
+          statusCode: 200,
+          risposta: _rispostaClaude(campi),
+        ),
+      );
 
-    final risultato = await client.estraiCopertina(Uint8List(0));
+      final risultato = await client.estraiCopertina(Uint8List(0));
 
-    expect(risultato.title, isNull);
-    expect(risultato.publisher, isNull);
-    expect(risultato.printingType, isNull);
-    expect(risultato.classificazione, isNull);
-    expect(
-      risultato.description,
-      isNull,
-      reason: "l'AI ammette incertezza sul fumetto invece di indovinare la descrizione",
-    );
-  });
+      expect(risultato.title, isNull);
+      expect(risultato.publisher, isNull);
+      expect(risultato.printingType, isNull);
+      expect(risultato.classificazione, isNull);
+      expect(
+        risultato.description,
+        isNull,
+        reason:
+            "l'AI ammette incertezza sul fumetto invece di indovinare la descrizione",
+      );
+    },
+  );
 
   test(
     'un elemento di computer vision non riconosciuto resta lista vuota/null, non genera '
@@ -110,7 +139,11 @@ void main() {
         ..['recognizedPublisherLogo'] = null
         ..['recognizedSeriesLogo'] = null;
       final client = ClaudeCoverAnalysisClient(
-        httpClient: _FakeHttpClient(statusCode: 200, risposta: _rispostaClaude(campi)),
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClient(
+          statusCode: 200,
+          risposta: _rispostaClaude(campi),
+        ),
       );
 
       final risultato = await client.estraiCopertina(Uint8List(0));
@@ -125,6 +158,7 @@ void main() {
 
   test('una risposta HTTP non-2xx solleva CoverAnalysisException', () async {
     final client = ClaudeCoverAnalysisClient(
+      settingsRepository: await _settingsConApiKey(),
       httpClient: _FakeHttpClient(statusCode: 500, risposta: 'errore interno'),
     );
 
@@ -134,14 +168,53 @@ void main() {
     );
   });
 
-  test('una risposta senza contenuto testuale solleva CoverAnalysisException', () async {
-    final client = ClaudeCoverAnalysisClient(
-      httpClient: _FakeHttpClient(statusCode: 200, risposta: jsonEncode({'content': <dynamic>[]})),
-    );
+  test(
+    'una risposta senza contenuto testuale solleva CoverAnalysisException',
+    () async {
+      final client = ClaudeCoverAnalysisClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClient(
+          statusCode: 200,
+          risposta: jsonEncode({'content': <dynamic>[]}),
+        ),
+      );
 
-    await expectLater(
-      () => client.estraiCopertina(Uint8List(0)),
-      throwsA(isA<CoverAnalysisException>()),
-    );
-  });
+      await expectLater(
+        () => client.estraiCopertina(Uint8List(0)),
+        throwsA(isA<CoverAnalysisException>()),
+      );
+    },
+  );
+
+  test(
+    'senza API key configurata nelle Impostazioni solleva CoverAnalysisException senza chiamare la rete',
+    () async {
+      final fake = _FakeHttpClient(
+        statusCode: 200,
+        risposta: _rispostaClaude(_campiCompleti),
+      );
+      final client = ClaudeCoverAnalysisClient(
+        settingsRepository: SettingsRepository.inMemoria(),
+        httpClient: fake,
+      );
+
+      await expectLater(
+        () => client.estraiCopertina(Uint8List(0)),
+        throwsA(isA<CoverAnalysisException>()),
+      );
+      expect(fake.ultimaRichiesta, isNull);
+    },
+  );
+
+  test(
+    'senza SettingsRepository (client costruito senza DI) solleva CoverAnalysisException',
+    () async {
+      final client = ClaudeCoverAnalysisClient();
+
+      await expectLater(
+        () => client.estraiCopertina(Uint8List(0)),
+        throwsA(isA<CoverAnalysisException>()),
+      );
+    },
+  );
 }

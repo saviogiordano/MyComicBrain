@@ -25,24 +25,9 @@ Il codice generato da Drift (`lib/core/data/database.g.dart`) è già committato
 dart run build_runner build --delete-conflicting-outputs
 ```
 
-## Configurare le chiavi API dei provider AI
+## Configurare i provider AI e Comic Vine
 
-L'analisi AI della copertina (OCR §6.1 + computer vision §6.2) chiama l'API di un provider AI direttamente dal client — Claude di default, OpenAI come alternativa selezionabile (vedi `CoverAnalysisProviderConfig`). Le chiavi non vanno mai committate: vengono incorporate a build-time via `--dart-define-from-file`.
-
-1. Copia il template: `cp dart_define.example.json dart_define.json` (dalla cartella `app/`).
-2. Apri `dart_define.json` e imposta `ANTHROPIC_API_KEY` con la tua chiave Anthropic (obbligatoria col provider di default). Il file è in `.gitignore`, resta locale.
-3. Se vuoi usare OpenAI invece di Claude: imposta `OPENAI_API_KEY` con la tua chiave OpenAI e `COVER_ANALYSIS_PROVIDER` a `"openai"` (default `"claude"`, nessuna UI per la scelta).
-4. Per l'Identificazione del fumetto (§6.3), quando il catalogo interno non produce un match: imposta `COMIC_VINE_API_KEY` con una chiave [Comic Vine](https://comicvine.gamespot.com/api/) (self-service, gratuita per uso non commerciale).
-5. Usa `scripts/flutter.sh` al posto di `flutter` per i comandi `run` e `build`: rileva `dart_define.json` e aggiunge automaticamente `--dart-define-from-file`, così i comandi restano quelli standard senza ripeterlo ogni volta:
-   ```bash
-   scripts/flutter.sh run -d "iPhone 16"
-   ```
-   Equivalente manuale, se preferisci non usare lo script:
-   ```bash
-   flutter run --dart-define-from-file=dart_define.json -d "iPhone 16"
-   ```
-
-Senza `dart_define.json` (o senza passare il flag manualmente) `ClaudeApiConfig.apiKey`/`OpenAiApiConfig.apiKey` restano vuote e `isConfigured` è `false`.
+L'analisi AI della copertina (OCR §6.1 + computer vision §6.2) e l'Identificazione del fumetto su Comic Vine (§6.3, quando il catalogo interno non produce un match) non richiedono più build separate: provider, API key, modello e URL si configurano a runtime dalla schermata Impostazioni (§12) all'interno dell'app, persistiti da `SettingsRepository` (API key in `flutter_secure_storage`, resto in `shared_preferences` — vedi `lib/core/data/settings_repository.dart`). Nessuna chiave va committata né passata a `flutter run`/`flutter build`.
 
 ## Eseguire su iOS Simulator
 
@@ -58,7 +43,7 @@ Poi lancia l'app:
 
 ```bash
 flutter devices                       # conferma che il simulatore compaia in lista
-scripts/flutter.sh run -d "iPhone 16" # o l'id del device mostrato da `flutter devices`
+flutter run -d "iPhone 16" # o l'id del device mostrato da `flutter devices`
 ```
 
 ## Eseguire su Android emulator
@@ -74,10 +59,10 @@ Poi lancia l'app:
 
 ```bash
 flutter devices                       # conferma che l'emulatore compaia in lista
-scripts/flutter.sh run -d emulator-5554  # o l'id mostrato da `flutter devices`
+flutter run -d emulator-5554  # o l'id mostrato da `flutter devices`
 ```
 
-In alternativa, con un device fisico Android collegato via USB (debug USB attivo), `flutter devices` lo elenca allo stesso modo e puoi lanciarlo con `scripts/flutter.sh run -d <id-device>`.
+In alternativa, con un device fisico Android collegato via USB (debug USB attivo), `flutter devices` lo elenca allo stesso modo e puoi lanciarlo con `flutter run -d <id-device>`.
 
 ## Eseguire su device fisico
 
@@ -94,18 +79,18 @@ Utile in particolare per testare lo scanner (fotocamera reale, permessi, prestaz
    ```
 5. Lancia l'app:
    ```bash
-   scripts/flutter.sh run -d <id-device>  # es. l'UDID o il nome mostrato da flutter devices
+   flutter run -d <id-device>  # es. l'UDID o il nome mostrato da flutter devices
    ```
 6. **Su iOS 26+: crash/schermo bianco in debug** — bug noto del JIT di Flutter su iOS 26 ([flutter/flutter#163984](https://github.com/flutter/flutter/issues/163984), [#176263](https://github.com/flutter/flutter/issues/176263), variante intermittente in [#184533](https://github.com/flutter/flutter/issues/184533)): il sistema revoca i permessi di esecuzione sulle pagine JIT e l'app crasha con `EXC_BAD_ACCESS` al lancio (a volte subito, a volte dopo qualche minuto), indipendentemente dal codice dell'app. Non è un bug del progetto.
    - **Per iterare con hot reload**: usa l'iOS Simulator (funziona regolarmente in debug, vedi sezione sopra), non il device fisico.
    - **Per testare sul device reale** (es. la fotocamera, che sul Simulator non è disponibile): lancia in modalità `--release` o `--profile`, che non usano JIT e non sono soggette al bug:
      ```bash
-     scripts/flutter.sh run --release -d <id-device>
+     flutter run --release -d <id-device>
      # oppure, per i log di performance senza le ottimizzazioni aggressive del release:
-     scripts/flutter.sh run --profile -d <id-device>
+     flutter run --profile -d <id-device>
      ```
    - Ogni tanto vale la pena rifare `flutter upgrade`: la variante intermittente potrebbe essere risolta in una release più recente di quella attuale (3.38.3).
-7. **Primo avvio: "Untrusted Developer"** — se l'app non parte e su iPhone appare un errore, vai su *Impostazioni → Generali → VPN e gestione dispositivo*, seleziona il tuo Apple ID/profilo sviluppatore e tocca *Trust*. Poi riavvia l'app dalla home o rilancia `scripts/flutter.sh run`.
+7. **Primo avvio: "Untrusted Developer"** — se l'app non parte e su iPhone appare un errore, vai su *Impostazioni → Generali → VPN e gestione dispositivo*, seleziona il tuo Apple ID/profilo sviluppatore e tocca *Trust*. Poi riavvia l'app dalla home o rilancia `flutter run`.
 8. **Permesso fotocamera** — al primo utilizzo dello scanner iOS mostra il prompt di sistema (testo da `NSCameraUsageDescription` in `ios/Runner/Info.plist`); se negato per errore, va riabilitato da *Impostazioni → Privacy e sicurezza → Fotocamera → MyComicBrain*.
 
 ### Android (device fisico)
@@ -120,7 +105,7 @@ Utile in particolare per testare lo scanner (fotocamera reale, permessi, prestaz
    ```
 5. Lancia l'app:
    ```bash
-   scripts/flutter.sh run -d <id-device>
+   flutter run -d <id-device>
    ```
 6. **Debug via Wi-Fi (opzionale, senza cavo dopo il pairing iniziale)**:
    ```bash

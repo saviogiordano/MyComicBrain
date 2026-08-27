@@ -288,9 +288,9 @@ class CoverAnalysisException implements Exception {
 
 /// Interfaccia comune dei client dei provider AI (Claude, OpenAI, ...)
 /// usati dalla pipeline di Analisi Copertina (§6.1, §6.2) — il provider
-/// effettivo è selezionato a build-time, vedi
-/// `CoverAnalysisProviderConfig`/`providers.dart`. Nessuna UI per la scelta
-/// (fuori scope della mappa #46).
+/// effettivo è selezionato a runtime dalle Impostazioni (§12, deciso su
+/// #101/#102, migrato su #106), vedi `coverAnalysisClientProvider` in
+/// `providers.dart`.
 abstract interface class CoverAnalysisClient {
   Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg);
 }

@@ -8,9 +8,10 @@ import 'package:mycomicbrain/core/data/identificazione_pipeline.dart';
 
 /// Pipeline di analisi copertina di fine batch (§6.1 OCR + §6.2 computer
 /// vision, deciso su #27/#32, esteso su #49): per ogni Scansione appena
-/// confermata, chiama il provider AI configurato (Claude di default, vedi
-/// `CoverAnalysisProviderConfig`), fa il parsing della risposta secondo lo
-/// schema deciso (#31, #47) e persiste il risultato — completata o fallita,
+/// confermata, chiama il provider AI configurato dalle Impostazioni (§12,
+/// Claude di default, vedi `coverAnalysisClientProvider` in
+/// `providers.dart`), fa il parsing della risposta secondo lo schema deciso
+/// (#31, #47) e persiste il risultato — completata o fallita,
 /// nessun retry automatico. Le Scansioni del batch sono processate in
 /// sequenza: un batch di fine sessione non ha requisiti di concorrenza, e
 /// restare sequenziali evita di sommare più chiamate in parallelo contro il

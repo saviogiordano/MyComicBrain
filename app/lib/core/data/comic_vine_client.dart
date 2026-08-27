@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:mycomicbrain/core/data/comic_vine_api_config.dart';
 import 'package:mycomicbrain/core/data/numero_pulito.dart';
+import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/data/text_similarity.dart';
 
 const _searchUrl = 'https://comicvine.gamespot.com/api/search/';
@@ -128,10 +128,29 @@ class _ComicVineVolumeCandidate {
 /// dentro il rate limit di ComicVine (200 richieste/risorsa/ora) per un uso
 /// hobbistico single-user con fallback solo occasionale su ComicVine.
 class ComicVineHttpClient implements ComicVineClient {
-  ComicVineHttpClient({http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client();
+  ComicVineHttpClient({
+    SettingsRepository? settingsRepository,
+    http.Client? httpClient,
+  }) : _settingsRepository = settingsRepository,
+       _httpClient = httpClient ?? http.Client();
 
+  final SettingsRepository? _settingsRepository;
   final http.Client _httpClient;
+
+  /// API key letta a runtime da [SettingsRepository] (§12, deciso su
+  /// #101/#102, migrato su #106) — non più a build-time. Risolta qui invece
+  /// che una volta sola all'inizio di [cercaIssue], così le chiamate che non
+  /// arrivano mai a interrogare ComicVine (es. nessun campo OCR disponibile)
+  /// non falliscono per una chiave assente che non avrebbero comunque usato.
+  Future<String> _apiKeyRichiesta() async {
+    final apiKey = await _settingsRepository?.apiKeyComics;
+    if (apiKey == null || apiKey.isEmpty) {
+      throw ComicVineException(
+        'Nessuna API key ComicVine configurata nelle Impostazioni.',
+      );
+    }
+    return apiKey;
+  }
 
   @override
   Future<List<ComicVineIssueMatch>> cercaIssue({
@@ -176,9 +195,10 @@ class ComicVineHttpClient implements ComicVineClient {
   /// `GET /search?resources=volume` — trova i volumi il cui nome combacia
   /// testualmente con [query] (`seriesName`/`title` letti dalla copertina).
   Future<List<_ComicVineVolumeCandidate>> _cercaVolumi(String query) async {
+    final apiKey = await _apiKeyRichiesta();
     final uri = Uri.parse(_searchUrl).replace(
       queryParameters: {
-        'api_key': ComicVineApiConfig.apiKey,
+        'api_key': apiKey,
         'format': 'json',
         'resources': 'volume',
         'query': query,
@@ -200,9 +220,10 @@ class ComicVineHttpClient implements ComicVineClient {
     required int volumeId,
     required String numeroLabel,
   }) async {
+    final apiKey = await _apiKeyRichiesta();
     final uri = Uri.parse(_issuesUrl).replace(
       queryParameters: {
-        'api_key': ComicVineApiConfig.apiKey,
+        'api_key': apiKey,
         'format': 'json',
         'filter': 'volume:$volumeId,issue_number:$numeroLabel',
         'field_list': _fieldList,
@@ -217,9 +238,10 @@ class ComicVineHttpClient implements ComicVineClient {
   /// non copre: nessun numero leggibile, o nessun volume candidato che lo
   /// contiene (es. speciali/annual non allineati alla numerazione regolare).
   Future<List<ComicVineIssueMatch>> _cercaIssueTestoLibero(String query) async {
+    final apiKey = await _apiKeyRichiesta();
     final uri = Uri.parse(_searchUrl).replace(
       queryParameters: {
-        'api_key': ComicVineApiConfig.apiKey,
+        'api_key': apiKey,
         'format': 'json',
         'resources': 'issue',
         'query': query,

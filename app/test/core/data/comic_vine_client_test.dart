@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
+import 'package:mycomicbrain/core/data/settings_repository.dart';
 
 /// `http.Client` finto: risponde in base al `resources`/percorso della
 /// richiesta (`volume` per la ricerca volumi, `/issues/` per il filtro per
@@ -65,6 +66,12 @@ String _rispostaComicVine(
   'results': results,
 });
 
+Future<SettingsRepository> _settingsConApiKey() async {
+  final settings = SettingsRepository.inMemoria();
+  await settings.impostaApiKeyComics('chiave-test');
+  return settings;
+}
+
 const Map<String, dynamic> _issueCompleta = {
   'id': 111000,
   'name': 'Amazing Fantasy',
@@ -123,7 +130,10 @@ void main() {
             ],
           },
         );
-        final client = ComicVineHttpClient(httpClient: fake);
+        final client = ComicVineHttpClient(
+          settingsRepository: await _settingsConApiKey(),
+          httpClient: fake,
+        );
 
         final risultati = await client.cercaIssue(
           title: null,
@@ -186,7 +196,10 @@ void main() {
             ],
           },
         );
-        final client = ComicVineHttpClient(httpClient: fake);
+        final client = ComicVineHttpClient(
+          settingsRepository: await _settingsConApiKey(),
+          httpClient: fake,
+        );
 
         final risultati = await client.cercaIssue(
           title: null,
@@ -254,7 +267,10 @@ void main() {
             ],
           },
         );
-        final client = ComicVineHttpClient(httpClient: fake);
+        final client = ComicVineHttpClient(
+          settingsRepository: await _settingsConApiKey(),
+          httpClient: fake,
+        );
 
         final risultati = await client.cercaIssue(
           title: null,
@@ -293,7 +309,10 @@ void main() {
           ],
           risultatiTestoLibero: [_issueCompleta],
         );
-        final client = ComicVineHttpClient(httpClient: fake);
+        final client = ComicVineHttpClient(
+          settingsRepository: await _settingsConApiKey(),
+          httpClient: fake,
+        );
 
         final risultati = await client.cercaIssue(
           title: null,
@@ -326,7 +345,10 @@ void main() {
           ],
         },
       );
-      final client = ComicVineHttpClient(httpClient: fake);
+      final client = ComicVineHttpClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: fake,
+      );
 
       final risultati = await client.cercaIssue(
         title: null,
@@ -344,7 +366,10 @@ void main() {
       'usa la ricerca testuale libera quando issueNumberLabel è null',
       () async {
         final fake = _FakeHttpClient(risultatiTestoLibero: [_issueCompleta]);
-        final client = ComicVineHttpClient(httpClient: fake);
+        final client = ComicVineHttpClient(
+          settingsRepository: await _settingsConApiKey(),
+          httpClient: fake,
+        );
 
         final risultati = await client.cercaIssue(
           title: 'Amazing Fantasy',
@@ -369,7 +394,10 @@ void main() {
       'usa issueNumberLabel+publisher come fallback quando title e seriesName sono null',
       () async {
         final fake = _FakeHttpClient();
-        final client = ComicVineHttpClient(httpClient: fake);
+        final client = ComicVineHttpClient(
+          settingsRepository: await _settingsConApiKey(),
+          httpClient: fake,
+        );
 
         await client.cercaIssue(
           title: null,
@@ -387,7 +415,10 @@ void main() {
 
     test("non chiama l'API se tutti i campi OCR sono null", () async {
       final fake = _FakeHttpClient();
-      final client = ComicVineHttpClient(httpClient: fake);
+      final client = ComicVineHttpClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: fake,
+      );
 
       final risultati = await client.cercaIssue(
         title: null,
@@ -412,6 +443,7 @@ void main() {
           'site_detail_url': 'https://comicvine.gamespot.com/x/1-999/',
         };
         final client = ComicVineHttpClient(
+          settingsRepository: await _settingsConApiKey(),
           httpClient: _FakeHttpClient(
             risultatiTestoLibero: [issueSenzaVolumeEImage],
           ),
@@ -437,6 +469,7 @@ void main() {
       'un status_code diverso da 1 solleva ComicVineException con il messaggio di errore',
       () async {
         final client = ComicVineHttpClient(
+          settingsRepository: await _settingsConApiKey(),
           httpClient: _FakeHttpClient(statusCode: 100),
         );
 
@@ -459,7 +492,10 @@ void main() {
     );
 
     test('una risposta HTTP non-2xx solleva ComicVineException', () async {
-      final client = ComicVineHttpClient(httpClient: _FakeHttpClientNon2xx());
+      final client = ComicVineHttpClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClientNon2xx(),
+      );
 
       await expectLater(
         () => client.cercaIssue(
@@ -474,6 +510,7 @@ void main() {
 
     test('una risposta non JSON valido solleva ComicVineException', () async {
       final client = ComicVineHttpClient(
+        settingsRepository: await _settingsConApiKey(),
         httpClient: _FakeHttpClientRispostaInvalida(),
       );
 
@@ -487,6 +524,28 @@ void main() {
         throwsA(isA<ComicVineException>()),
       );
     });
+
+    test(
+      'senza API key configurata nelle Impostazioni solleva ComicVineException senza chiamare la rete',
+      () async {
+        final fake = _FakeHttpClient(risultatiTestoLibero: [_issueCompleta]);
+        final client = ComicVineHttpClient(
+          settingsRepository: SettingsRepository.inMemoria(),
+          httpClient: fake,
+        );
+
+        await expectLater(
+          () => client.cercaIssue(
+            title: 'x',
+            seriesName: null,
+            issueNumberLabel: null,
+            publisher: null,
+          ),
+          throwsA(isA<ComicVineException>()),
+        );
+        expect(fake.richieste, isEmpty);
+      },
+    );
   });
 }
 
