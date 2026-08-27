@@ -13,6 +13,7 @@ import 'package:mycomicbrain/core/data/identificazione_pipeline.dart';
 import 'package:mycomicbrain/core/data/image_crop_service.dart';
 import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
+import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
@@ -40,6 +41,13 @@ final sharedPreferencesProvider = Provider<SharedPreferences>(
 final copertinaDownloaderProvider = Provider<CopertinaDownloader>(
   (ref) => CopertinaDownloader(),
 );
+
+/// Il `SettingsRepository` (§12, schema deciso su #101, implementato su
+/// #105): unico punto di accesso alle Impostazioni per lo schermo omonimo
+/// (#107) e per i client AI/ComicVine migrati su #106.
+final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
+  return SettingsRepository(preferences: ref.watch(sharedPreferencesProvider));
+});
 
 final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
   final repository = ComicsRepository(
