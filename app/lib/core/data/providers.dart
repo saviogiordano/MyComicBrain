@@ -10,7 +10,9 @@ import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/identificazione_pipeline.dart';
 import 'package:mycomicbrain/core/data/image_crop_service.dart';
+import 'package:mycomicbrain/core/data/locale_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
+import 'package:mycomicbrain/core/data/openrouter_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/preferences.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
@@ -84,21 +86,31 @@ final openAiCoverAnalysisClientProvider = Provider<OpenAiCoverAnalysisClient>(
   ),
 );
 
+final openRouterCoverAnalysisClientProvider =
+    Provider<OpenRouterCoverAnalysisClient>(
+      (ref) => OpenRouterCoverAnalysisClient(
+        settingsRepository: ref.watch(settingsRepositoryProvider),
+      ),
+    );
+
+final localeCoverAnalysisClientProvider = Provider<LocaleCoverAnalysisClient>(
+  (ref) => LocaleCoverAnalysisClient(
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  ),
+);
+
 /// Il client del provider AI configurato per l'Analisi Copertina, letto a
 /// runtime dalle Impostazioni (§12, deciso su #101/#102, migrato su #106) —
 /// non più a build-time. Default a Claude quando l'utente non ha ancora
 /// scelto un provider (nessuno schermo Impostazioni funzionante prima di
-/// #107). OpenRouter/Locale non hanno ancora un client implementato (#109):
-/// selezionarli fa fallire l'Analisi Copertina con un errore esplicito
-/// invece di usare in silenzio il provider sbagliato.
+/// #107). OpenRouter/Locale hanno un client implementato da #109.
 final coverAnalysisClientProvider = Provider<CoverAnalysisClient>((ref) {
   final providerAi = ref.watch(settingsRepositoryProvider).providerAi;
   return switch (providerAi) {
     AiProvider.openai => ref.watch(openAiCoverAnalysisClientProvider),
     AiProvider.claude || null => ref.watch(claudeCoverAnalysisClientProvider),
-    AiProvider.openRouter || AiProvider.locale => throw CoverAnalysisException(
-      'Provider AI "${providerAi.label}" non ancora supportato per l\'Analisi Copertina.',
-    ),
+    AiProvider.openRouter => ref.watch(openRouterCoverAnalysisClientProvider),
+    AiProvider.locale => ref.watch(localeCoverAnalysisClientProvider),
   };
 });
 
