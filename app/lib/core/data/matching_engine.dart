@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/database.dart'
     show AnalisiCopertinaTableData;
+import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/text_similarity.dart';
 import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
@@ -162,6 +163,20 @@ class MatchingEngine {
     required int? issueNumero,
     required Map<int, Set<int>> numeriPossedutiPerSerie,
   }) {
+    // Titolo e nome Serie sono identici per *ogni* albo della stessa
+    // testata — non possono da soli discriminare fra numeri diversi.
+    // Un'etichetta di numero letta chiaramente diversa da quella del
+    // candidato è quindi un segnale di non-corrispondenza più forte di
+    // qualunque somiglianza testuale sugli altri campi, altrimenti un
+    // albo già in catalogo (es. #700, tipicamente ben scritto e con
+    // testo identico) vince per sempre su qualunque altro numero della
+    // stessa Serie appena scansionato — bug osservato dal vivo: la
+    // pipeline (`IdentificazionePipeline`) salta ComicVine non appena
+    // `candidatiInterni` produce anche un solo candidato sopra soglia.
+    if (_numeroInConflitto(analisi.issueNumberLabel, issueNumberLabel)) {
+      return 0;
+    }
+
     final testuale = _similaritaTestuale(
       analisi: analisi,
       title: title,
@@ -299,3 +314,16 @@ class MatchingEngine {
 /// `Edizioni.issueNumber`.
 int? _numeroDaLabel(String? label) =>
     label == null ? null : int.tryParse(label.trim());
+
+/// Vero se entrambe le etichette sono presenti (dopo [numeroPulito]) e
+/// chiaramente diverse — confronto testuale, non numerico, così etichette
+/// non intere (`"Annual 1"` vs `"42"`, `"699.1"` vs `"700"`) restano
+/// distinguibili. Un lato assente non è un conflitto: il campo è escluso
+/// dal punteggio come ogni altro campo mancante, non trattato come segnale
+/// negativo.
+bool _numeroInConflitto(String? a, String? b) {
+  final pa = numeroPulito(a)?.toLowerCase();
+  final pb = numeroPulito(b)?.toLowerCase();
+  if (pa == null || pb == null) return false;
+  return pa != pb;
+}

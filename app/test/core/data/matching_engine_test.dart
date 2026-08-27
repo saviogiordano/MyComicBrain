@@ -190,11 +190,67 @@ void main() {
       expect(adiacente.punteggio, greaterThan(lontana.punteggio));
     });
 
+    test(
+      'un numero chiaramente diverso azzera il punteggio anche con serie/titolo identici',
+      () {
+        // Bug reale: un'Edizione già in catalogo (es. #700) ha seriesName e
+        // spesso anche title identici a *qualunque* altro albo della stessa
+        // testata scansionato — senza questo azzeramento vincerebbe sempre,
+        // impedendo a IdentificazionePipeline di interrogare mai ComicVine
+        // per il numero effettivamente scansionato.
+        final analisi = _analisi(
+          title: 'The Amazing Spider-Man',
+          seriesName: 'The Amazing Spider-Man',
+          issueNumberLabel: '699.1',
+          publisher: 'Marvel',
+        );
+        final edizione700 = _edizione(
+          title: 'The Amazing Spider-Man',
+          seriesName: 'The Amazing Spider-Man',
+          publisher: 'Marvel',
+          issueNumberLabel: '700',
+        );
+
+        final candidati = motore.candidatiInterni(
+          analisi: analisi,
+          catalogo: [edizione700],
+          numeriPossedutiPerSerie: const {},
+        );
+
+        expect(candidati, isEmpty);
+      },
+    );
+
+    test(
+      "un'etichetta di numero mancante su un lato non è un conflitto",
+      () {
+        final analisi = _analisi(
+          seriesName: 'The Amazing Spider-Man',
+          issueNumberLabel: '699.1',
+        );
+        final edizioneSenzaNumero = _edizione(
+          seriesName: 'The Amazing Spider-Man',
+        );
+
+        final candidati = motore.candidatiInterni(
+          analisi: analisi,
+          catalogo: [edizioneSenzaNumero],
+          numeriPossedutiPerSerie: const {},
+        );
+
+        expect(candidati, hasLength(1));
+      },
+    );
+
     test('ordina per punteggio decrescente e taglia a massimoCandidati', () {
-      final analisi = _analisi(title: 'Batman', seriesName: 'Batman', issueNumberLabel: '5');
+      // Nessun issueNumberLabel su nessun lato: la variabilità di punteggio
+      // fra i candidati viene dal titolo (via numero crescente di caratteri
+      // spuri in coda), non dal numero — altrimenti l'azzeramento per
+      // conflitto di numero (vedi test sopra) escluderebbe tutti tranne uno.
+      final analisi = _analisi(title: 'Batman', seriesName: 'Batman');
       final catalogo = [
         for (var i = 0; i < MatchingEngine.massimoCandidati + 3; i++)
-          _edizione(edizioneId: i, seriesName: 'Batman', issueNumberLabel: '$i'),
+          _edizione(edizioneId: i, seriesName: 'Batman', title: 'Batman${'x' * i}'),
       ];
 
       final candidati = motore.candidatiInterni(
@@ -204,7 +260,7 @@ void main() {
       );
 
       expect(candidati.length, MatchingEngine.massimoCandidati);
-      expect(candidati.first.edizioneId, 5, reason: "l'etichetta identica al numero 5 vince");
+      expect(candidati.first.edizioneId, 0, reason: 'il titolo identico vince');
       for (var i = 1; i < candidati.length; i++) {
         expect(candidati[i - 1].punteggio, greaterThanOrEqualTo(candidati[i].punteggio));
       }
@@ -274,6 +330,33 @@ void main() {
         final adiacente = candidati.firstWhere((c) => c.issueNumberLabel == '4');
         final lontana = candidati.firstWhere((c) => c.issueNumberLabel == '40');
         expect(adiacente.punteggio, greaterThan(lontana.punteggio));
+      },
+    );
+
+    test(
+      'un numero chiaramente diverso azzera il punteggio anche con volume/titolo identici',
+      () {
+        final analisi = _analisi(
+          seriesName: 'The Amazing Spider-Man',
+          issueNumberLabel: '699.1',
+        );
+        const issueSbagliata = ComicVineIssueMatch(
+          id: 1,
+          name: 'The Amazing Spider-Man',
+          issueNumber: '700',
+          volumeName: 'The Amazing Spider-Man',
+          coverImageUrl: null,
+          siteDetailUrl: 'https://comicvine.example/700',
+        );
+
+        final candidati = motore.candidatiEsterni(
+          analisi: analisi,
+          risultati: const [issueSbagliata],
+          catalogo: const [],
+          numeriPossedutiPerSerie: const {},
+        );
+
+        expect(candidati, isEmpty);
       },
     );
   });
