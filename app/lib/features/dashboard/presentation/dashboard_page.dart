@@ -1,6 +1,3 @@
-import 'dart:io';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,8 +6,18 @@ import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
 import 'package:mycomicbrain/features/dashboard/application/dashboard_providers.dart';
 
 const _mesiItaliani = [
-  'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
-  'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
+  'gennaio',
+  'febbraio',
+  'marzo',
+  'aprile',
+  'maggio',
+  'giugno',
+  'luglio',
+  'agosto',
+  'settembre',
+  'ottobre',
+  'novembre',
+  'dicembre',
 ];
 
 /// Testata (§4.1) — etichetta, totale, griglia KPI e CTA di scansione,
@@ -37,7 +44,9 @@ class DashboardPage extends ConsumerWidget {
               child: Text(
                 'Non è stato possibile caricare la collezione.',
                 textAlign: TextAlign.center,
-                style: AppTypography.bodyMedium.copyWith(color: AppColors.textTertiary),
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textTertiary,
+                ),
               ),
             ),
           ),
@@ -57,11 +66,18 @@ class _Collection extends ConsumerWidget {
     // Errore o caricamento delle due sezioni secondarie non blocca il resto
     // della Dashboard, già renderizzata dai KPI: si comportano come vuote
     // (nascoste, regola #8) finché non arriva un dato.
-    final recenti = ref.watch(aggiuntiDiRecenteProvider).valueOrNull ?? const [];
-    final serieIncomplete = ref.watch(serieIncompleteProvider).valueOrNull ?? const [];
+    final recenti =
+        ref.watch(aggiuntiDiRecenteProvider).valueOrNull ?? const [];
+    final serieIncomplete =
+        ref.watch(serieIncompleteProvider).valueOrNull ?? const [];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.xxl),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.xxl,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -90,7 +106,12 @@ class _EmptyCollection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Padding(
-      padding: EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.xxl),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.xxl,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -143,9 +164,19 @@ class _CollectionTotal extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        Text(_formatItalianInt(total), style: AppTypography.heroNumber.copyWith(color: AppColors.textPrimary)),
+        Text(
+          _formatItalianInt(total),
+          style: AppTypography.heroNumber.copyWith(
+            color: AppColors.textPrimary,
+          ),
+        ),
         const SizedBox(width: AppSpacing.xs),
-        Text('fumetti', style: AppTypography.bodyLarge.copyWith(color: AppColors.textTertiary)),
+        Text(
+          'fumetti',
+          style: AppTypography.bodyLarge.copyWith(
+            color: AppColors.textTertiary,
+          ),
+        ),
       ],
     );
   }
@@ -186,7 +217,10 @@ class _AiButton extends StatelessWidget {
             border: Border.all(color: AppColors.borderDefault),
             borderRadius: AppRadii.mdRadius,
           ),
-          child: Text('AI', style: AppTypography.monoLabel.copyWith(color: AppColors.accent)),
+          child: Text(
+            'AI',
+            style: AppTypography.monoLabel.copyWith(color: AppColors.accent),
+          ),
         ),
       ),
     );
@@ -246,7 +280,9 @@ List<Widget> _kpiCards(BuildContext context, DashboardKpis kpis) {
       onTap: () => context.push('/serie'),
     ),
     KpiCard(
-      value: spesoZero ? '—' : '€${_formatItalianInt(kpis.spesoFinora.round())}',
+      value: spesoZero
+          ? '—'
+          : '€${_formatItalianInt(kpis.spesoFinora.round())}',
       label: 'speso finora',
       valueColor: _kpiColor(_KpiTone.neutral, spesoZero),
       onTap: () => context.go('/statistiche'),
@@ -255,7 +291,8 @@ List<Widget> _kpiCards(BuildContext context, DashboardKpis kpis) {
       value: kpis.aggiuntiMeseCorrente,
       label: 'aggiunti a $meseCorrente',
       tone: _KpiTone.accent,
-      onTap: () => context.go('/collezione'),
+      // Intento esplicito → Collezione pre-filtrata (§9, deciso su #91).
+      onTap: () => context.go('/collezione', extra: true),
     ),
   ];
 }
@@ -313,7 +350,10 @@ class _ScanCta extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [AppColors.accentAlpha(0.16), AppColors.accentAlpha(0.04)],
+              colors: [
+                AppColors.accentAlpha(0.16),
+                AppColors.accentAlpha(0.04),
+              ],
             ),
           ),
           child: Row(
@@ -322,8 +362,15 @@ class _ScanCta extends StatelessWidget {
                 width: iconSize,
                 height: iconSize,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: AppColors.accent, borderRadius: AppRadii.lgRadius),
-                child: Icon(Icons.camera_alt_outlined, color: AppColors.onAccent, size: emphasized ? 26 : 22),
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: AppRadii.lgRadius,
+                ),
+                child: Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.onAccent,
+                  size: emphasized ? 26 : 22,
+                ),
               ),
               const SizedBox(width: AppSpacing.sm + 2),
               Expanded(
@@ -332,13 +379,19 @@ class _ScanCta extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      emphasized ? 'Scansiona la prima cover' : 'Scansiona una cover',
-                      style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary),
+                      emphasized
+                          ? 'Scansiona la prima cover'
+                          : 'Scansiona una cover',
+                      style: AppTypography.titleMedium.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Fotografa → riconosci → conferma',
-                      style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -353,9 +406,9 @@ class _ScanCta extends StatelessWidget {
 }
 
 /// Carosello orizzontale delle ultime copie possedute aggiunte al catalogo
-/// (§4.1, righe 129-141 del prototipo). Mostra la cover reale se nota, vedi
-/// [_Cover]; altrimenti una copertina procedurale generata da titolo e
-/// numero, vedi [_CoverProcedurale]. Nascosta del tutto se vuota (#8).
+/// (§4.1, righe 129-141 del prototipo). Mostra la cover reale se nota,
+/// altrimenti una copertina procedurale generata da titolo e numero — vedi
+/// `ComicCoverImage`. Nascosta del tutto se vuota (#8).
 class _AggiuntiRecenteSection extends StatelessWidget {
   const _AggiuntiRecenteSection({required this.items});
 
@@ -370,7 +423,10 @@ class _AggiuntiRecenteSection extends StatelessWidget {
           label: 'aggiunti di recente',
           trailing: GestureDetector(
             onTap: () => context.go('/collezione'),
-            child: Text('Tutti', style: AppTypography.bodyMedium.copyWith(color: AppColors.accent)),
+            child: Text(
+              'Tutti',
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.accent),
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -409,14 +465,21 @@ class _RecentCard extends StatelessWidget {
             SizedBox(
               width: 96,
               height: 128,
-              child: _Cover(item: item),
+              child: ComicCoverImage(
+                coverImage: item.coverImage,
+                titolo: item.titolo,
+                numero: item.numero ?? 0,
+                etichetta: item.numeroVisualizzato,
+              ),
             ),
             const SizedBox(height: 7),
             Text(
               item.titolo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.labelMedium.copyWith(color: AppColors.textPrimary),
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textPrimary,
+              ),
             ),
             // Editore assente: riga omessa, non "—" — quel simbolo è la
             // convenzione per "valore zero" (#8), un significato diverso da
@@ -427,123 +490,13 @@ class _RecentCard extends StatelessWidget {
                 item.editore!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
               ),
             ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// La cover reale dell'Edizione se nota (percorso locale scaricato da
-/// `CopertinaDownloader`, o in fallback l'URL remoto originale), altrimenti
-/// la copertina procedurale [_CoverProcedurale]. Un percorso locale ma
-/// ormai mancante su disco ricade sullo stesso segnaposto invece di un
-/// errore visibile.
-class _Cover extends StatelessWidget {
-  const _Cover({required this.item});
-
-  final ComicRecente item;
-
-  @override
-  Widget build(BuildContext context) {
-    final coverImage = item.coverImage;
-    final procedurale = _CoverProcedurale(
-      titolo: item.titolo,
-      numero: item.numero ?? 0,
-      etichetta: item.numeroVisualizzato,
-    );
-    if (coverImage == null) return procedurale;
-
-    final isRemote = coverImage.startsWith('http://') || coverImage.startsWith('https://');
-    final immagine = ClipRRect(
-      borderRadius: AppRadii.xsRadius,
-      child: isRemote
-          ? Image.network(
-              coverImage,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => procedurale,
-            )
-          : Image.file(
-              File(coverImage),
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => procedurale,
-            ),
-    );
-    return SizedBox.expand(child: immagine);
-  }
-}
-
-/// Copertina segnaposto generata dal titolo e dal numero, per le Edizioni
-/// senza cover nota (prototipo `cover()`/`shape`, righe 730-736): colore di
-/// sfondo scelto da `(titolo.length + numero) % palette`, forma
-/// (cerchio/quadrato arrotondato) dalla parità del numero, rotazione dal
-/// resto modulo 3.
-class _CoverProcedurale extends StatelessWidget {
-  const _CoverProcedurale({required this.titolo, required this.numero, required this.etichetta});
-
-  final String titolo;
-  final int numero;
-  final String etichetta;
-
-  static const List<({Color bg, Color ink})> _palette = [
-    (bg: Color(0xFF1B3A4B), ink: Color(0xFFEFE7D6)),
-    (bg: Color(0xFFB23A2E), ink: Color(0xFFF7E4C8)),
-    (bg: Color(0xFF2E2A4F), ink: Color(0xFFE6E2F2)),
-    (bg: Color(0xFF0F5C4A), ink: Color(0xFFEAF3E5)),
-    (bg: Color(0xFFC4771B), ink: Color(0xFF22160C)),
-    (bg: Color(0xFF3A3A3C), ink: Color(0xFFF0F0F2)),
-    (bg: Color(0xFF7A2E4E), ink: Color(0xFFF6E1EA)),
-    (bg: Color(0xFF1E4620), ink: Color(0xFFE8F0DE)),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final colori = _palette[(titolo.length + numero) % _palette.length];
-    final circolare = numero.isOdd;
-    final rotazione = ((numero % 3) * 9 - 9) * (math.pi / 180);
-
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: colori.bg, borderRadius: AppRadii.xsRadius),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -13,
-            bottom: -18,
-            child: Transform.rotate(
-              angle: rotazione,
-              child: Container(
-                width: 71,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: colori.ink.withValues(alpha: 0.22),
-                  shape: circolare ? BoxShape.circle : BoxShape.rectangle,
-                  borderRadius: circolare ? null : BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.xs),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titolo,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelMedium.copyWith(color: colori.ink, height: 1.15),
-                ),
-                const Spacer(),
-                if (etichetta.isNotEmpty)
-                  Text(etichetta, style: AppTypography.monoLabel.copyWith(color: colori.ink)),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -582,7 +535,10 @@ class _SerieIncompletaRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       onTap: () => context.push('/serie/${item.serieId}'),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm + 2, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm + 2,
+        vertical: AppSpacing.sm,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -595,13 +551,17 @@ class _SerieIncompletaRow extends StatelessWidget {
                   item.nome,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary),
+                  style: AppTypography.titleMedium.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 '${item.numeriPosseduti}/${item.numeriTotali}',
-                style: AppTypography.monoLabel.copyWith(color: AppColors.textSecondary),
+                style: AppTypography.monoLabel.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             ],
           ),
@@ -610,7 +570,9 @@ class _SerieIncompletaRow extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Mancano ${_missingLabel(item.numeriMancanti)}',
-            style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary),
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textTertiary,
+            ),
           ),
         ],
       ),

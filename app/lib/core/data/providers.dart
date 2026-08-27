@@ -16,12 +16,26 @@ import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
+import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
+import 'package:mycomicbrain/core/domain/serie_lista.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
   ref.onDispose(db.close);
   return db;
 });
+
+/// L'istanza di `SharedPreferences` risolta prima di `runApp` (vedi
+/// `main.dart`) e passata come override — usata per la persistenza dei
+/// filtri della Collezione (§9, deciso su #85). Il valore di default lancia
+/// di proposito: un consumatore che la legge senza che `main.dart` l'abbia
+/// sostituita è un errore di bootstrap, non un caso da gestire in UI.
+final sharedPreferencesProvider = Provider<SharedPreferences>(
+  (ref) => throw UnimplementedError(
+    'sharedPreferencesProvider non sostituito prima di runApp',
+  ),
+);
 
 final copertinaDownloaderProvider = Provider<CopertinaDownloader>(
   (ref) => CopertinaDownloader(),
@@ -142,4 +156,16 @@ analisiCopertinaProvider =
 final StreamProviderFamily<EdizioneDettaglio?, int> edizioneDettaglioProvider =
     StreamProvider.family<EdizioneDettaglio?, int>((ref, edizioneId) {
       return ref.watch(comicsRepositoryProvider).watchEdizione(edizioneId);
+    });
+
+/// L'elenco `/serie` (§11, deciso su #97/#98), raggruppato in tre sezioni.
+final serieListaProvider = StreamProvider<SerieLista>((ref) {
+  return ref.watch(comicsRepositoryProvider).watchSerieLista();
+});
+
+/// Il dettaglio `/serie/:id` (§11, deciso su #97/#99), per id — `null` se
+/// la Serie è stata cancellata.
+final StreamProviderFamily<SerieDettaglio?, int> serieDettaglioProvider =
+    StreamProvider.family<SerieDettaglio?, int>((ref, serieId) {
+      return ref.watch(comicsRepositoryProvider).watchSerieDettaglio(serieId);
     });

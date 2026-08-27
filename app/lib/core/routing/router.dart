@@ -17,6 +17,7 @@ import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart
 import 'package:mycomicbrain/features/scansione/presentation/scansione_page.dart';
 import 'package:mycomicbrain/features/scheda/presentation/modifica_scheda_page.dart';
 import 'package:mycomicbrain/features/scheda/presentation/scheda_page.dart';
+import 'package:mycomicbrain/features/serie/presentation/serie_dettaglio_page.dart';
 import 'package:mycomicbrain/features/serie/presentation/serie_page.dart';
 import 'package:mycomicbrain/features/statistiche/presentation/statistiche_page.dart';
 
@@ -64,9 +65,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [
+              // `extra: true` porta l'intento esplicito del KPI "aggiunti
+              // nel mese corrente" della Dashboard (§9, deciso su #91) — la
+              // Collezione si apre pre-filtrata solo in quel caso.
               GoRoute(
                 path: '/collezione',
-                builder: (context, state) => const CollezionePage(),
+                builder: (context, state) => CollezionePage(
+                  soloAggiuntiMeseCorrente: state.extra == true,
+                ),
               ),
             ],
           ),
@@ -143,9 +149,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/serie',
         builder: (context, state) => const SeriePage(),
       ),
+      // Dettaglio di una Serie (§11, deciso su #97/#99) — sostituisce lo
+      // stub condiviso con `/serie`.
       GoRoute(
         path: '/serie/:id',
-        builder: (context, state) => const SeriePage(),
+        builder: (context, state) => SerieDettaglioPage(
+          serieId: int.parse(state.pathParameters['id']!),
+        ),
       ),
       GoRoute(
         path: '/duplicati',

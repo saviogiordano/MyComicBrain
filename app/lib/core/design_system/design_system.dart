@@ -2,6 +2,7 @@ export 'app_theme.dart';
 export 'components/app_card.dart';
 export 'components/app_chip.dart';
 export 'components/app_progress_bar.dart';
+export 'components/comic_cover.dart';
 export 'components/kpi_card.dart';
 export 'components/placeholder_screen.dart';
 export 'components/section_header.dart';

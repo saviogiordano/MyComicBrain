@@ -58,12 +58,20 @@ _Avoid_: Edizione (già l'entità stessa nel glossario — questo campo descrive
 Campo `format` (§9, deciso su [Formato: valori esatti dell'enum](https://github.com/saviogiordano/MyComicBrain/issues/83)) di Edizione: enum chiuso, valore singolo, nullable — Spillato, Bonellide, Brossurato, Cartonato, Tankōbon, Omnibus. Descrive la forma fisica di stampa dell'edizione, distinto da Tipo di stampa (che copre prima stampa/ristampa/variant, non il formato fisico). Il digitale non è un valore dell'enum — resta fuori scope (asse concettualmente diverso: rompe le assunzioni di possesso fisico su cui si basano Copia, Condizione e Posizione).
 _Avoid_: confondere con Tipo di stampa (proprietà diversa dello stesso oggetto — vedi sopra)
 
+**Anno**:
+Campo `year` (§9, deciso su [Anno come campo strutturato su Edizione](https://github.com/saviogiordano/MyComicBrain/issues/81)) di Edizione: intero, nullable, popolato in scrittura (riconoscimento AI o inserimento manuale) — non derivato a runtime da `releaseDate` (testo grezzo tipo "mese/anno", troppo fragile da parsare per un asse di organizzazione centrale).
+_Avoid_: confondere con `releaseDate` (testo grezzo per la visualizzazione bibliografica, §8.1 — voce distinta, non un asse di filtro)
+
 **Personaggio**:
 Campo di Edizione (§9, deciso su [Mappa — Organizzazione della collezione](https://github.com/saviogiordano/MyComicBrain/issues/79) via [#84](https://github.com/saviogiordano/MyComicBrain/issues/84)): relazione many-to-many con una nuova entità catalogabile `Character`, condivisa fra Edizioni diverse — stesso pattern di Creator (#64), nessun vincolo UNIQUE su `name` (dedup lasciato all'autocomplete in UI). Aggiunto manualmente dall'utente, senza collegamento automatico con "Personaggi raffigurati": stesso principio già valido per gli autori, che pure hanno un'entità dedicata (Creator) ma non si auto-collegano dai campi letti dall'AI alla conferma del Candidato.
 _Avoid_: confondere con Personaggi raffigurati (voce distinta — quel campo vive sulla Scansione/Analisi Copertina, libero e non verificato, senza collegamento a questa entità catalogata)
 
 **Genere**:
 Campo di Edizione (§9, deciso su [Mappa — Organizzazione della collezione](https://github.com/saviogiordano/MyComicBrain/issues/79) via [#84](https://github.com/saviogiordano/MyComicBrain/issues/84)): enum chiuso, multi-valore (relazione many-to-many, a differenza di Formato che è singolo) — Supereroi, Azione/Avventura, Fantascienza, Fantasy, Horror, Giallo/Noir, Commedia, Drammatico, Romantico, Storico, Slice of life, Erotico/Adulti.
+
+**Tag personalizzati**:
+Campo di Edizione (§9, deciso su [Tag personalizzati: nuova entità Tag](https://github.com/saviogiordano/MyComicBrain/issues/82)): relazione many-to-many con una nuova entità `Tag`, libera da vincoli — definiti dall'utente, non dall'AI (a differenza di "Tag di stile copertina"/"Tag di elementi visivi caratteristici").
+_Avoid_: confondere con "Tag di stile copertina"/"Tag di elementi visivi caratteristici" (voci distinte — quei campi vivono sull'Analisi Copertina, generati dall'AI, senza collegamento a questa entità catalogata)
 
 **Sessione di acquisizione**:
 Un raggruppamento temporaneo, non persistito, di più Scansioni prodotte consecutivamente (fotocamera e/o galleria) prima che l'utente termini con "Fine". Esiste solo come stato della UI: non sopravvive a un riavvio e non ha una propria riga nel database — solo le Scansioni che produce vengono salvate.

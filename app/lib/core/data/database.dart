@@ -6,6 +6,8 @@ import 'package:mycomicbrain/core/data/database.steps.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
+import 'package:mycomicbrain/core/domain/formato.dart';
+import 'package:mycomicbrain/core/domain/genere.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -18,7 +20,8 @@ class StringListConverter extends TypeConverter<List<String>, String> {
   const StringListConverter();
 
   @override
-  List<String> fromSql(String fromDb) => (jsonDecode(fromDb) as List<dynamic>).cast<String>();
+  List<String> fromSql(String fromDb) =>
+      (jsonDecode(fromDb) as List<dynamic>).cast<String>();
 
   @override
   String toSql(List<String> value) => jsonEncode(value);
@@ -110,6 +113,17 @@ class Edizioni extends Table {
   /// Classificazione/rating (§8.1, deciso su #71) — vedi il commento
   /// gemello su `AnalisiCopertinaTable.classificazione`.
   TextColumn get classificazione => text().nullable()();
+
+  /// Anno di pubblicazione (§9, deciso su #81) — campo strutturato a sé,
+  /// popolato in scrittura (riconoscimento AI o inserimento manuale): non
+  /// derivato a runtime da `releaseDate` (testo grezzo tipo "mese/anno",
+  /// troppo fragile da parsare per un asse di organizzazione centrale).
+  IntColumn get year => integer().nullable()();
+
+  /// Formato fisico di stampa (§9, deciso su #83) — enum chiuso, valore
+  /// singolo, distinto da `printingType`/Tipo di stampa (prima stampa/
+  /// ristampa/variant, non la forma fisica).
+  TextColumn get format => textEnum<FormatoEdizione>().nullable()();
 }
 
 /// `Copia`: un esemplare fisico posseduto di un'edizione. `status` guida
@@ -137,7 +151,8 @@ class Copie extends Table {
   /// inserimento manuale (§6.3, deciso su #53). Nullable: le fixture dei test
   /// create direttamente con `ComicsRepository.aggiungiCopia` non passano da
   /// una Scansione.
-  IntColumn get scansioneId => integer().nullable().references(Scansioni, #id)();
+  IntColumn get scansioneId =>
+      integer().nullable().references(Scansioni, #id)();
 }
 
 /// `Scansione`: una fotografia di cover acquisita e confermata, non ancora
@@ -195,19 +210,22 @@ class AnalisiCopertinaTable extends Table {
   /// Personaggi raffigurati sulla copertina (§6.2, tag liberi — deciso su
   /// #48). Lista vuota se Claude non riconosce nulla con sufficiente
   /// sicurezza, mai `null`.
-  TextColumn get characters =>
-      text().map(const StringListConverter()).withDefault(const Constant('[]'))();
+  TextColumn get characters => text()
+      .map(const StringListConverter())
+      .withDefault(const Constant('[]'))();
 
   /// Tag di stile/genere artistico o tipologia editoriale della copertina
   /// nel suo complesso (§6.2, deciso su #48), es. "manga", "variant cover".
-  TextColumn get coverStyleTags =>
-      text().map(const StringListConverter()).withDefault(const Constant('[]'))();
+  TextColumn get coverStyleTags => text()
+      .map(const StringListConverter())
+      .withDefault(const Constant('[]'))();
 
   /// Elementi visivi concreti e specifici della copertina (§6.2, deciso su
   /// #48) che non descrivono uno stile generale, es. "sfondo con
   /// esplosione".
-  TextColumn get visualElementTags =>
-      text().map(const StringListConverter()).withDefault(const Constant('[]'))();
+  TextColumn get visualElementTags => text()
+      .map(const StringListConverter())
+      .withDefault(const Constant('[]'))();
 
   /// Logo dell'editore riconosciuto visivamente (§6.2, deciso su #48) —
   /// parallelo a [publisher] (letto testualmente via OCR), ma distinto:
@@ -241,8 +259,9 @@ class AnalisiCopertinaTable extends Table {
   /// L'intera risposta JSON strutturata di Claude (autori, codici
   /// identificativi, posizione qualitativa/bounding box del testo).
   TextColumn get rawResponse => text().nullable()();
-  TextColumn get status => textEnum<StatoAnalisiCopertina>()
-      .withDefault(Constant(StatoAnalisiCopertina.pending.name))();
+  TextColumn get status => textEnum<StatoAnalisiCopertina>().withDefault(
+    Constant(StatoAnalisiCopertina.pending.name),
+  )();
 
   /// Motivo di un fallimento — utile dato che non c'è retry automatico.
   TextColumn get errorMessage => text().nullable()();
@@ -262,8 +281,9 @@ class IdentificazioneTable extends Table {
 
   IntColumn get id => integer().autoIncrement()();
   IntColumn get scansioneId => integer().references(Scansioni, #id)();
-  TextColumn get status => textEnum<StatoIdentificazione>()
-      .withDefault(Constant(StatoIdentificazione.pending.name))();
+  TextColumn get status => textEnum<StatoIdentificazione>().withDefault(
+    Constant(StatoIdentificazione.pending.name),
+  )();
 
   /// Motivo di un fallimento tecnico — nessun retry, come `AnalisiCopertina`.
   TextColumn get errorMessage => text().nullable()();
@@ -286,7 +306,8 @@ class CandidatiTable extends Table {
   String get tableName => 'candidati';
 
   IntColumn get id => integer().autoIncrement()();
-  IntColumn get identificazioneId => integer().references(IdentificazioneTable, #id)();
+  IntColumn get identificazioneId =>
+      integer().references(IdentificazioneTable, #id)();
   TextColumn get source => textEnum<FonteCandidato>()();
   IntColumn get edizioneId => integer().nullable().references(Edizioni, #id)();
   TextColumn get title => text().nullable()();
@@ -337,6 +358,71 @@ class ComicCreator extends Table {
   ];
 }
 
+/// `Tag`: tag personalizzato definito dall'utente (§9, deciso su
+/// [Tag personalizzati: nuova entità Tag](https://github.com/saviogiordano/MyComicBrain/issues/82))
+/// — nessun vincolo di univocità sul nome, dedup lasciata all'autocomplete
+/// in UI (stesso pattern di [Creator], #64). Nome di classe `TagTable`
+/// (non `Tag`) per lo stesso motivo di `SerieTable`.
+class TagTable extends Table {
+  @override
+  String get tableName => 'tag';
+
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+}
+
+/// Relazione many-to-many fra Edizione e Tag (§9, deciso su #82).
+class EdizioneTag extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get edizioneId => integer().references(Edizioni, #id)();
+  IntColumn get tagId => integer().references(TagTable, #id)();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {edizioneId, tagId},
+  ];
+}
+
+/// `Character`: personaggio catalogabile (§9, deciso su
+/// [Personaggio e Genere: tag liberi o entità catalogabili?](https://github.com/saviogiordano/MyComicBrain/issues/84))
+/// — entità dedicata sul modello di [Creator], nessun vincolo di univocità
+/// sul nome. Distinto dai "Personaggi raffigurati" letti dall'AI
+/// sull'Analisi Copertina (`AnalisiCopertinaTable.characters`): nessun
+/// collegamento automatico fra i due, stesso principio già valido per gli
+/// autori (vedi `ComicsRepository._creaEdizioneDaCandidato`).
+class Character extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+}
+
+/// Relazione many-to-many fra Edizione e Character (§9, deciso su #84) —
+/// parallela a [ComicCreator] ma senza `ruolo`.
+class ComicCharacter extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get edizioneId => integer().references(Edizioni, #id)();
+  IntColumn get characterId => integer().references(Character, #id)();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {edizioneId, characterId},
+  ];
+}
+
+/// Relazione many-to-many fra Edizione e Genere (§9, deciso su #84) — il
+/// Genere è un enum chiuso, non un'entità propria: questa tabella collega
+/// direttamente il valore enum all'Edizione, senza una tabella `Genere` a
+/// sé (a differenza di [Character]/[TagTable], che sono liberi).
+class EdizioneGenere extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get edizioneId => integer().references(Edizioni, #id)();
+  TextColumn get genere => textEnum<GenereEdizione>()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {edizioneId, genere},
+  ];
+}
+
 @DriftDatabase(
   tables: [
     Opere,
@@ -349,6 +435,11 @@ class ComicCreator extends Table {
     CandidatiTable,
     Creator,
     ComicCreator,
+    TagTable,
+    EdizioneTag,
+    Character,
+    ComicCharacter,
+    EdizioneGenere,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -357,15 +448,33 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from8To9: (m, schema) async {
+        await m.addColumn(schema.edizioni, schema.edizioni.year);
+        await m.addColumn(schema.edizioni, schema.edizioni.format);
+        await m.createTable(schema.tag);
+        await m.createTable(schema.edizioneTag);
+        await m.createTable(schema.character);
+        await m.createTable(schema.comicCharacter);
+        await m.createTable(schema.edizioneGenere);
+      },
       from7To8: (m, schema) async {
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.printingType);
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.classificazione);
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.description);
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.printingType,
+        );
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.classificazione,
+        );
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.description,
+        );
         await m.addColumn(schema.edizioni, schema.edizioni.printingType);
         await m.addColumn(schema.edizioni, schema.edizioni.classificazione);
       },
@@ -386,11 +495,26 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(schema.edizioni, schema.edizioni.language);
         await m.addColumn(schema.edizioni, schema.edizioni.color);
         await m.addColumn(schema.edizioni, schema.edizioni.ean);
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.releaseDate);
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.pageCount);
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.language);
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.color);
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.issn);
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.releaseDate,
+        );
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.pageCount,
+        );
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.language,
+        );
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.color,
+        );
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.issn,
+        );
       },
       from1To2: (m, schema) async {
         await m.dropColumn(schema.scansioni, 'ocr_text');
@@ -400,14 +524,26 @@ class AppDatabase extends _$AppDatabase {
       },
       from2To3: (m, schema) async {
         await m.renameTable(schema.analisiCopertina, 'analisi_ocr');
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.characters);
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.coverStyleTags);
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.visualElementTags);
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.characters,
+        );
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.coverStyleTags,
+        );
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.visualElementTags,
+        );
         await m.addColumn(
           schema.analisiCopertina,
           schema.analisiCopertina.recognizedPublisherLogo,
         );
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.recognizedSeriesLogo);
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.recognizedSeriesLogo,
+        );
       },
       from3To4: (m, schema) async {
         await m.createTable(schema.identificazione);

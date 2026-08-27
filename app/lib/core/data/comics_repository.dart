@@ -9,8 +9,13 @@ import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
 import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
+import 'package:mycomicbrain/core/domain/edizione_collezione.dart';
 import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
+import 'package:mycomicbrain/core/domain/formato.dart';
+import 'package:mycomicbrain/core/domain/genere.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
+import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
+import 'package:mycomicbrain/core/domain/serie_lista.dart';
 
 /// Espone il dominio del catalogo (opera/edizione/copia, §36) all'UI senza
 /// farle vedere Drift: prende e restituisce tipi di dominio, mai i tipi
@@ -49,9 +54,13 @@ class ComicsRepository {
     String? issn,
   }) async {
     final nomeNormalizzato = name.trim();
-    final esistente = await (_db.select(
-      _db.serieTable,
-    )..where((s) => s.name.lower().equals(nomeNormalizzato.toLowerCase()))).getSingleOrNull();
+    final esistente =
+        await (_db.select(
+              _db.serieTable,
+            )..where(
+              (s) => s.name.lower().equals(nomeNormalizzato.toLowerCase()),
+            ))
+            .getSingleOrNull();
     if (esistente != null) return esistente.id;
 
     return _db
@@ -77,7 +86,9 @@ class ComicsRepository {
       final tutte = await _db.select(_db.serieTable).get();
       final gruppi = <String, List<SerieTableData>>{};
       for (final serie in tutte) {
-        gruppi.putIfAbsent(serie.name.trim().toLowerCase(), () => []).add(serie);
+        gruppi
+            .putIfAbsent(serie.name.trim().toLowerCase(), () => [])
+            .add(serie);
       }
 
       for (final gruppo in gruppi.values) {
@@ -88,15 +99,22 @@ class ComicsRepository {
 
         final totalIssues =
             superstite.totalIssues ??
-            gruppo.map((s) => s.totalIssues).firstWhere((v) => v != null, orElse: () => null);
+            gruppo
+                .map((s) => s.totalIssues)
+                .firstWhere((v) => v != null, orElse: () => null);
         final issn =
             superstite.issn ??
-            gruppo.map((s) => s.issn).firstWhere((v) => v != null, orElse: () => null);
+            gruppo
+                .map((s) => s.issn)
+                .firstWhere((v) => v != null, orElse: () => null);
         if (totalIssues != superstite.totalIssues || issn != superstite.issn) {
           await (_db.update(
             _db.serieTable,
           )..where((s) => s.id.equals(superstite.id))).write(
-            SerieTableCompanion(totalIssues: Value(totalIssues), issn: Value(issn)),
+            SerieTableCompanion(
+              totalIssues: Value(totalIssues),
+              issn: Value(issn),
+            ),
           );
         }
 
@@ -106,7 +124,9 @@ class ComicsRepository {
           )..where((e) => e.serieId.equals(dup.id))).write(
             EdizioniCompanion(serieId: Value(superstite.id)),
           );
-          await (_db.delete(_db.serieTable)..where((s) => s.id.equals(dup.id))).go();
+          await (_db.delete(
+            _db.serieTable,
+          )..where((s) => s.id.equals(dup.id))).go();
         }
       }
     });
@@ -129,6 +149,8 @@ class ComicsRepository {
     String? description,
     String? printingType,
     String? classificazione,
+    int? year,
+    FormatoEdizione? format,
     DateTime? createdAt,
   }) {
     return _db
@@ -151,6 +173,8 @@ class ComicsRepository {
             description: Value(description),
             printingType: Value(printingType),
             classificazione: Value(classificazione),
+            year: Value(year),
+            format: Value(format),
             createdAt: createdAt ?? DateTime.now(),
           ),
         );
@@ -251,6 +275,108 @@ class ComicsRepository {
           ),
       ],
     );
+  }
+
+  // --- Personaggio (§9, deciso su #84) — stesso pattern di Creator/#64. ---
+
+  /// Cerca Personaggi esistenti per nome (match parziale, per l'autocomplete
+  /// dell'asse Personaggio della Collezione).
+  Future<List<CharacterData>> cercaCharacter(String query) {
+    return (_db.select(
+      _db.character,
+    )..where((c) => c.name.like('%$query%'))).get();
+  }
+
+  /// Crea un nuovo Personaggio. Nessun controllo di univocità sul nome
+  /// (#84, stesso pattern di [aggiungiCreator]).
+  Future<int> aggiungiCharacter(String name) {
+    return _db
+        .into(_db.character)
+        .insert(CharacterCompanion.insert(name: name));
+  }
+
+  /// Collega un Personaggio a un'Edizione.
+  Future<void> collegaCharacterAEdizione({
+    required int edizioneId,
+    required int characterId,
+  }) {
+    return _db
+        .into(_db.comicCharacter)
+        .insert(
+          ComicCharacterCompanion.insert(
+            edizioneId: edizioneId,
+            characterId: characterId,
+          ),
+        );
+  }
+
+  /// Rimuove un collegamento Personaggio↔Edizione (riga ComicCharacter).
+  Future<void> rimuoviCharacterDaEdizione(int comicCharacterId) {
+    return (_db.delete(
+      _db.comicCharacter,
+    )..where((c) => c.id.equals(comicCharacterId))).go();
+  }
+
+  // --- Tag personalizzati (§9, deciso su #82) — stesso pattern di Creator/#64. ---
+
+  /// Cerca Tag esistenti per nome (match parziale, per l'autocomplete
+  /// dell'asse Tag della Collezione).
+  Future<List<TagTableData>> cercaTag(String query) {
+    return (_db.select(
+      _db.tagTable,
+    )..where((t) => t.name.like('%$query%'))).get();
+  }
+
+  /// Crea un nuovo Tag. Nessun vincolo di univocità sul nome (#82).
+  Future<int> aggiungiTag(String name) {
+    return _db.into(_db.tagTable).insert(TagTableCompanion.insert(name: name));
+  }
+
+  /// Collega un Tag a un'Edizione.
+  Future<void> collegaTagAEdizione({
+    required int edizioneId,
+    required int tagId,
+  }) {
+    return _db
+        .into(_db.edizioneTag)
+        .insert(
+          EdizioneTagCompanion.insert(edizioneId: edizioneId, tagId: tagId),
+        );
+  }
+
+  /// Rimuove un collegamento Tag↔Edizione (riga EdizioneTag).
+  Future<void> rimuoviTagDaEdizione(int edizioneTagId) {
+    return (_db.delete(
+      _db.edizioneTag,
+    )..where((t) => t.id.equals(edizioneTagId))).go();
+  }
+
+  // --- Genere (§9, deciso su #84) — enum multi-valore, sostituzione intera. ---
+
+  /// Sostituisce l'intero insieme dei Generi di un'Edizione con [generi] —
+  /// a differenza di Autore/Personaggio/Tag (collegamenti singoli aggiunti/
+  /// rimossi uno a uno), il Genere è un piccolo enum chiuso: la UI lo tratta
+  /// come un insieme di chip selezionate, non come voci con un proprio id da
+  /// tracciare singolarmente.
+  Future<void> impostaGeneriEdizione({
+    required int edizioneId,
+    required Set<GenereEdizione> generi,
+  }) {
+    return _db.transaction(() async {
+      await (_db.delete(
+        _db.edizioneGenere,
+      )..where((g) => g.edizioneId.equals(edizioneId))).go();
+      for (final genere in generi) {
+        await _db
+            .into(_db.edizioneGenere)
+            .insert(
+              EdizioneGenereCompanion.insert(
+                edizioneId: edizioneId,
+                genere: genere,
+              ),
+            );
+      }
+    });
   }
 
   /// Persiste una Scansione confermata (revisione ritaglio/rotazione, #24).
@@ -930,6 +1056,175 @@ ORDER BY s.name, ns.n
         });
   }
 
+  // --- Schermo Serie (§11, deciso su #97/#98/#99). ---
+
+  /// L'elenco `/serie` raggruppato nelle tre sezioni fissate su #97: solo
+  /// le serie con almeno un'edizione posseduta compaiono (stesso filtro del
+  /// KPI "serie" della Dashboard, #2). Ordinamento delle sezioni deciso su
+  /// #97: incomplete per percentuale di completamento crescente, le altre
+  /// due alfabetiche.
+  Stream<SerieLista> watchSerieLista() {
+    return _db
+        .customSelect(
+          '''
+WITH RECURSIVE
+  numeri_serie(serie_id, n, total_issues) AS (
+    SELECT id, 1, total_issues FROM serie WHERE total_issues IS NOT NULL
+    UNION ALL
+    SELECT serie_id, n + 1, total_issues FROM numeri_serie WHERE n < total_issues
+  ),
+  numeri_posseduti AS (
+    SELECT DISTINCT e.serie_id AS serie_id, e.issue_number AS n
+    FROM edizioni e
+    JOIN copie c ON c.edizione_id = e.id AND c.status IN ('posseduta', 'prestata')
+    WHERE e.serie_id IS NOT NULL AND e.issue_number IS NOT NULL
+  ),
+  serie_posseduta AS (
+    SELECT DISTINCT e.serie_id AS serie_id
+    FROM edizioni e
+    JOIN copie c ON c.edizione_id = e.id AND c.status IN ('posseduta', 'prestata')
+    WHERE e.serie_id IS NOT NULL
+  ),
+  mancanti_count AS (
+    SELECT ns.serie_id AS serie_id, COUNT(*) AS n
+    FROM numeri_serie ns
+    WHERE NOT EXISTS (
+      SELECT 1 FROM numeri_posseduti np WHERE np.serie_id = ns.serie_id AND np.n = ns.n
+    )
+    GROUP BY ns.serie_id
+  ),
+  posseduti_count AS (
+    SELECT serie_id, COUNT(*) AS n FROM numeri_posseduti GROUP BY serie_id
+  )
+SELECT
+  s.id AS serie_id,
+  s.name AS nome,
+  s.total_issues AS numeri_totali,
+  COALESCE(pc.n, 0) AS numeri_posseduti,
+  COALESCE(mc.n, 0) AS numeri_mancanti
+FROM serie s
+JOIN serie_posseduta sp ON sp.serie_id = s.id
+LEFT JOIN posseduti_count pc ON pc.serie_id = s.id
+LEFT JOIN mancanti_count mc ON mc.serie_id = s.id
+''',
+          readsFrom: {_db.serieTable, _db.edizioni, _db.copie},
+        )
+        .watch()
+        .map((rows) {
+          final incomplete = <SerieRiga>[];
+          final complete = <SerieRiga>[];
+          final senzaTotale = <SerieRiga>[];
+
+          for (final row in rows) {
+            final riga = SerieRiga(
+              serieId: row.read<int>('serie_id'),
+              nome: row.read<String>('nome'),
+              numeriPosseduti: row.read<int>('numeri_posseduti'),
+              numeriTotali: row.readNullable<int>('numeri_totali'),
+            );
+            if (riga.numeriTotali == null) {
+              senzaTotale.add(riga);
+            } else if (row.read<int>('numeri_mancanti') == 0) {
+              complete.add(riga);
+            } else {
+              incomplete.add(riga);
+            }
+          }
+
+          incomplete.sort(
+            (a, b) => a.percentualeCompletamento!.compareTo(
+              b.percentualeCompletamento!,
+            ),
+          );
+          complete.sort((a, b) => a.nome.compareTo(b.nome));
+          senzaTotale.sort((a, b) => a.nome.compareTo(b.nome));
+
+          return SerieLista(
+            incomplete: incomplete,
+            complete: complete,
+            senzaTotale: senzaTotale,
+          );
+        });
+  }
+
+  /// Il dettaglio `/serie/:id`: numeri posseduti, editore/anno derivati
+  /// aggregando le edizioni della serie (nessun nuovo campo su
+  /// `SerieTable`, deciso su #97), duplicati. Null se la Serie non esiste
+  /// (più cancellata nel frattempo).
+  Stream<SerieDettaglio?> watchSerieDettaglio(int serieId) {
+    return _db
+        .customSelect(
+          '''
+WITH posseduti AS (
+  SELECT DISTINCT e.issue_number AS n
+  FROM edizioni e
+  JOIN copie c ON c.edizione_id = e.id AND c.status IN ('posseduta', 'prestata')
+  WHERE e.serie_id = ?1 AND e.issue_number IS NOT NULL
+)
+SELECT
+  s.id AS serie_id,
+  s.name AS nome,
+  s.total_issues AS numeri_totali,
+  s.issn AS issn,
+  p.n AS numero_posseduto,
+  (SELECT publisher FROM edizioni WHERE serie_id = ?1 AND publisher IS NOT NULL
+     GROUP BY publisher ORDER BY COUNT(*) DESC, publisher LIMIT 1) AS publisher,
+  (SELECT MIN(year) FROM edizioni WHERE serie_id = ?1 AND year IS NOT NULL) AS anno_inizio,
+  (SELECT COUNT(*) FROM (
+     SELECT e2.id FROM edizioni e2
+     JOIN copie c2 ON c2.edizione_id = e2.id AND c2.status IN ('posseduta', 'prestata')
+     WHERE e2.serie_id = ?1
+     GROUP BY e2.id HAVING COUNT(*) >= 2
+   )) AS duplicati
+FROM serie s
+LEFT JOIN posseduti p ON 1 = 1
+WHERE s.id = ?1
+ORDER BY p.n
+''',
+          variables: [Variable.withInt(serieId)],
+          readsFrom: {_db.serieTable, _db.edizioni, _db.copie},
+        )
+        .watch()
+        .map((rows) {
+          if (rows.isEmpty) return null;
+          final first = rows.first;
+          return SerieDettaglio(
+            serieId: first.read<int>('serie_id'),
+            nome: first.read<String>('nome'),
+            issn: first.readNullable<String>('issn'),
+            numeriTotali: first.readNullable<int>('numeri_totali'),
+            numeriPosseduti: [
+              for (final row in rows)
+                if (row.readNullable<int>('numero_posseduto') != null)
+                  row.read<int>('numero_posseduto'),
+            ],
+            duplicati: first.read<int>('duplicati'),
+            publisher: first.readNullable<String>('publisher'),
+            annoInizio: first.readNullable<int>('anno_inizio'),
+          );
+        });
+  }
+
+  /// Aggiorna nome/numero totale/ISSN di una Serie (§11, deciso su #99) —
+  /// unica scrittura UI su questi campi, finora popolati solo da
+  /// `aggiungiSerie()` (ingestion AI). Nessun vincolo qui sul numero totale
+  /// rispetto ai numeri già posseduti: lo valida la UI (`ModificaSerieSheet`)
+  /// prima di chiamare questo metodo.
+  Future<void> aggiornaSerie({
+    required int id,
+    required String name,
+    int? totalIssues,
+    String? issn,
+  }) {
+    return (_db.update(_db.serieTable)..where((s) => s.id.equals(id))).write(
+      SerieTableCompanion(
+        name: Value(name.trim()),
+        totalIssues: Value(totalIssues),
+        issn: Value(issn),
+      ),
+    );
+  }
+
   /// Quante copie mostrare nel carosello "Aggiunti di recente" — oltre lo
   /// scroll orizzontale di una Dashboard non aggiunge informazione utile.
   static const _limiteAggiuntiDiRecente = 12;
@@ -1145,6 +1440,8 @@ ORDER BY s.name, ns.n
     String? ean,
     String? volume,
     String? description,
+    int? year,
+    FormatoEdizione? format,
   }) {
     return (_db.update(
       _db.edizioni,
@@ -1163,6 +1460,8 @@ ORDER BY s.name, ns.n
         ean: Value(ean),
         volume: Value(volume),
         description: Value(description),
+        year: Value(year),
+        format: Value(format),
       ),
     );
   }
@@ -1256,5 +1555,196 @@ ORDER BY s.name, ns.n
     await (_db.delete(
       _db.edizioni,
     )..where((e) => e.id.equals(edizioneId))).go();
+  }
+
+  // --- Collezione (§9, deciso su #79/#90). ---
+
+  /// Le Edizioni possedute (stessa regola "Edizione posseduta" del resto del
+  /// catalogo: almeno una Copia `posseduta`/`prestata`) con tutti i valori
+  /// dei 12 assi di filtro/ordinamento già risolti — filtro/ordinamento
+  /// veri e propri restano lato Dart (`FiltriCollezioneLogic`, #85),
+  /// nessuna paginazione (#95): il repository restituisce l'intero catalogo
+  /// posseduto a ogni emissione.
+  ///
+  /// Un'unica query di base (Edizioni+Opera+Serie+Copie possedute, per il
+  /// badge duplicato e gli assi per-Copia) più quattro letture bulk per gli
+  /// assi many-to-many (Autore, Personaggio, Genere, Tag), raggruppate per
+  /// `edizioneId` in Dart invece che unite in un solo join — un join
+  /// simultaneo di 4 relazioni many-to-many produrrebbe un prodotto
+  /// cartesiano per Edizione (lo stesso problema che [watchEdizione] evita
+  /// avendo una sola relazione many-to-many, Autori, oltre a Copie).
+  Stream<List<EdizioneCollezione>> watchCollezione() {
+    final query = _db.select(_db.edizioni).join([
+      innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+      leftOuterJoin(
+        _db.serieTable,
+        _db.serieTable.id.equalsExp(_db.edizioni.serieId),
+      ),
+      leftOuterJoin(
+        _db.copie,
+        _db.copie.edizioneId.equalsExp(_db.edizioni.id) &
+            _db.copie.status.isInValues(const [
+              StatoCopia.posseduta,
+              StatoCopia.prestata,
+            ]),
+      ),
+    ]);
+
+    return query.watch().asyncMap((rows) async {
+      final righePerEdizione = <int, List<TypedResult>>{};
+      for (final row in rows) {
+        righePerEdizione
+            .putIfAbsent(row.readTable(_db.edizioni).id, () => [])
+            .add(row);
+      }
+      // Il leftOuterJoin include anche le Edizioni senza copie possedute
+      // (riga con Copie null): solo l'"Edizione posseduta" entra in
+      // Collezione.
+      final righeEdizioniPossedute = righePerEdizione.entries
+          .where(
+            (entry) =>
+                entry.value.any((r) => r.readTableOrNull(_db.copie) != null),
+          )
+          .toList();
+      if (righeEdizioniPossedute.isEmpty) return const <EdizioneCollezione>[];
+
+      final ids = [for (final entry in righeEdizioniPossedute) entry.key];
+      final autori = await _autoriPerEdizione(ids);
+      final personaggi = await _personaggiPerEdizione(ids);
+      final tag = await _tagPerEdizione(ids);
+      final generi = await _generiPerEdizione(ids);
+
+      return [
+        for (final entry in righeEdizioniPossedute)
+          await _edizioneCollezioneDaRighe(
+            entry.value,
+            autori: autori[entry.key] ?? const [],
+            personaggi: personaggi[entry.key] ?? const [],
+            tag: tag[entry.key] ?? const [],
+            generi: generi[entry.key] ?? const [],
+          ),
+      ];
+    });
+  }
+
+  /// Autori collegati (§8.1/§9), raggruppati per `edizioneId`, per
+  /// l'insieme di Edizioni date — bulk equivalente di [autoriDiEdizione]
+  /// per più Edizioni insieme, usato da [watchCollezione].
+  Future<Map<int, List<String>>> _autoriPerEdizione(
+    List<int> edizioneIds,
+  ) async {
+    final query = _db.select(_db.comicCreator).join([
+      innerJoin(
+        _db.creator,
+        _db.creator.id.equalsExp(_db.comicCreator.creatorId),
+      ),
+    ])..where(_db.comicCreator.edizioneId.isIn(edizioneIds));
+
+    final righe = await query.get();
+    final risultato = <int, List<String>>{};
+    for (final riga in righe) {
+      final edizioneId = riga.readTable(_db.comicCreator).edizioneId;
+      risultato
+          .putIfAbsent(edizioneId, () => [])
+          .add(riga.readTable(_db.creator).name);
+    }
+    return risultato;
+  }
+
+  /// Personaggi collegati (§9, #84), raggruppati per `edizioneId`, per
+  /// l'insieme di Edizioni date — usato da [watchCollezione].
+  Future<Map<int, List<String>>> _personaggiPerEdizione(
+    List<int> edizioneIds,
+  ) async {
+    final query = _db.select(_db.comicCharacter).join([
+      innerJoin(
+        _db.character,
+        _db.character.id.equalsExp(_db.comicCharacter.characterId),
+      ),
+    ])..where(_db.comicCharacter.edizioneId.isIn(edizioneIds));
+
+    final righe = await query.get();
+    final risultato = <int, List<String>>{};
+    for (final riga in righe) {
+      final edizioneId = riga.readTable(_db.comicCharacter).edizioneId;
+      risultato
+          .putIfAbsent(edizioneId, () => [])
+          .add(riga.readTable(_db.character).name);
+    }
+    return risultato;
+  }
+
+  /// Tag collegati (§9, #82), raggruppati per `edizioneId`, per l'insieme
+  /// di Edizioni date — usato da [watchCollezione].
+  Future<Map<int, List<String>>> _tagPerEdizione(List<int> edizioneIds) async {
+    final query = _db.select(_db.edizioneTag).join([
+      innerJoin(_db.tagTable, _db.tagTable.id.equalsExp(_db.edizioneTag.tagId)),
+    ])..where(_db.edizioneTag.edizioneId.isIn(edizioneIds));
+
+    final righe = await query.get();
+    final risultato = <int, List<String>>{};
+    for (final riga in righe) {
+      final edizioneId = riga.readTable(_db.edizioneTag).edizioneId;
+      risultato
+          .putIfAbsent(edizioneId, () => [])
+          .add(riga.readTable(_db.tagTable).name);
+    }
+    return risultato;
+  }
+
+  Future<Map<int, List<GenereEdizione>>> _generiPerEdizione(
+    List<int> edizioneIds,
+  ) async {
+    final righe = await (_db.select(
+      _db.edizioneGenere,
+    )..where((g) => g.edizioneId.isIn(edizioneIds))).get();
+    final risultato = <int, List<GenereEdizione>>{};
+    for (final riga in righe) {
+      risultato.putIfAbsent(riga.edizioneId, () => []).add(riga.genere);
+    }
+    return risultato;
+  }
+
+  Future<EdizioneCollezione> _edizioneCollezioneDaRighe(
+    List<TypedResult> righe, {
+    required List<String> autori,
+    required List<String> personaggi,
+    required List<String> tag,
+    required List<GenereEdizione> generi,
+  }) async {
+    final edizione = righe.first.readTable(_db.edizioni);
+    final opera = righe.first.readTable(_db.opere);
+    final serie = righe.first.readTableOrNull(_db.serieTable);
+
+    final copiePerId = <int, CopiaAsseCollezione>{};
+    for (final riga in righe) {
+      final copia = riga.readTableOrNull(_db.copie);
+      if (copia == null) continue;
+      copiePerId[copia.id] = CopiaAsseCollezione(
+        readingStatus: copia.readingStatus,
+        condition: copia.condition,
+        location: copia.location,
+        createdAt: copia.createdAt,
+      );
+    }
+
+    return EdizioneCollezione(
+      edizioneId: edizione.id,
+      titolo: opera.title,
+      serieId: serie?.id,
+      serieName: serie?.name,
+      publisher: edizione.publisher,
+      issueNumber: edizione.issueNumber,
+      issueNumberLabel: edizione.issueNumberLabel,
+      coverImage: await risolviCoverImage(edizione.coverImage),
+      year: edizione.year,
+      format: edizione.format,
+      language: edizione.language,
+      autori: autori,
+      personaggi: personaggi,
+      generi: generi,
+      tag: tag,
+      copiePossedute: copiePerId.values.toList(),
+    );
   }
 }

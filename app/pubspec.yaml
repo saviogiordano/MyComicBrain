@@ -44,6 +44,7 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.6
   permission_handler: ^13.0.1
+  shared_preferences: ^2.5.5
 
 dependency_overrides:
   # permission_handler_android 14.0.0's own android/build.gradle.kts is broken

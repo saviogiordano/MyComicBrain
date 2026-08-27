@@ -7,6 +7,9 @@ import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
+import 'package:mycomicbrain/core/domain/creator.dart';
+import 'package:mycomicbrain/core/domain/formato.dart';
+import 'package:mycomicbrain/core/domain/genere.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -327,6 +330,193 @@ void main() {
     });
   });
 
+  group('watchSerieLista (§11)', () {
+    test('collezione vuota: nessuna sezione', () async {
+      final lista = await repo.watchSerieLista().first;
+      expect(lista.isEmpty, isTrue);
+      expect(lista.incomplete, isEmpty);
+      expect(lista.complete, isEmpty);
+      expect(lista.senzaTotale, isEmpty);
+    });
+
+    test('raggruppa nelle tre sezioni e ordina ciascuna secondo #97', () async {
+      // Incomplete, in ordine di % di completamento crescente attesa:
+      // "B" 1/4 (25%), "A" 1/2 (50%).
+      final serieA = await repo.aggiungiSerie(name: 'A incompleta', totalIssues: 2);
+      await edizioneConCopia(
+        titolo: 'A #1',
+        serieId: serieA,
+        issueNumber: 1,
+        status: StatoCopia.posseduta,
+      );
+      final serieB = await repo.aggiungiSerie(name: 'B incompleta', totalIssues: 4);
+      await edizioneConCopia(
+        titolo: 'B #1',
+        serieId: serieB,
+        issueNumber: 1,
+        status: StatoCopia.posseduta,
+      );
+
+      // Complete, alfabetiche.
+      final serieZeta = await repo.aggiungiSerie(name: 'Zeta completa', totalIssues: 1);
+      await edizioneConCopia(
+        titolo: 'Zeta #1',
+        serieId: serieZeta,
+        issueNumber: 1,
+        status: StatoCopia.posseduta,
+      );
+      final serieAlfa = await repo.aggiungiSerie(name: 'Alfa completa', totalIssues: 1);
+      await edizioneConCopia(
+        titolo: 'Alfa #1',
+        serieId: serieAlfa,
+        issueNumber: 1,
+        status: StatoCopia.posseduta,
+      );
+
+      // Senza numero totale, alfabetiche.
+      final serieRho = await repo.aggiungiSerie(name: 'Rho senza totale');
+      await edizioneConCopia(
+        titolo: 'Rho #1',
+        serieId: serieRho,
+        issueNumber: 1,
+        status: StatoCopia.posseduta,
+      );
+      final serieBeta = await repo.aggiungiSerie(name: 'Beta senza totale');
+      await edizioneConCopia(
+        titolo: 'Beta #1',
+        serieId: serieBeta,
+        issueNumber: 1,
+        status: StatoCopia.posseduta,
+      );
+
+      final lista = await repo.watchSerieLista().first;
+
+      expect(lista.incomplete.map((s) => s.nome), ['B incompleta', 'A incompleta']);
+      expect(lista.complete.map((s) => s.nome), ['Alfa completa', 'Zeta completa']);
+      expect(lista.senzaTotale.map((s) => s.nome), ['Beta senza totale', 'Rho senza totale']);
+    });
+
+    test('una serie senza edizioni possedute non compare (stesso filtro del KPI "serie")', () async {
+      final serieId = await repo.aggiungiSerie(name: 'Solo venduta', totalIssues: 3);
+      await edizioneConCopia(
+        titolo: 'Solo venduta #1',
+        serieId: serieId,
+        issueNumber: 1,
+        status: StatoCopia.venduta,
+      );
+
+      final lista = await repo.watchSerieLista().first;
+      expect(lista.isEmpty, isTrue);
+    });
+  });
+
+  group('watchSerieDettaglio (§11)', () {
+    test('serie inesistente: null', () async {
+      expect(await repo.watchSerieDettaglio(999999).first, isNull);
+    });
+
+    test('numeri posseduti, editore/anno derivati e duplicati', () async {
+      final serieId = await repo.aggiungiSerie(
+        name: 'Kaiju Bianco',
+        totalIssues: 5,
+        issn: '1122-3344',
+      );
+
+      final opera1 = await repo.aggiungiOpera(title: 'Kaiju Bianco #1');
+      final edizione1 = await repo.aggiungiEdizione(
+        operaId: opera1,
+        serieId: serieId,
+        issueNumber: 1,
+        publisher: 'Bao Publishing',
+        year: 2019,
+      );
+      await repo.aggiungiCopia(edizioneId: edizione1, status: StatoCopia.posseduta);
+      // Seconda copia dello stesso #1: duplicato.
+      await repo.aggiungiCopia(edizioneId: edizione1, status: StatoCopia.posseduta);
+
+      final opera2 = await repo.aggiungiOpera(title: 'Kaiju Bianco #2');
+      final edizione2 = await repo.aggiungiEdizione(
+        operaId: opera2,
+        serieId: serieId,
+        issueNumber: 2,
+        publisher: 'Bao Publishing',
+        year: 2018,
+      );
+      await repo.aggiungiCopia(edizioneId: edizione2, status: StatoCopia.posseduta);
+
+      final opera3 = await repo.aggiungiOpera(title: 'Kaiju Bianco #3');
+      final edizione3 = await repo.aggiungiEdizione(
+        operaId: opera3,
+        serieId: serieId,
+        issueNumber: 3,
+        publisher: 'Altro editore',
+      );
+      await repo.aggiungiCopia(edizioneId: edizione3, status: StatoCopia.posseduta);
+
+      final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+
+      expect(dettaglio, isNotNull);
+      expect(dettaglio!.nome, 'Kaiju Bianco');
+      expect(dettaglio.issn, '1122-3344');
+      expect(dettaglio.numeriTotali, 5);
+      expect(dettaglio.numeriPosseduti, [1, 2, 3]);
+      expect(dettaglio.numeriMancanti, [4, 5]);
+      expect(dettaglio.completa, isFalse);
+      expect(dettaglio.duplicati, 1);
+      expect(dettaglio.publisher, 'Bao Publishing'); // più frequente (2 su 3)
+      expect(dettaglio.annoInizio, 2018); // minimo fra le edizioni con anno noto
+    });
+
+    test('senza numero totale: numeriMancanti vuota e non è mai completa', () async {
+      final serieId = await repo.aggiungiSerie(name: 'Senza totale');
+      final opera = await repo.aggiungiOpera(title: 'X #1');
+      final edizione = await repo.aggiungiEdizione(
+        operaId: opera,
+        serieId: serieId,
+        issueNumber: 1,
+      );
+      await repo.aggiungiCopia(edizioneId: edizione, status: StatoCopia.posseduta);
+
+      final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+
+      expect(dettaglio!.numeriTotali, isNull);
+      expect(dettaglio.numeriPosseduti, [1]);
+      expect(dettaglio.numeriMancanti, isEmpty);
+      expect(dettaglio.completa, isFalse);
+    });
+  });
+
+  group('aggiornaSerie (§11, deciso su #99)', () {
+    test('scrive nome/numero totale/issn — finora popolati solo da aggiungiSerie', () async {
+      final serieId = await repo.aggiungiSerie(name: 'Ombre di Marte');
+
+      await repo.aggiornaSerie(
+        id: serieId,
+        name: 'Ombre di Marte',
+        totalIssues: 16,
+        issn: '5566-7788',
+      );
+
+      final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+      expect(dettaglio!.numeriTotali, 16);
+      expect(dettaglio.issn, '5566-7788');
+    });
+
+    test('totale/issn null: torna una serie senza numero totale/issn', () async {
+      final serieId = await repo.aggiungiSerie(
+        name: 'Con totale',
+        totalIssues: 10,
+        issn: '1111-2222',
+      );
+
+      await repo.aggiornaSerie(id: serieId, name: 'Con totale');
+
+      final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+      expect(dettaglio!.numeriTotali, isNull);
+      expect(dettaglio.issn, isNull);
+    });
+  });
+
   group('€ speso finora', () {
     test('somma i prezzi delle copie possedute, ignora quelle senza prezzo', () async {
       final operaConPrezzo = await repo.aggiungiOpera(title: 'Con prezzo');
@@ -549,6 +739,168 @@ void main() {
 
         final recente = (await repoConBase.watchAggiuntiDiRecente().first).single;
         expect(recente.coverImage, p.join(tempBase.path, 'copertine', '1.jpg'));
+      },
+    );
+  });
+
+  group('watchCollezione (§9)', () {
+    test(
+      'solo le Edizioni con almeno una copia posseduta/prestata compaiono',
+      () async {
+        await edizioneConCopia(
+          titolo: 'Posseduta',
+          status: StatoCopia.posseduta,
+        );
+        await edizioneConCopia(titolo: 'Prestata', status: StatoCopia.prestata);
+        await edizioneConCopia(titolo: 'Venduta', status: StatoCopia.venduta);
+        await edizioneConCopia(titolo: 'Persa', status: StatoCopia.persa);
+
+        final collezione = await repo.watchCollezione().first;
+
+        expect(collezione.map((e) => e.titolo).toSet(), {
+          'Posseduta',
+          'Prestata',
+        });
+      },
+    );
+
+    test(
+      'il badge duplicato conta le copie possedute/prestate, non vendute/perse',
+      () async {
+        final operaId = await repo.aggiungiOpera(title: 'Con copie miste');
+        final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.prestata,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.venduta,
+        );
+
+        final edizione = (await repo.watchCollezione().first).single;
+
+        expect(edizione.numeroCopie, 2);
+      },
+    );
+
+    test(
+      "serie, editore, anno, formato e lingua risolti dai campi dell'Edizione",
+      () async {
+        final serieId = await repo.aggiungiSerie(name: 'Dylan Dog');
+        final operaId = await repo.aggiungiOpera(title: 'Dylan Dog 407');
+        final edizioneId = await repo.aggiungiEdizione(
+          operaId: operaId,
+          serieId: serieId,
+          publisher: 'Bonelli',
+          year: 2021,
+          format: FormatoEdizione.bonellide,
+          language: 'Italiano',
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
+
+        final edizione = (await repo.watchCollezione().first).single;
+
+        expect(edizione.serieName, 'Dylan Dog');
+        expect(edizione.publisher, 'Bonelli');
+        expect(edizione.year, 2021);
+        expect(edizione.format, FormatoEdizione.bonellide);
+        expect(edizione.language, 'Italiano');
+      },
+    );
+
+    test(
+      'un\'Edizione senza Serie ha serieName null (asse "Senza serie" a carico della UI)',
+      () async {
+        final edizioneId = await edizioneConCopia(
+          titolo: 'One-shot',
+          status: StatoCopia.posseduta,
+        );
+        final edizione = (await repo.watchCollezione().first).firstWhere(
+          (e) => e.edizioneId == edizioneId,
+        );
+
+        expect(edizione.serieName, isNull);
+      },
+    );
+
+    test('autori, personaggi, tag e generi aggregati per Edizione', () async {
+      final operaId = await repo.aggiungiOpera(title: 'Watchmen');
+      final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+
+      final autoreId = await repo.aggiungiCreator('Alan Moore');
+      await repo.collegaCreatorAEdizione(
+        edizioneId: edizioneId,
+        creatorId: autoreId,
+        ruolo: RuoloCreator.sceneggiatore,
+      );
+
+      final personaggioId = await repo.aggiungiCharacter('Rorschach');
+      await repo.collegaCharacterAEdizione(
+        edizioneId: edizioneId,
+        characterId: personaggioId,
+      );
+
+      final tagId = await repo.aggiungiTag('capolavoro');
+      await repo.collegaTagAEdizione(edizioneId: edizioneId, tagId: tagId);
+
+      await repo.impostaGeneriEdizione(
+        edizioneId: edizioneId,
+        generi: {GenereEdizione.supereroi, GenereEdizione.drammatico},
+      );
+
+      final edizione = (await repo.watchCollezione().first).single;
+
+      expect(edizione.autori, ['Alan Moore']);
+      expect(edizione.personaggi, ['Rorschach']);
+      expect(edizione.tag, ['capolavoro']);
+      expect(edizione.generi.toSet(), {
+        GenereEdizione.supereroi,
+        GenereEdizione.drammatico,
+      });
+    });
+
+    test(
+      'gli assi per-Copia (stato di lettura, condizione, posizione) riflettono solo le copie '
+      'possedute/prestate — regola "almeno una copia" (#80)',
+      () async {
+        final operaId = await repo.aggiungiOpera(title: 'Batman: Anno Uno');
+        final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+          readingStatus: StatoLettura.letto,
+          condition: CondizioneCopia.good,
+          location: 'Scaffale A',
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.venduta,
+          readingStatus: StatoLettura.daLeggere,
+          condition: CondizioneCopia.poor,
+          location: 'Scatola 1',
+        );
+
+        final edizione = (await repo.watchCollezione().first).single;
+
+        expect(edizione.copiePossedute, hasLength(1));
+        expect(
+          edizione.copiePossedute.single.readingStatus,
+          StatoLettura.letto,
+        );
+        expect(edizione.copiePossedute.single.condition, CondizioneCopia.good);
+        expect(edizione.copiePossedute.single.location, 'Scaffale A');
       },
     );
   });
