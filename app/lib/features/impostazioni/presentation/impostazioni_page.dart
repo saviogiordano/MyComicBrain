@@ -1,11 +1,305 @@
 import 'package:flutter/material.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/features/impostazioni/application/ai_provider.dart';
 
-class ImpostazioniPage extends StatelessWidget {
+/// Schermo Impostazioni (§12, deciso su #104): elenco di righe stile
+/// impostazioni di sistema — il valore corrente in trailing, ogni riga apre
+/// una bottom sheet per modificarla. Stato ancora locale: la persistenza
+/// dietro `SettingsRepository` (deciso su #101/#102) non è ancora
+/// implementata.
+class ImpostazioniPage extends StatefulWidget {
   const ImpostazioniPage({super.key});
 
   @override
+  State<ImpostazioniPage> createState() => _ImpostazioniPageState();
+}
+
+class _ImpostazioniPageState extends State<ImpostazioniPage> {
+  AiProvider _provider = AiProvider.claude;
+  String _apiKeyAi = '';
+  late String _modello = _provider.modelloDefault;
+  String _urlLocale = '';
+
+  String _apiKeyComics = '';
+
+  ({bool loading, EsitoVerifica? esito}) _verifica = (loading: false, esito: null);
+
+  Future<void> _verificaConfigurazione() async {
+    setState(() => _verifica = (loading: true, esito: null));
+    final esito = await verificaConfigurazione(
+      apiKey: _apiKeyAi,
+      provider: _provider,
+      url: _urlLocale,
+    );
+    if (!mounted) return;
+    setState(() => _verifica = (loading: false, esito: esito));
+  }
+
+  Future<void> _apriSheetProvider() async {
+    final scelto = await showModalBottomSheet<AiProvider>(
+      context: context,
+      backgroundColor: AppColors.surfaceRaised,
+      builder: (context) => _SheetLista(
+        titolo: 'Provider AI',
+        children: [
+          for (final p in AiProvider.values)
+            ListTile(
+              title: Text(p.label, style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary)),
+              trailing: p == _provider ? const Icon(Icons.check, color: AppColors.accent) : null,
+              onTap: () => Navigator.pop(context, p),
+            ),
+        ],
+      ),
+    );
+    if (scelto == null) return;
+    setState(() {
+      _provider = scelto;
+      _modello = scelto.modelloDefault;
+      _verifica = (loading: false, esito: null);
+    });
+  }
+
+  Future<void> _apriSheetModello() async {
+    final curati = _provider.modelliCurati;
+    if (curati != null) {
+      final scelto = await showModalBottomSheet<String>(
+        context: context,
+        backgroundColor: AppColors.surfaceRaised,
+        builder: (context) => _SheetLista(
+          titolo: 'Modello',
+          children: [
+            for (final m in curati)
+              ListTile(
+                title: Text(m, style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary)),
+                trailing: m == _modello ? const Icon(Icons.check, color: AppColors.accent) : null,
+                onTap: () => Navigator.pop(context, m),
+              ),
+          ],
+        ),
+      );
+      if (scelto != null) setState(() => _modello = scelto);
+      return;
+    }
+    final testo = await _apriSheetTestoLibero(
+      titolo: 'Modello',
+      valoreIniziale: _modello,
+      hint: _provider == AiProvider.locale ? 'es. llama3' : null,
+    );
+    if (testo != null) setState(() => _modello = testo);
+  }
+
+  Future<String?> _apriSheetTestoLibero({
+    required String titolo,
+    required String valoreIniziale,
+    String? hint,
+    bool mascherato = false,
+  }) {
+    final ctrl = TextEditingController(text: valoreIniziale);
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surfaceRaised,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          left: AppSpacing.md,
+          right: AppSpacing.md,
+          top: AppSpacing.md,
+          bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.md,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(titolo, style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary)),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(controller: ctrl, obscureText: mascherato, autofocus: true, decoration: InputDecoration(hintText: hint)),
+            const SizedBox(height: AppSpacing.md),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, ctrl.text),
+              child: const Text('Salva'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const PlaceholderScreen(title: 'Impostazioni', icon: Icons.settings_outlined);
+    return Scaffold(
+      backgroundColor: AppColors.surfaceDeepest,
+      appBar: AppBar(
+        backgroundColor: AppColors.surfaceDeepest,
+        title: const Text('Impostazioni'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.xxl),
+          children: [
+            const SectionHeader(label: 'Provider AI'),
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _Riga(titolo: 'Provider', valore: _provider.label, onTap: _apriSheetProvider),
+                  const _Divisore(),
+                  _Riga(
+                    titolo: 'API key',
+                    valore: _apiKeyAi.isEmpty ? 'Non impostata' : '••••••••',
+                    onTap: () async {
+                      final v = await _apriSheetTestoLibero(
+                        titolo: 'API key',
+                        valoreIniziale: _apiKeyAi,
+                        mascherato: true,
+                      );
+                      if (v != null) setState(() => _apiKeyAi = v);
+                    },
+                  ),
+                  const _Divisore(),
+                  _Riga(titolo: 'Modello', valore: _modello.isEmpty ? 'Non impostato' : _modello, onTap: _apriSheetModello),
+                  if (_provider.richiedeUrl) ...[
+                    const _Divisore(),
+                    _Riga(
+                      titolo: 'URL API',
+                      valore: _urlLocale.isEmpty ? 'Non impostato' : _urlLocale,
+                      onTap: () async {
+                        final v = await _apriSheetTestoLibero(
+                          titolo: 'URL API',
+                          valoreIniziale: _urlLocale,
+                          hint: 'http://localhost:11434/v1',
+                        );
+                        if (v != null) setState(() => _urlLocale = v);
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            const SectionHeader(label: 'Provider fumetti'),
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  const _Riga(titolo: 'Provider', valore: 'ComicVine'),
+                  const _Divisore(),
+                  _Riga(
+                    titolo: 'API key',
+                    valore: _apiKeyComics.isEmpty ? 'Non impostata' : '••••••••',
+                    onTap: () async {
+                      final v = await _apriSheetTestoLibero(
+                        titolo: 'API key',
+                        valoreIniziale: _apiKeyComics,
+                        mascherato: true,
+                      );
+                      if (v != null) setState(() => _apiKeyComics = v);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: _Riga(
+                titolo: 'Verifica configurazione',
+                valore: switch ((_verifica.loading, _verifica.esito)) {
+                  (true, _) => 'In corso…',
+                  (false, null) => 'Non verificata',
+                  (false, EsitoVerifica(:final ok, :final messaggio)) => ok ? 'OK' : messaggio,
+                },
+                valoreColore: switch ((_verifica.loading, _verifica.esito)) {
+                  (true, _) => AppColors.textSecondary,
+                  (false, null) => AppColors.textMuted,
+                  (false, EsitoVerifica(:final ok)) => ok ? AppColors.accent : AppColors.amberStrong,
+                },
+                onTap: _verifica.loading ? null : _verificaConfigurazione,
+                mostraChevron: false,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetLista extends StatelessWidget {
+  const _SheetLista({required this.titolo, required this.children});
+
+  final String titolo;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xs),
+            child: Text(titolo, style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary)),
+          ),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _Riga extends StatelessWidget {
+  const _Riga({
+    required this.titolo,
+    required this.valore,
+    this.onTap,
+    this.valoreColore,
+    this.mostraChevron = true,
+  });
+
+  final String titolo;
+  final String valore;
+  final VoidCallback? onTap;
+  final Color? valoreColore;
+  final bool mostraChevron;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
+        child: Row(
+          children: [
+            Text(titolo, style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary)),
+            const Spacer(),
+            Flexible(
+              child: Text(
+                valore,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: AppTypography.bodyMedium.copyWith(color: valoreColore ?? AppColors.textSecondary),
+              ),
+            ),
+            if (onTap != null && mostraChevron) ...[
+              const SizedBox(width: AppSpacing.xxs),
+              Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Divisore extends StatelessWidget {
+  const _Divisore();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(height: 1, color: AppColors.borderSubtle, indent: AppSpacing.md, endIndent: AppSpacing.md);
   }
 }
