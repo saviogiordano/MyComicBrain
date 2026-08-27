@@ -17,7 +17,12 @@ class LoginPage extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.xl, AppSpacing.xl, AppSpacing.xl),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.xl,
+            AppSpacing.xl,
+            AppSpacing.xl,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -30,33 +35,58 @@ class LoginPage extends ConsumerWidget {
                         width: 26,
                         height: 26,
                         alignment: Alignment.center,
-                        decoration: BoxDecoration(color: AppColors.accent, borderRadius: AppRadii.xsRadius),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          borderRadius: AppRadii.xsRadius,
+                        ),
                         child: Text(
-                          'S',
-                          style: AppTypography.labelLarge.copyWith(fontSize: 13, color: AppColors.onAccent),
+                          'M',
+                          style: AppTypography.labelLarge.copyWith(
+                            fontSize: 13,
+                            color: AppColors.onAccent,
+                          ),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.xs + 2),
-                      Text('Scaffale', style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary)),
+                      Text(
+                        'MyComicBrain',
+                        style: AppTypography.titleMedium.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xl + 2),
                   Text(
                     "Fotografa la\ncopertina.\nAl resto pensa l'app.",
-                    style: AppTypography.headline.copyWith(color: AppColors.textPrimary),
+                    style: AppTypography.headline.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     'Riconoscimento della cover, metadati dai database, copie fisiche '
                     'e numeri mancanti — in un unico posto.',
-                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textTertiary),
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.textTertiary,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.lg + 2),
                   const Row(
                     children: [
-                      Expanded(child: _StatBox(value: '~12s', label: 'per albo catalogato')),
+                      Expanded(
+                        child: _StatBox(
+                          value: '~12s',
+                          label: 'per albo catalogato',
+                        ),
+                      ),
                       SizedBox(width: AppSpacing.xs),
-                      Expanded(child: _StatBox(value: '1 tap', label: 'per confermare il match')),
+                      Expanded(
+                        child: _StatBox(
+                          value: '1 tap',
+                          label: 'per confermare il match',
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -68,7 +98,11 @@ class LoginPage extends ConsumerWidget {
                     height: 52,
                     child: FilledButton(
                       onPressed: enter,
-                      style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: AppRadii.lgRadius)),
+                      style: FilledButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: AppRadii.lgRadius,
+                        ),
+                      ),
                       child: const Text('Entra nella collezione'),
                     ),
                   ),
@@ -78,7 +112,11 @@ class LoginPage extends ConsumerWidget {
                     height: 52,
                     child: OutlinedButton(
                       onPressed: enter,
-                      style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: AppRadii.lgRadius)),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: AppRadii.lgRadius,
+                        ),
+                      ),
                       child: const Text('Crea un account'),
                     ),
                   ),
@@ -87,7 +125,9 @@ class LoginPage extends ConsumerWidget {
                     'Le foto vengono analizzate solo dopo il tuo consenso e puoi '
                     'eliminarle in qualsiasi momento.',
                     textAlign: TextAlign.center,
-                    style: AppTypography.bodySmall.copyWith(color: AppColors.textDisabled),
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textDisabled,
+                    ),
                   ),
                 ],
               ),
@@ -113,9 +153,17 @@ class _StatBox extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(value, style: AppTypography.titleLarge.copyWith(color: AppColors.accent)),
+          Text(
+            value,
+            style: AppTypography.titleLarge.copyWith(color: AppColors.accent),
+          ),
           const SizedBox(height: 3),
-          Text(label, style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary)),
+          Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textTertiary,
+            ),
+          ),
         ],
       ),
     );

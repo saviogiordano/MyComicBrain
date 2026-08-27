@@ -2,4 +2,10 @@
 <resources>
     <color name="ic_launcher_background">#22B8CF</color>
     <color name="brand_ink">#0B1416</color>
+    <!-- Sfondo della schermata di lancio nativa: stesso valore esatto di
+         AppColors.surfaceBase (app/lib/core/design_system/tokens.dart) —
+         l'app forza sempre il tema scuro, quindi lo splash nativo deve
+         fondersi con la prima schermata Flutter invece di lampeggiare in
+         un colore diverso. -->
+    <color name="splash_background">#0E1113</color>
 </resources>
