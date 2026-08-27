@@ -11,7 +11,7 @@ import 'package:mycomicbrain/core/domain/ai_provider.dart';
 class SettingsRepository {
   SettingsRepository({
     required Preferences preferences,
-    SecureStorage secureStorage = const FlutterSecureStorageAdapter(),
+    required SecureStorage secureStorage,
   }) : _preferences = preferences,
        _secureStorage = secureStorage;
 

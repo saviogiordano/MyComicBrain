@@ -1,0 +1,20 @@
+{
+  "provider": "claude",
+  "claude": {
+    "apiKey": "",
+    "modello": "claude-sonnet-5"
+  },
+  "openai": {
+    "apiKey": "",
+    "modello": "gpt-5.6-terra"
+  },
+  "openRouter": {
+    "apiKey": "",
+    "modello": "anthropic/claude-sonnet-4.5"
+  },
+  "locale": {
+    "apiKey": "",
+    "modello": "",
+    "url": "http://localhost:11434/v1"
+  }
+}

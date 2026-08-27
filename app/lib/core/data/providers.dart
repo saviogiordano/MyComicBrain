@@ -13,8 +13,9 @@ import 'package:mycomicbrain/core/data/image_crop_service.dart';
 import 'package:mycomicbrain/core/data/locale_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/openrouter_cover_analysis_client.dart';
-import 'package:mycomicbrain/core/data/preferences.dart';
+import 'package:mycomicbrain/core/data/preferences_shared_preferences_adapter.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
+import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
@@ -51,6 +52,7 @@ final copertinaDownloaderProvider = Provider<CopertinaDownloader>(
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   return SettingsRepository(
     preferences: SharedPreferencesAdapter(ref.watch(sharedPreferencesProvider)),
+    secureStorage: const FlutterSecureStorageAdapter(),
   );
 });
 

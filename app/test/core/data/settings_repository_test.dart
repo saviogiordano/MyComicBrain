@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mycomicbrain/core/data/preferences.dart';
+import 'package:mycomicbrain/core/data/preferences_shared_preferences_adapter.dart';
 import 'package:mycomicbrain/core/data/secure_storage.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
