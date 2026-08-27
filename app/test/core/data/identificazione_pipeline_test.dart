@@ -30,6 +30,9 @@ class _FakeComicVineClient implements ComicVineClient {
     if (eccezione != null) throw eccezione;
     return risultati;
   }
+
+  @override
+  Future<void> verificaConnessione() async {}
 }
 
 const _issueSpiderMan = ComicVineIssueMatch(
@@ -47,7 +50,10 @@ void main() {
 
   setUp(() {
     db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
     );
     repo = ComicsRepository(db);
   });
@@ -61,7 +67,9 @@ void main() {
     String? publisher,
   }) async {
     final scansioneId = await repo.aggiungiScansione(image: '/scansioni/1.jpg');
-    final analisiId = await repo.avviaAnalisiCopertina(scansioneId: scansioneId);
+    final analisiId = await repo.avviaAnalisiCopertina(
+      scansioneId: scansioneId,
+    );
     await repo.completaAnalisiCopertina(
       id: analisiId,
       rawResponse: '{}',
@@ -76,83 +84,117 @@ void main() {
   Future<IdentificazioneTableData> unicaIdentificazione() =>
       db.select(db.identificazioneTable).getSingle();
 
-  test('candidato interno sopra soglia: nessuna chiamata a ComicVine', () async {
-    final operaId = await repo.aggiungiOpera(title: 'Batman');
-    await repo.aggiungiEdizione(operaId: operaId, publisher: 'DC Comics', issueNumberLabel: '42');
-    final scansioneId = await scansioneConAnalisiCompletata(
-      title: 'Batman',
-      publisher: 'DC Comics',
-      issueNumberLabel: '42',
-    );
-    final comicVine = _FakeComicVineClient();
-    final pipeline = IdentificazionePipeline(repository: repo, comicVineClient: comicVine);
+  test(
+    'candidato interno sopra soglia: nessuna chiamata a ComicVine',
+    () async {
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      await repo.aggiungiEdizione(
+        operaId: operaId,
+        publisher: 'DC Comics',
+        issueNumberLabel: '42',
+      );
+      final scansioneId = await scansioneConAnalisiCompletata(
+        title: 'Batman',
+        publisher: 'DC Comics',
+        issueNumberLabel: '42',
+      );
+      final comicVine = _FakeComicVineClient();
+      final pipeline = IdentificazionePipeline(
+        repository: repo,
+        comicVineClient: comicVine,
+      );
 
-    await pipeline.identifica(scansioneId: scansioneId);
+      await pipeline.identifica(scansioneId: scansioneId);
 
-    expect(comicVine.chiamato, isFalse);
-    final identificazione = await unicaIdentificazione();
-    expect(identificazione.status, StatoIdentificazione.completata);
-    final candidati = await (db.select(
-      db.candidatiTable,
-    )..where((c) => c.identificazioneId.equals(identificazione.id))).get();
-    expect(candidati, hasLength(1));
-    expect(candidati.single.source, FonteCandidato.interno);
-    expect(candidati.single.edizioneId, isNotNull);
-  });
+      expect(comicVine.chiamato, isFalse);
+      final identificazione = await unicaIdentificazione();
+      expect(identificazione.status, StatoIdentificazione.completata);
+      final candidati = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.identificazioneId.equals(identificazione.id))).get();
+      expect(candidati, hasLength(1));
+      expect(candidati.single.source, FonteCandidato.interno);
+      expect(candidati.single.edizioneId, isNotNull);
+    },
+  );
 
-  test('nessun candidato interno sopra soglia: fallback su ComicVine, candidato esterno persistito', () async {
-    final scansioneId = await scansioneConAnalisiCompletata(
-      title: 'Amazing Fantasy',
-      seriesName: 'Amazing Fantasy',
-    );
-    final comicVine = _FakeComicVineClient(risultati: const [_issueSpiderMan]);
-    final pipeline = IdentificazionePipeline(repository: repo, comicVineClient: comicVine);
+  test(
+    'nessun candidato interno sopra soglia: fallback su ComicVine, candidato esterno persistito',
+    () async {
+      final scansioneId = await scansioneConAnalisiCompletata(
+        title: 'Amazing Fantasy',
+        seriesName: 'Amazing Fantasy',
+      );
+      final comicVine = _FakeComicVineClient(
+        risultati: const [_issueSpiderMan],
+      );
+      final pipeline = IdentificazionePipeline(
+        repository: repo,
+        comicVineClient: comicVine,
+      );
 
-    await pipeline.identifica(scansioneId: scansioneId);
+      await pipeline.identifica(scansioneId: scansioneId);
 
-    expect(comicVine.chiamato, isTrue);
-    final identificazione = await unicaIdentificazione();
-    expect(identificazione.status, StatoIdentificazione.completata);
-    final candidati = await (db.select(
-      db.candidatiTable,
-    )..where((c) => c.identificazioneId.equals(identificazione.id))).get();
-    expect(candidati, hasLength(1));
-    expect(candidati.single.source, FonteCandidato.esterno);
-    expect(candidati.single.edizioneId, isNull);
-    expect(candidati.single.title, 'Amazing Fantasy');
-  });
+      expect(comicVine.chiamato, isTrue);
+      final identificazione = await unicaIdentificazione();
+      expect(identificazione.status, StatoIdentificazione.completata);
+      final candidati = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.identificazioneId.equals(identificazione.id))).get();
+      expect(candidati, hasLength(1));
+      expect(candidati.single.source, FonteCandidato.esterno);
+      expect(candidati.single.edizioneId, isNull);
+      expect(candidati.single.title, 'Amazing Fantasy');
+    },
+  );
 
-  test('zero candidati (interno vuoto, ComicVine senza risultati): completata senza righe', () async {
-    final scansioneId = await scansioneConAnalisiCompletata(title: 'Un fumetto mai visto');
-    final comicVine = _FakeComicVineClient();
-    final pipeline = IdentificazionePipeline(repository: repo, comicVineClient: comicVine);
+  test(
+    'zero candidati (interno vuoto, ComicVine senza risultati): completata senza righe',
+    () async {
+      final scansioneId = await scansioneConAnalisiCompletata(
+        title: 'Un fumetto mai visto',
+      );
+      final comicVine = _FakeComicVineClient();
+      final pipeline = IdentificazionePipeline(
+        repository: repo,
+        comicVineClient: comicVine,
+      );
 
-    await pipeline.identifica(scansioneId: scansioneId);
+      await pipeline.identifica(scansioneId: scansioneId);
 
-    expect(comicVine.chiamato, isTrue);
-    final identificazione = await unicaIdentificazione();
-    expect(identificazione.status, StatoIdentificazione.completata);
-    final candidati = await (db.select(
-      db.candidatiTable,
-    )..where((c) => c.identificazioneId.equals(identificazione.id))).get();
-    expect(candidati, isEmpty);
-  });
+      expect(comicVine.chiamato, isTrue);
+      final identificazione = await unicaIdentificazione();
+      expect(identificazione.status, StatoIdentificazione.completata);
+      final candidati = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.identificazioneId.equals(identificazione.id))).get();
+      expect(candidati, isEmpty);
+    },
+  );
 
-  test('un fallimento tecnico di ComicVine porta lo stato a fallita, nessuna eccezione propagata', () async {
-    final scansioneId = await scansioneConAnalisiCompletata(title: 'Un fumetto mai visto');
-    final comicVine = _FakeComicVineClient(
-      eccezione: ComicVineException('rate limit superato'),
-    );
-    final pipeline = IdentificazionePipeline(repository: repo, comicVineClient: comicVine);
+  test(
+    'un fallimento tecnico di ComicVine porta lo stato a fallita, nessuna eccezione propagata',
+    () async {
+      final scansioneId = await scansioneConAnalisiCompletata(
+        title: 'Un fumetto mai visto',
+      );
+      final comicVine = _FakeComicVineClient(
+        eccezione: ComicVineException('rate limit superato'),
+      );
+      final pipeline = IdentificazionePipeline(
+        repository: repo,
+        comicVineClient: comicVine,
+      );
 
-    await pipeline.identifica(scansioneId: scansioneId);
+      await pipeline.identifica(scansioneId: scansioneId);
 
-    final identificazione = await unicaIdentificazione();
-    expect(identificazione.status, StatoIdentificazione.fallita);
-    expect(identificazione.errorMessage, contains('rate limit superato'));
-    final candidati = await (db.select(
-      db.candidatiTable,
-    )..where((c) => c.identificazioneId.equals(identificazione.id))).get();
-    expect(candidati, isEmpty);
-  });
+      final identificazione = await unicaIdentificazione();
+      expect(identificazione.status, StatoIdentificazione.fallita);
+      expect(identificazione.errorMessage, contains('rate limit superato'));
+      final candidati = await (db.select(
+        db.candidatiTable,
+      )..where((c) => c.identificazioneId.equals(identificazione.id))).get();
+      expect(candidati, isEmpty);
+    },
+  );
 }

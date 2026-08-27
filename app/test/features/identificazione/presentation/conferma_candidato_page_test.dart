@@ -61,6 +61,11 @@ void main() {
           builder: (context, state) =>
               Scaffold(body: Text('inserisci manualmente #${state.extra}')),
         ),
+        GoRoute(
+          path: '/impostazioni',
+          builder: (context, state) =>
+              const Scaffold(body: Center(child: Text('Impostazioni'))),
+        ),
       ],
     );
     await tester.pumpWidget(
@@ -263,4 +268,37 @@ void main() {
     expect(find.text('ComicVine offline'), findsOneWidget);
     expect(find.text('Inserisci manualmente'), findsOneWidget);
   });
+
+  testWidgets(
+    'con ComicVine non configurato (#108) mostra un link diretto alle Impostazioni',
+    (tester) async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repository.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repository.fallisciIdentificazione(
+        id: identificazioneId,
+        errorMessage:
+            'ComicVineException: Configurazione mancante: Nessuna API key ComicVine configurata nelle Impostazioni.',
+      );
+
+      final router = await pumpConfermaCandidato(
+        tester,
+        scansioneId: scansioneId,
+      );
+
+      expect(find.text('Provider fumetti non configurato'), findsOneWidget);
+      expect(find.text('Apri Impostazioni'), findsOneWidget);
+      expect(find.text('Inserisci manualmente'), findsOneWidget);
+
+      await tester.tap(find.text('Apri Impostazioni'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Impostazioni'), findsOneWidget);
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        '/impostazioni',
+      );
+    },
+  );
 }

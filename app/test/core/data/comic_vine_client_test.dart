@@ -547,6 +547,49 @@ void main() {
       },
     );
   });
+
+  group('verificaConnessione (#108)', () {
+    test('con status_code 1 non solleva nulla', () async {
+      final client = ComicVineHttpClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClient(),
+      );
+
+      await client.verificaConnessione();
+    });
+
+    test(
+      'con status_code diverso da 1 (chiave non valida) solleva ComicVineException',
+      () async {
+        final client = ComicVineHttpClient(
+          settingsRepository: await _settingsConApiKey(),
+          httpClient: _FakeHttpClient(statusCode: 100),
+        );
+
+        await expectLater(
+          client.verificaConnessione,
+          throwsA(isA<ComicVineException>()),
+        );
+      },
+    );
+
+    test(
+      'senza API key configurata solleva un errore di configurazione mancante, senza chiamare la rete',
+      () async {
+        final fake = _FakeHttpClient();
+        final client = ComicVineHttpClient(
+          settingsRepository: SettingsRepository.inMemoria(),
+          httpClient: fake,
+        );
+
+        await expectLater(
+          client.verificaConnessione,
+          throwsA(isA<ComicVineException>()),
+        );
+        expect(fake.richieste, isEmpty);
+      },
+    );
+  });
 }
 
 class _FakeHttpClientNon2xx extends http.BaseClient {

@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
+import 'package:mycomicbrain/core/domain/errore_configurazione.dart';
 
 /// Schermata `/scansione/riepilogo` (S-B — Lista con stato, deciso su #20):
 /// una riga per Scansione appena confermata, con thumbnail e chip di stato
@@ -57,7 +58,10 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
   void _fine() {
     setState(() => _avviato = true);
     final daInviare = _scansioni.where((s) {
-      final stato = ref.read(statoAnalisiCopertinaProvider(s.path)).valueOrNull?.stato;
+      final stato = ref
+          .read(statoAnalisiCopertinaProvider(s.path))
+          .valueOrNull
+          ?.stato;
       return stato == null || stato == StatoAnalisiCopertina.pending;
     });
     unawaited(
@@ -308,7 +312,10 @@ class _RigaScansione extends ConsumerWidget {
 /// prescindere dall'esito, vedi indagine su segnalazione utente): `null`
 /// finché lo stream non ha ancora emesso il primo valore. Da `fallita`, la
 /// chip stessa è il tasto di retry manuale (nessun retry automatico, #27) —
-/// `errorMessage` compare al tocco prolungato.
+/// `errorMessage` compare al tocco prolungato. Quando il fallimento è per
+/// provider AI non configurato (nessuna API key, deciso su #108), la chip
+/// diventa un link diretto alle Impostazioni invece del retry: riprovare
+/// senza aver configurato nulla fallirebbe di nuovo con lo stesso errore.
 class _ChipStatoAnalisi extends StatelessWidget {
   const _ChipStatoAnalisi({
     required this.stato,
@@ -322,10 +329,18 @@ class _ChipStatoAnalisi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final configurazioneMancante =
+        stato == StatoAnalisiCopertina.fallita &&
+        erroreConfigurazioneMancante(errorMessage);
+
     final (String label, Color colore) = switch (stato) {
       null || StatoAnalisiCopertina.pending => ('In sospeso', AppColors.amber),
       StatoAnalisiCopertina.inCorso => ('In corso', AppColors.amber),
       StatoAnalisiCopertina.completata => ('Completata', AppColors.accent),
+      StatoAnalisiCopertina.fallita when configurazioneMancante => (
+        'Configura provider',
+        AppColors.amberStrong,
+      ),
       StatoAnalisiCopertina.fallita => (
         'Fallita · Riprova',
         AppColors.textMuted,
@@ -351,10 +366,14 @@ class _ChipStatoAnalisi extends StatelessWidget {
     if (stato != StatoAnalisiCopertina.fallita) return chip;
 
     return Tooltip(
-      message: errorMessage ?? 'Motivo del fallimento non disponibile',
+      message: configurazioneMancante
+          ? '${errorMessage ?? ''} · tocca per aprire le Impostazioni'
+          : errorMessage ?? 'Motivo del fallimento non disponibile',
       child: InkWell(
         borderRadius: AppRadii.pillRadius,
-        onTap: onRiprova,
+        onTap: configurazioneMancante
+            ? () => context.go('/impostazioni')
+            : onRiprova,
         child: chip,
       ),
     );

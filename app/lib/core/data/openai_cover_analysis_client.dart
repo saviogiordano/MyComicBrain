@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
+import 'package:mycomicbrain/core/domain/errore_configurazione.dart';
 
 const _apiUrl = 'https://api.openai.com/v1/responses';
 
@@ -40,23 +41,32 @@ class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
   final SettingsRepository? _settingsRepository;
   final http.Client _httpClient;
 
-  @override
-  Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
+  /// Legge API key e modello da [SettingsRepository], sollevando
+  /// [CoverAnalysisException] col prefisso [prefissoConfigurazioneMancante]
+  /// (§12, deciso su #108) se manca la chiave — condiviso fra
+  /// [estraiCopertina] e [verificaConnessione].
+  Future<({String apiKey, String modello})> _apiKeyEModello() async {
     final settingsRepository = _settingsRepository;
     if (settingsRepository == null) {
       throw CoverAnalysisException(
-        'Nessuna API key configurata per OpenAI nelle Impostazioni.',
+        '${prefissoConfigurazioneMancante}Nessuna API key configurata per OpenAI nelle Impostazioni.',
       );
     }
     final apiKey = await settingsRepository.apiKeyAi(AiProvider.openai);
     if (apiKey == null || apiKey.isEmpty) {
       throw CoverAnalysisException(
-        'Nessuna API key configurata per OpenAI nelle Impostazioni.',
+        '${prefissoConfigurazioneMancante}Nessuna API key configurata per OpenAI nelle Impostazioni.',
       );
     }
     final modello =
         settingsRepository.modello(AiProvider.openai) ??
         AiProvider.openai.modelloDefault;
+    return (apiKey: apiKey, modello: modello);
+  }
+
+  @override
+  Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
+    final (:apiKey, :modello) = await _apiKeyEModello();
 
     final http.Response response;
     try {
@@ -100,6 +110,48 @@ class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
     }
 
     return _leggiRisposta(responseBody);
+  }
+
+  /// Chiamata minima (nessuna immagine né schema strutturato) allo stesso
+  /// endpoint di [estraiCopertina]: verifica che API key e modello siano
+  /// validi senza il costo/tempo di un'estrazione vera. `max_output_tokens`
+  /// a 16 è il minimo accettato dalla Responses API.
+  @override
+  Future<void> verificaConnessione() async {
+    final (:apiKey, :modello) = await _apiKeyEModello();
+
+    final http.Response response;
+    try {
+      response = await _httpClient
+          .post(
+            Uri.parse(_apiUrl),
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'content-type': 'application/json',
+            },
+            body: jsonEncode({
+              'model': modello,
+              'input': [
+                {
+                  'role': 'user',
+                  'content': [
+                    {'type': 'input_text', 'text': 'ping'},
+                  ],
+                },
+              ],
+              'max_output_tokens': 16,
+            }),
+          )
+          .timeout(coverAnalysisTimeout);
+    } on Object catch (e) {
+      throw CoverAnalysisException("Chiamata all'API OpenAI fallita: $e");
+    }
+
+    if (response.statusCode != 200) {
+      throw CoverAnalysisException(
+        'OpenAI API ${response.statusCode}: ${utf8.decode(response.bodyBytes)}',
+      );
+    }
   }
 
   CoverAnalysisResult _leggiRisposta(String responseBody) {

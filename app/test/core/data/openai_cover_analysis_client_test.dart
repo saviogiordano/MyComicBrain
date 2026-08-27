@@ -213,4 +213,47 @@ void main() {
       expect(fake.ultimaRichiesta, isNull);
     },
   );
+
+  group('verificaConnessione (#108)', () {
+    test('con risposta 200 non solleva nulla', () async {
+      final client = OpenAiCoverAnalysisClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClient(statusCode: 200, risposta: '{}'),
+      );
+
+      await client.verificaConnessione();
+    });
+
+    test('con risposta non-200 solleva CoverAnalysisException', () async {
+      final client = OpenAiCoverAnalysisClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: _FakeHttpClient(
+          statusCode: 401,
+          risposta: '{"error": "invalid api key"}',
+        ),
+      );
+
+      await expectLater(
+        client.verificaConnessione,
+        throwsA(isA<CoverAnalysisException>()),
+      );
+    });
+
+    test(
+      'senza API key configurata solleva un errore di configurazione mancante, senza chiamare la rete',
+      () async {
+        final fake = _FakeHttpClient(statusCode: 200, risposta: '{}');
+        final client = OpenAiCoverAnalysisClient(
+          settingsRepository: SettingsRepository.inMemoria(),
+          httpClient: fake,
+        );
+
+        await expectLater(
+          client.verificaConnessione,
+          throwsA(isA<CoverAnalysisException>()),
+        );
+        expect(fake.ultimaRichiesta, isNull);
+      },
+    );
+  });
 }

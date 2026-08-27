@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
+import 'package:mycomicbrain/core/domain/errore_configurazione.dart';
 
 const _apiUrl = 'https://api.anthropic.com/v1/messages';
 const _anthropicVersion = '2023-06-01';
@@ -31,23 +32,33 @@ class ClaudeCoverAnalysisClient implements CoverAnalysisClient {
   final SettingsRepository? _settingsRepository;
   final http.Client _httpClient;
 
-  @override
-  Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
+  /// Legge API key e modello da [SettingsRepository], sollevando
+  /// [CoverAnalysisException] col prefisso [prefissoConfigurazioneMancante]
+  /// (§12, deciso su #108: distingue una configurazione mancante da un
+  /// fallimento tecnico generico agli occhi della UI) se manca la chiave —
+  /// condiviso fra [estraiCopertina] e [verificaConnessione].
+  Future<({String apiKey, String modello})> _apiKeyEModello() async {
     final settingsRepository = _settingsRepository;
     if (settingsRepository == null) {
       throw CoverAnalysisException(
-        'Nessuna API key configurata per Claude nelle Impostazioni.',
+        '${prefissoConfigurazioneMancante}Nessuna API key configurata per Claude nelle Impostazioni.',
       );
     }
     final apiKey = await settingsRepository.apiKeyAi(AiProvider.claude);
     if (apiKey == null || apiKey.isEmpty) {
       throw CoverAnalysisException(
-        'Nessuna API key configurata per Claude nelle Impostazioni.',
+        '${prefissoConfigurazioneMancante}Nessuna API key configurata per Claude nelle Impostazioni.',
       );
     }
     final modello =
         settingsRepository.modello(AiProvider.claude) ??
         AiProvider.claude.modelloDefault;
+    return (apiKey: apiKey, modello: modello);
+  }
+
+  @override
+  Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg) async {
+    final (:apiKey, :modello) = await _apiKeyEModello();
 
     final http.Response response;
     try {
@@ -98,6 +109,43 @@ class ClaudeCoverAnalysisClient implements CoverAnalysisClient {
     }
 
     return _leggiRisposta(responseBody);
+  }
+
+  /// Chiamata minima (`max_tokens: 1`, nessuna immagine né schema) allo
+  /// stesso endpoint di [estraiCopertina]: verifica che API key e modello
+  /// siano validi senza il costo/tempo di un'estrazione vera.
+  @override
+  Future<void> verificaConnessione() async {
+    final (:apiKey, :modello) = await _apiKeyEModello();
+
+    final http.Response response;
+    try {
+      response = await _httpClient
+          .post(
+            Uri.parse(_apiUrl),
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': _anthropicVersion,
+              'content-type': 'application/json',
+            },
+            body: jsonEncode({
+              'model': modello,
+              'max_tokens': 1,
+              'messages': [
+                {'role': 'user', 'content': 'ping'},
+              ],
+            }),
+          )
+          .timeout(coverAnalysisTimeout);
+    } on Object catch (e) {
+      throw CoverAnalysisException("Chiamata all'API Claude fallita: $e");
+    }
+
+    if (response.statusCode != 200) {
+      throw CoverAnalysisException(
+        'Claude API ${response.statusCode}: ${utf8.decode(response.bodyBytes)}',
+      );
+    }
   }
 
   CoverAnalysisResult _leggiRisposta(String responseBody) {

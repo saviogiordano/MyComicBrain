@@ -175,6 +175,11 @@ void main() {
             ),
           ),
         ),
+        GoRoute(
+          path: '/impostazioni',
+          builder: (context, state) =>
+              const Scaffold(body: Center(child: Text('Impostazioni'))),
+        ),
       ],
     );
     await tester.pumpWidget(
@@ -363,6 +368,54 @@ void main() {
 
     expect(pipeline.riprovati, [scansioni.single.path]);
   });
+
+  testWidgets(
+    'la chip "Configura provider" (config mancante, #108) apre le Impostazioni invece di riprovare',
+    (tester) async {
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = ComicsRepository(db);
+      final scansioni = scansioniFinte(1);
+      await repository.aggiungiScansione(image: scansioni.single.path);
+      final scansioneId = await repository.idScansionePerImmagine(
+        scansioni.single.path,
+      );
+      final analisiId = await repository.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
+      await repository.fallisciAnalisiCopertina(
+        id: analisiId,
+        errorMessage:
+            'CoverAnalysisException: Configurazione mancante: Nessuna API key configurata per Claude nelle Impostazioni.',
+      );
+
+      final pipeline = _FakeAnalisiCopertinaPipeline();
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        pipeline: pipeline,
+        repository: repository,
+      );
+
+      expect(find.text('Configura provider'), findsOneWidget);
+      expect(find.textContaining('Fallita'), findsNothing);
+
+      await tester.tap(find.text('Configura provider'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Impostazioni'), findsOneWidget);
+      expect(
+        pipeline.riprovati,
+        isEmpty,
+        reason: 'il tocco apre le Impostazioni, non riprova',
+      );
+    },
+  );
 
   testWidgets(
     'una riga con Analisi Copertina completata apre la conferma candidato al tocco (#59)',
@@ -567,7 +620,8 @@ void main() {
         [
           [scansioni[1].path],
         ],
-        reason: 'solo la Scansione ancora In sospeso deve entrare in avviaBatch',
+        reason:
+            'solo la Scansione ancora In sospeso deve entrare in avviaBatch',
       );
     },
   );

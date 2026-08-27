@@ -293,6 +293,13 @@ class CoverAnalysisException implements Exception {
 /// `providers.dart`.
 abstract interface class CoverAnalysisClient {
   Future<CoverAnalysisResult> estraiCopertina(Uint8List immagineJpeg);
+
+  /// Verifica reale della configurazione corrente (§12, deciso su #108):
+  /// una chiamata minima al provider per controllare che API key e modello
+  /// siano validi, senza estrarre nulla — usata dal bottone "Verifica
+  /// configurazione" delle Impostazioni. Ritorna normalmente se la
+  /// configurazione è valida, altrimenti solleva [CoverAnalysisException].
+  Future<void> verificaConnessione();
 }
 
 /// Timeout della chiamata HTTP al provider AI, condiviso fra i client

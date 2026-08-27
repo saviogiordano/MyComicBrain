@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/data/text_similarity.dart';
+import 'package:mycomicbrain/core/domain/errore_configurazione.dart';
 
 const _searchUrl = 'https://comicvine.gamespot.com/api/search/';
 const _issuesUrl = 'https://comicvine.gamespot.com/api/issues/';
@@ -96,6 +97,13 @@ abstract interface class ComicVineClient {
     required String? issueNumberLabel,
     required String? publisher,
   });
+
+  /// Verifica reale della configurazione corrente (§12, deciso su #108):
+  /// una ricerca minima per controllare che l'API key sia valida — usata dal
+  /// bottone "Verifica configurazione" delle Impostazioni. Ritorna
+  /// normalmente se la configurazione è valida, altrimenti solleva
+  /// [ComicVineException].
+  Future<void> verificaConnessione();
 }
 
 /// Candidato di volume ComicVine (`resources=volume`) da cui poi cercare
@@ -146,10 +154,30 @@ class ComicVineHttpClient implements ComicVineClient {
     final apiKey = await _settingsRepository?.apiKeyComics;
     if (apiKey == null || apiKey.isEmpty) {
       throw ComicVineException(
-        'Nessuna API key ComicVine configurata nelle Impostazioni.',
+        '${prefissoConfigurazioneMancante}Nessuna API key ComicVine configurata nelle Impostazioni.',
       );
     }
     return apiKey;
+  }
+
+  /// Ricerca minima (`resources=issue`, `limit=1`) per verificare che l'API
+  /// key sia valida (§12, deciso su #108): `_getResults` solleva già
+  /// [ComicVineException] su `status_code` diverso da `1` — incluso il caso
+  /// di chiave non valida — quindi basta far arrivare la chiamata a segno.
+  @override
+  Future<void> verificaConnessione() async {
+    final apiKey = await _apiKeyRichiesta();
+    final uri = Uri.parse(_searchUrl).replace(
+      queryParameters: {
+        'api_key': apiKey,
+        'format': 'json',
+        'resources': 'issue',
+        'query': 'test',
+        'limit': '1',
+        'field_list': 'id',
+      },
+    );
+    await _getResults(uri);
   }
 
   @override

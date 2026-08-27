@@ -25,7 +25,10 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
 
   String _apiKeyComics = '';
 
-  ({bool loading, EsitoVerifica? esito}) _verifica = (loading: false, esito: null);
+  ({bool loading, EsitoVerifica? esito}) _verifica = (
+    loading: false,
+    esito: null,
+  );
 
   @override
   void initState() {
@@ -57,9 +60,8 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   Future<void> _verificaConfigurazione() async {
     setState(() => _verifica = (loading: true, esito: null));
     final esito = await verificaConfigurazione(
-      apiKey: _apiKeyAi,
-      provider: _provider,
-      url: _urlLocale,
+      aiClient: () => ref.read(coverAnalysisClientProvider),
+      comicVineClient: () => ref.read(comicVineClientProvider),
     );
     if (!mounted) return;
     setState(() => _verifica = (loading: false, esito: esito));
@@ -76,9 +78,13 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
             ListTile(
               title: Text(
                 p.label,
-                style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
+                style: AppTypography.bodyLarge.copyWith(
+                  color: AppColors.textPrimary,
+                ),
               ),
-              trailing: p == _provider ? const Icon(Icons.check, color: AppColors.accent) : null,
+              trailing: p == _provider
+                  ? const Icon(Icons.check, color: AppColors.accent)
+                  : null,
               onTap: () => Navigator.pop(context, p),
             ),
         ],
@@ -110,9 +116,13 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
               ListTile(
                 title: Text(
                   m,
-                  style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-                trailing: m == _modello ? const Icon(Icons.check, color: AppColors.accent) : null,
+                trailing: m == _modello
+                    ? const Icon(Icons.check, color: AppColors.accent)
+                    : null,
                 onTap: () => Navigator.pop(context, m),
               ),
           ],
@@ -130,7 +140,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   }
 
   Future<void> _salvaModello(String modello) async {
-    await ref.read(settingsRepositoryProvider).impostaModello(_provider, modello);
+    await ref
+        .read(settingsRepositoryProvider)
+        .impostaModello(_provider, modello);
     if (!mounted) return;
     setState(() => _modello = modello);
   }
@@ -160,7 +172,12 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(titolo, style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary)),
+              Text(
+                titolo,
+                style: AppTypography.titleMedium.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
               const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: ctrl,
@@ -172,7 +189,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   errore!,
-                  style: AppTypography.bodyMedium.copyWith(color: AppColors.amberStrong),
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.amberStrong,
+                  ),
                 ),
               ],
               const SizedBox(height: AppSpacing.md),
@@ -204,7 +223,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
       ),
       body: SafeArea(
         child: _caricamento
-            ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.accent),
+              )
             : ListView(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.md,
@@ -227,7 +248,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                         const _Divisore(),
                         _Riga(
                           titolo: 'API key',
-                          valore: _apiKeyAi.isEmpty ? 'Non impostata' : '••••••••',
+                          valore: _apiKeyAi.isEmpty
+                              ? 'Non impostata'
+                              : '••••••••',
                           onTap: () async {
                             final v = await _apriSheetTestoLibero(
                               titolo: 'API key',
@@ -252,7 +275,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                           const _Divisore(),
                           _Riga(
                             titolo: 'URL API',
-                            valore: _urlLocale.isEmpty ? 'Non impostato' : _urlLocale,
+                            valore: _urlLocale.isEmpty
+                                ? 'Non impostato'
+                                : _urlLocale,
                             onTap: () async {
                               final v = await _apriSheetTestoLibero(
                                 titolo: 'URL API',
@@ -266,7 +291,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                                 },
                               );
                               if (v == null) return;
-                              await ref.read(settingsRepositoryProvider).impostaUrlLocale(v);
+                              await ref
+                                  .read(settingsRepositoryProvider)
+                                  .impostaUrlLocale(v);
                               if (!mounted) return;
                               setState(() => _urlLocale = v);
                             },
@@ -286,7 +313,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                         const _Divisore(),
                         _Riga(
                           titolo: 'API key',
-                          valore: _apiKeyComics.isEmpty ? 'Non impostata' : '••••••••',
+                          valore: _apiKeyComics.isEmpty
+                              ? 'Non impostata'
+                              : '••••••••',
                           onTap: () async {
                             final v = await _apriSheetTestoLibero(
                               titolo: 'API key',
@@ -294,7 +323,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                               mascherato: true,
                             );
                             if (v == null) return;
-                            await ref.read(settingsRepositoryProvider).impostaApiKeyComics(v);
+                            await ref
+                                .read(settingsRepositoryProvider)
+                                .impostaApiKeyComics(v);
                             if (!mounted) return;
                             setState(() => _apiKeyComics = v);
                           },
@@ -313,7 +344,10 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                         (false, EsitoVerifica(:final ok, :final messaggio)) =>
                           ok ? 'OK' : messaggio,
                       },
-                      valoreColore: switch ((_verifica.loading, _verifica.esito)) {
+                      valoreColore: switch ((
+                        _verifica.loading,
+                        _verifica.esito,
+                      )) {
                         (true, _) => AppColors.textSecondary,
                         (false, null) => AppColors.textMuted,
                         (false, EsitoVerifica(:final ok)) =>
@@ -352,7 +386,9 @@ class _SheetLista extends StatelessWidget {
             ),
             child: Text(
               titolo,
-              style: AppTypography.titleMedium.copyWith(color: AppColors.textPrimary),
+              style: AppTypography.titleMedium.copyWith(
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
           ...children,
@@ -382,10 +418,18 @@ class _Riga extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm + 2,
+        ),
         child: Row(
           children: [
-            Text(titolo, style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary)),
+            Text(
+              titolo,
+              style: AppTypography.bodyLarge.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
             const Spacer(),
             Flexible(
               child: Text(

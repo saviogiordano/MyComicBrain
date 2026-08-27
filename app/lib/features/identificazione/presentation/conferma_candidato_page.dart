@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/core/domain/errore_configurazione.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 
 /// Schermo "Possibile corrispondenza" (§6.3, deciso su #54 — Variante B,
@@ -485,6 +486,10 @@ class _EmptyState extends StatelessWidget {
 
 /// Fallimento tecnico dell'Identificazione (es. ComicVine irraggiungibile) —
 /// distinto dallo stato vuoto: nessun retry, come `AnalisiCopertina` (#53).
+/// Quando il fallimento è per provider fumetti non configurato (nessuna API
+/// key ComicVine, deciso su #108), aggiunge un link diretto alle
+/// Impostazioni: "Inserisci manualmente" resta comunque disponibile per
+/// procedere subito senza risolvere la configurazione.
 class _ErroreIdentificazione extends StatelessWidget {
   const _ErroreIdentificazione({
     required this.errorMessage,
@@ -496,16 +501,26 @@ class _ErroreIdentificazione extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final configurazioneMancante = erroreConfigurazioneMancante(errorMessage);
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 48, color: AppColors.textMuted),
+            Icon(
+              configurazioneMancante
+                  ? Icons.settings_outlined
+                  : Icons.error_outline,
+              size: 48,
+              color: AppColors.textMuted,
+            ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Identificazione non riuscita',
+              configurazioneMancante
+                  ? 'Provider fumetti non configurato'
+                  : 'Identificazione non riuscita',
               style: AppTypography.titleMedium.copyWith(
                 color: AppColors.textPrimary,
               ),
@@ -519,13 +534,27 @@ class _ErroreIdentificazione extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
+            if (configurazioneMancante) ...[
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => context.go('/impostazioni'),
+                  child: const Text('Apri Impostazioni'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              TextButton(
                 onPressed: onInserisciManualmente,
                 child: const Text('Inserisci manualmente'),
               ),
-            ),
+            ] else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: onInserisciManualmente,
+                  child: const Text('Inserisci manualmente'),
+                ),
+              ),
           ],
         ),
       ),

@@ -28,6 +28,9 @@ class _FakeComicVineClient implements ComicVineClient {
     chiamato = true;
     return const [];
   }
+
+  @override
+  Future<void> verificaConnessione() async {}
 }
 
 /// [CoverAnalysisClient] finto: restituisce [risultato] o solleva
@@ -45,6 +48,9 @@ class _FakeCoverAnalysisClient implements CoverAnalysisClient {
     if (eccezione != null) throw eccezione;
     return risultato!;
   }
+
+  @override
+  Future<void> verificaConnessione() async {}
 }
 
 const _risultatoCompleto = CoverAnalysisResult(
@@ -138,7 +144,10 @@ void main() {
     expect(analisi.recognizedSeriesLogo, isNull);
     expect(analisi.printingType, 'Direct Edition');
     expect(analisi.classificazione, 'Rated T+');
-    expect(analisi.description, 'Peter Parker affronta Venom in un confronto decisivo.');
+    expect(
+      analisi.description,
+      'Peter Parker affronta Venom in un confronto decisivo.',
+    );
     expect(analisi.rawResponse, contains('David Michelinie'));
     expect(analisi.errorMessage, isNull);
     expect(analisi.completedAt, isNotNull);
@@ -382,4 +391,7 @@ class _CoverAnalysisClientAlternante implements CoverAnalysisClient {
     onChiamata();
     return risposte[_indice++]();
   }
+
+  @override
+  Future<void> verificaConnessione() async {}
 }
