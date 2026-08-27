@@ -1,6 +1,6 @@
 /// Il dettaglio `/serie/:id` (§11): numeri posseduti/mancanti, statistiche
 /// derivate dalle edizioni della serie, e i campi editabili — nome, numero
-/// totale, issn (deciso su #99, unica scrittura UI su questi campi).
+/// totale, issn (deciso su #99, unica scrittura UI su questi campi), cover.
 class SerieDettaglio {
   const SerieDettaglio({
     required this.serieId,
@@ -11,11 +11,26 @@ class SerieDettaglio {
     required this.duplicati,
     required this.publisher,
     required this.annoInizio,
+    required this.coverImage,
+    required this.coverImageOverride,
   });
 
   final int serieId;
   final String nome;
   final String? issn;
+
+  /// La cover da mostrare: l'override esplicito se impostato, altrimenti
+  /// la cover della prima Edizione posseduta per numero — già risolta
+  /// (percorso locale assoluto o URL remoto, vedi
+  /// `ComicsRepository.risolviCoverImage`). Null se nessuna delle due
+  /// esiste — la UI ricade sulla copertina procedurale come per le Edizioni.
+  final String? coverImage;
+
+  /// Il solo valore di override (`SerieTable.coverImage`, non risolto) —
+  /// serve a `ModificaSerieSheet` per sapere se esiste già una scelta
+  /// esplicita da poter rimuovere ("torna al default"), distinto da
+  /// [coverImage] che è sempre il valore effettivo mostrato.
+  final String? coverImageOverride;
 
   /// Null: numero totale non impostato — nessuna griglia possibile, la
   /// serie non è mai valutabile come completa (CONTEXT.md).

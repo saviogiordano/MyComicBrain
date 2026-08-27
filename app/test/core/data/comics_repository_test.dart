@@ -18,7 +18,10 @@ void main() {
 
   setUp(() {
     db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
     );
     repo = ComicsRepository(db);
   });
@@ -34,8 +37,10 @@ void main() {
     int? serieId,
     int? issueNumber,
     String? issueNumberLabel,
+    String? coverImage,
     double? purchasePrice,
     DateTime? createdAt,
+    DateTime? edizioneCreatedAt,
   }) async {
     final operaId = await repo.aggiungiOpera(title: titolo);
     final edizioneId = await repo.aggiungiEdizione(
@@ -43,6 +48,8 @@ void main() {
       serieId: serieId,
       issueNumber: issueNumber,
       issueNumberLabel: issueNumberLabel,
+      coverImage: coverImage,
+      createdAt: edizioneCreatedAt,
     );
     await repo.aggiungiCopia(
       edizioneId: edizioneId,
@@ -107,8 +114,13 @@ void main() {
 
       // Volume unico: edizione senza serie non entra nel conteggio.
       final operaOneShot = await repo.aggiungiOpera(title: 'One-shot');
-      final edizioneOneShot = await repo.aggiungiEdizione(operaId: operaOneShot);
-      await repo.aggiungiCopia(edizioneId: edizioneOneShot, status: StatoCopia.posseduta);
+      final edizioneOneShot = await repo.aggiungiEdizione(
+        operaId: operaOneShot,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneOneShot,
+        status: StatoCopia.posseduta,
+      );
 
       final kpis = await repo.watchDashboardKpis().first;
       expect(kpis.numeroSerie, 1);
@@ -116,8 +128,12 @@ void main() {
 
     test('più edizioni della stessa collana riusano la stessa Serie', () async {
       final serieId1 = await repo.aggiungiSerie(name: 'Batman');
-      final serieId2 = await repo.aggiungiSerie(name: 'batman'); // stesso nome, case diverso
-      final serieId3 = await repo.aggiungiSerie(name: '  Batman  '); // spazi extra
+      final serieId2 = await repo.aggiungiSerie(
+        name: 'batman',
+      ); // stesso nome, case diverso
+      final serieId3 = await repo.aggiungiSerie(
+        name: '  Batman  ',
+      ); // spazi extra
 
       expect(serieId2, serieId1);
       expect(serieId3, serieId1);
@@ -137,54 +153,63 @@ void main() {
   });
 
   group('unisciSerieDuplicate', () {
-    test('unisce Serie con lo stesso nome create prima della deduplica, riassegna le Edizioni '
-        'alla superstite (id più basso) e ne conserva "numeri totali"/ISSN se noti', () async {
-      // Simula i dati creati prima del fix su `aggiungiSerie`: più righe
-      // `serie` con lo stesso nome, inserite direttamente (bypassando la
-      // deduplica ora in `aggiungiSerie`).
-      final serieVecchia = await db
-          .into(db.serieTable)
-          .insert(SerieTableCompanion.insert(name: 'Batman'));
-      final serieNuova = await db
-          .into(db.serieTable)
-          .insert(
-            SerieTableCompanion.insert(
-              name: 'batman', // case diverso, stesso nome
-              totalIssues: const Value(12),
-            ),
-          );
+    test(
+      'unisce Serie con lo stesso nome create prima della deduplica, riassegna le Edizioni '
+      'alla superstite (id più basso) e ne conserva "numeri totali"/ISSN se noti',
+      () async {
+        // Simula i dati creati prima del fix su `aggiungiSerie`: più righe
+        // `serie` con lo stesso nome, inserite direttamente (bypassando la
+        // deduplica ora in `aggiungiSerie`).
+        final serieVecchia = await db
+            .into(db.serieTable)
+            .insert(SerieTableCompanion.insert(name: 'Batman'));
+        final serieNuova = await db
+            .into(db.serieTable)
+            .insert(
+              SerieTableCompanion.insert(
+                name: 'batman', // case diverso, stesso nome
+                totalIssues: const Value(12),
+              ),
+            );
 
-      final edizioneVecchia = await edizioneConCopia(
-        titolo: 'Batman #1',
-        serieId: serieVecchia,
-        issueNumber: 1,
-        status: StatoCopia.posseduta,
-      );
-      final edizioneNuova = await edizioneConCopia(
-        titolo: 'Batman #2',
-        serieId: serieNuova,
-        issueNumber: 2,
-        status: StatoCopia.posseduta,
-      );
+        final edizioneVecchia = await edizioneConCopia(
+          titolo: 'Batman #1',
+          serieId: serieVecchia,
+          issueNumber: 1,
+          status: StatoCopia.posseduta,
+        );
+        final edizioneNuova = await edizioneConCopia(
+          titolo: 'Batman #2',
+          serieId: serieNuova,
+          issueNumber: 2,
+          status: StatoCopia.posseduta,
+        );
 
-      await repo.unisciSerieDuplicate();
+        await repo.unisciSerieDuplicate();
 
-      final serieRimaste = await db.select(db.serieTable).get();
-      expect(serieRimaste, hasLength(1));
-      expect(serieRimaste.single.id, serieVecchia);
-      expect(serieRimaste.single.totalIssues, 12); // recuperato dalla duplicata
+        final serieRimaste = await db.select(db.serieTable).get();
+        expect(serieRimaste, hasLength(1));
+        expect(serieRimaste.single.id, serieVecchia);
+        expect(
+          serieRimaste.single.totalIssues,
+          12,
+        ); // recuperato dalla duplicata
 
-      final edizioni = await db.select(db.edizioni).get();
-      expect(
-        edizioni.map((e) => e.serieId),
-        everyElement(serieVecchia),
-        reason: 'entrambe le Edizioni devono puntare alla Serie superstite',
-      );
-      expect(edizioni.map((e) => e.id), containsAll([edizioneVecchia, edizioneNuova]));
+        final edizioni = await db.select(db.edizioni).get();
+        expect(
+          edizioni.map((e) => e.serieId),
+          everyElement(serieVecchia),
+          reason: 'entrambe le Edizioni devono puntare alla Serie superstite',
+        );
+        expect(
+          edizioni.map((e) => e.id),
+          containsAll([edizioneVecchia, edizioneNuova]),
+        );
 
-      final kpis = await repo.watchDashboardKpis().first;
-      expect(kpis.numeroSerie, 1);
-    });
+        final kpis = await repo.watchDashboardKpis().first;
+        expect(kpis.numeroSerie, 1);
+      },
+    );
 
     test('non tocca Serie con nomi diversi', () async {
       final serieA = await repo.aggiungiSerie(name: 'Batman');
@@ -200,8 +225,12 @@ void main() {
     });
 
     test('è idempotente: una seconda chiamata non rompe nulla', () async {
-      await db.into(db.serieTable).insert(SerieTableCompanion.insert(name: 'Batman'));
-      await db.into(db.serieTable).insert(SerieTableCompanion.insert(name: 'Batman'));
+      await db
+          .into(db.serieTable)
+          .insert(SerieTableCompanion.insert(name: 'Batman'));
+      await db
+          .into(db.serieTable)
+          .insert(SerieTableCompanion.insert(name: 'Batman'));
 
       await repo.unisciSerieDuplicate();
       await repo.unisciSerieDuplicate();
@@ -215,8 +244,14 @@ void main() {
     test('edizione con due copie possedute conta come duplicato', () async {
       final operaId = await repo.aggiungiOpera(title: 'Opera duplicata');
       final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
 
       final kpis = await repo.watchDashboardKpis().first;
       expect(kpis.duplicati, 1);
@@ -225,8 +260,14 @@ void main() {
     test('due copie di cui una venduta non è un duplicato', () async {
       final operaId = await repo.aggiungiOpera(title: 'Opera non duplicata');
       final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.venduta);
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.venduta,
+      );
 
       final kpis = await repo.watchDashboardKpis().first;
       expect(kpis.duplicati, 0);
@@ -234,31 +275,43 @@ void main() {
   });
 
   group('numeri mancanti e serie complete', () {
-    test('serie con buchi interni: variant copre il buco del suo numero', () async {
-      final serieId = await repo.aggiungiSerie(name: 'Spider-Man', totalIssues: 10);
-      for (final n in [1, 2, 3, 5, 6]) {
+    test(
+      'serie con buchi interni: variant copre il buco del suo numero',
+      () async {
+        final serieId = await repo.aggiungiSerie(
+          name: 'Spider-Man',
+          totalIssues: 10,
+        );
+        for (final n in [1, 2, 3, 5, 6]) {
+          await edizioneConCopia(
+            titolo: 'Spider-Man #$n',
+            serieId: serieId,
+            issueNumber: n,
+            status: StatoCopia.posseduta,
+          );
+        }
+        // #10 posseduto solo come variant: copre comunque il buco del #10.
         await edizioneConCopia(
-          titolo: 'Spider-Man #$n',
+          titolo: 'Spider-Man #10 Variant',
           serieId: serieId,
-          issueNumber: n,
+          issueNumber: 10,
+          issueNumberLabel: '10 Variant',
           status: StatoCopia.posseduta,
         );
-      }
-      // #10 posseduto solo come variant: copre comunque il buco del #10.
-      await edizioneConCopia(
-        titolo: 'Spider-Man #10 Variant',
-        serieId: serieId,
-        issueNumber: 10,
-        issueNumberLabel: '10 Variant',
-        status: StatoCopia.posseduta,
-      );
 
-      final kpis = await repo.watchDashboardKpis().first;
-      expect(kpis.numeriMancanti, 4); // 4, 7, 8, 9 — il #10 è coperto dalla variant
-    });
+        final kpis = await repo.watchDashboardKpis().first;
+        expect(
+          kpis.numeriMancanti,
+          4,
+        ); // 4, 7, 8, 9 — il #10 è coperto dalla variant
+      },
+    );
 
     test('serie completa (nessun numero mancante)', () async {
-      final serieId = await repo.aggiungiSerie(name: 'Dylan Dog', totalIssues: 3);
+      final serieId = await repo.aggiungiSerie(
+        name: 'Dylan Dog',
+        totalIssues: 3,
+      );
       for (final n in [1, 2, 3]) {
         await edizioneConCopia(
           titolo: 'Dylan Dog #$n',
@@ -274,60 +327,112 @@ void main() {
         serieId: serieId,
         issueNumber: 3,
       );
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
 
       final kpis = await repo.watchDashboardKpis().first;
       expect(kpis.numeriMancanti, 0);
       expect(kpis.serieComplete, 1);
     });
 
-    test('serie senza "numeri totali" non è valutabile: esclusa da entrambi i KPI', () async {
-      final serieId = await repo.aggiungiSerie(name: 'Senza totale');
-      await edizioneConCopia(
-        titolo: 'X #1',
-        serieId: serieId,
-        issueNumber: 1,
-        status: StatoCopia.posseduta,
-      );
+    test(
+      'serie senza "numeri totali" non è valutabile: esclusa da entrambi i KPI',
+      () async {
+        final serieId = await repo.aggiungiSerie(name: 'Senza totale');
+        await edizioneConCopia(
+          titolo: 'X #1',
+          serieId: serieId,
+          issueNumber: 1,
+          status: StatoCopia.posseduta,
+        );
 
-      final kpis = await repo.watchDashboardKpis().first;
-      expect(kpis.numeriMancanti, 0);
-      expect(kpis.serieComplete, 0);
-      expect(await repo.watchSerieIncomplete().first, isEmpty);
-    });
+        final kpis = await repo.watchDashboardKpis().first;
+        expect(kpis.numeriMancanti, 0);
+        expect(kpis.serieComplete, 0);
+        expect(await repo.watchSerieIncomplete().first, isEmpty);
+      },
+    );
   });
 
   group('serie incomplete con percentuale', () {
-    test('elenca solo le serie con numeri totali noti e mancanti, con la percentuale', () async {
-      final kaiju = await repo.aggiungiSerie(name: 'Kaiju Bianco', totalIssues: 42);
-      for (final n in [1, 2, 3, 5, 6, 10]) {
+    test(
+      'elenca solo le serie con numeri totali noti e mancanti, con la percentuale',
+      () async {
+        final kaiju = await repo.aggiungiSerie(
+          name: 'Kaiju Bianco',
+          totalIssues: 42,
+        );
+        for (final n in [1, 2, 3, 5, 6, 10]) {
+          await edizioneConCopia(
+            titolo: 'Kaiju Bianco #$n',
+            serieId: kaiju,
+            issueNumber: n,
+            status: StatoCopia.posseduta,
+          );
+        }
+
+        // Serie completa: non deve comparire fra le incomplete.
+        final dylanDog = await repo.aggiungiSerie(
+          name: 'Dylan Dog',
+          totalIssues: 1,
+        );
         await edizioneConCopia(
-          titolo: 'Kaiju Bianco #$n',
-          serieId: kaiju,
-          issueNumber: n,
+          titolo: 'Dylan Dog #1',
+          serieId: dylanDog,
+          issueNumber: 1,
           status: StatoCopia.posseduta,
         );
-      }
 
-      // Serie completa: non deve comparire fra le incomplete.
-      final dylanDog = await repo.aggiungiSerie(name: 'Dylan Dog', totalIssues: 1);
-      await edizioneConCopia(
-        titolo: 'Dylan Dog #1',
-        serieId: dylanDog,
-        issueNumber: 1,
-        status: StatoCopia.posseduta,
-      );
+        final incomplete = await repo.watchSerieIncomplete().first;
 
-      final incomplete = await repo.watchSerieIncomplete().first;
-
-      expect(incomplete, hasLength(1));
-      final serie = incomplete.single;
-      expect(serie.nome, 'Kaiju Bianco');
-      expect(serie.numeriTotali, 42);
-      expect(serie.numeriPosseduti, 6);
-      expect(serie.numeriMancanti, [4, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]);
-      expect(serie.percentualeCompletamento, closeTo(6 / 42, 0.0001));
-    });
+        expect(incomplete, hasLength(1));
+        final serie = incomplete.single;
+        expect(serie.nome, 'Kaiju Bianco');
+        expect(serie.numeriTotali, 42);
+        expect(serie.numeriPosseduti, 6);
+        expect(serie.numeriMancanti, [
+          4,
+          7,
+          8,
+          9,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+        ]);
+        expect(serie.percentualeCompletamento, closeTo(6 / 42, 0.0001));
+      },
+    );
   });
 
   group('watchSerieLista (§11)', () {
@@ -342,14 +447,20 @@ void main() {
     test('raggruppa nelle tre sezioni e ordina ciascuna secondo #97', () async {
       // Incomplete, in ordine di % di completamento crescente attesa:
       // "B" 1/4 (25%), "A" 1/2 (50%).
-      final serieA = await repo.aggiungiSerie(name: 'A incompleta', totalIssues: 2);
+      final serieA = await repo.aggiungiSerie(
+        name: 'A incompleta',
+        totalIssues: 2,
+      );
       await edizioneConCopia(
         titolo: 'A #1',
         serieId: serieA,
         issueNumber: 1,
         status: StatoCopia.posseduta,
       );
-      final serieB = await repo.aggiungiSerie(name: 'B incompleta', totalIssues: 4);
+      final serieB = await repo.aggiungiSerie(
+        name: 'B incompleta',
+        totalIssues: 4,
+      );
       await edizioneConCopia(
         titolo: 'B #1',
         serieId: serieB,
@@ -358,14 +469,20 @@ void main() {
       );
 
       // Complete, alfabetiche.
-      final serieZeta = await repo.aggiungiSerie(name: 'Zeta completa', totalIssues: 1);
+      final serieZeta = await repo.aggiungiSerie(
+        name: 'Zeta completa',
+        totalIssues: 1,
+      );
       await edizioneConCopia(
         titolo: 'Zeta #1',
         serieId: serieZeta,
         issueNumber: 1,
         status: StatoCopia.posseduta,
       );
-      final serieAlfa = await repo.aggiungiSerie(name: 'Alfa completa', totalIssues: 1);
+      final serieAlfa = await repo.aggiungiSerie(
+        name: 'Alfa completa',
+        totalIssues: 1,
+      );
       await edizioneConCopia(
         titolo: 'Alfa #1',
         serieId: serieAlfa,
@@ -391,22 +508,54 @@ void main() {
 
       final lista = await repo.watchSerieLista().first;
 
-      expect(lista.incomplete.map((s) => s.nome), ['B incompleta', 'A incompleta']);
-      expect(lista.complete.map((s) => s.nome), ['Alfa completa', 'Zeta completa']);
-      expect(lista.senzaTotale.map((s) => s.nome), ['Beta senza totale', 'Rho senza totale']);
+      expect(lista.incomplete.map((s) => s.nome), [
+        'B incompleta',
+        'A incompleta',
+      ]);
+      expect(lista.complete.map((s) => s.nome), [
+        'Alfa completa',
+        'Zeta completa',
+      ]);
+      expect(lista.senzaTotale.map((s) => s.nome), [
+        'Beta senza totale',
+        'Rho senza totale',
+      ]);
     });
 
-    test('una serie senza edizioni possedute non compare (stesso filtro del KPI "serie")', () async {
-      final serieId = await repo.aggiungiSerie(name: 'Solo venduta', totalIssues: 3);
+    test(
+      'una serie senza edizioni possedute non compare (stesso filtro del KPI "serie")',
+      () async {
+        final serieId = await repo.aggiungiSerie(
+          name: 'Solo venduta',
+          totalIssues: 3,
+        );
+        await edizioneConCopia(
+          titolo: 'Solo venduta #1',
+          serieId: serieId,
+          issueNumber: 1,
+          status: StatoCopia.venduta,
+        );
+
+        final lista = await repo.watchSerieLista().first;
+        expect(lista.isEmpty, isTrue);
+      },
+    );
+
+    test('ogni riga porta la cover della prima Edizione posseduta', () async {
+      final serieId = await repo.aggiungiSerie(
+        name: 'Con cover',
+        totalIssues: 1,
+      );
       await edizioneConCopia(
-        titolo: 'Solo venduta #1',
+        titolo: 'Con cover #1',
         serieId: serieId,
         issueNumber: 1,
-        status: StatoCopia.venduta,
+        status: StatoCopia.posseduta,
+        coverImage: 'https://example.com/cover.jpg',
       );
 
       final lista = await repo.watchSerieLista().first;
-      expect(lista.isEmpty, isTrue);
+      expect(lista.complete.single.coverImage, 'https://example.com/cover.jpg');
     });
   });
 
@@ -430,9 +579,15 @@ void main() {
         publisher: 'Bao Publishing',
         year: 2019,
       );
-      await repo.aggiungiCopia(edizioneId: edizione1, status: StatoCopia.posseduta);
+      await repo.aggiungiCopia(
+        edizioneId: edizione1,
+        status: StatoCopia.posseduta,
+      );
       // Seconda copia dello stesso #1: duplicato.
-      await repo.aggiungiCopia(edizioneId: edizione1, status: StatoCopia.posseduta);
+      await repo.aggiungiCopia(
+        edizioneId: edizione1,
+        status: StatoCopia.posseduta,
+      );
 
       final opera2 = await repo.aggiungiOpera(title: 'Kaiju Bianco #2');
       final edizione2 = await repo.aggiungiEdizione(
@@ -442,7 +597,10 @@ void main() {
         publisher: 'Bao Publishing',
         year: 2018,
       );
-      await repo.aggiungiCopia(edizioneId: edizione2, status: StatoCopia.posseduta);
+      await repo.aggiungiCopia(
+        edizioneId: edizione2,
+        status: StatoCopia.posseduta,
+      );
 
       final opera3 = await repo.aggiungiOpera(title: 'Kaiju Bianco #3');
       final edizione3 = await repo.aggiungiEdizione(
@@ -451,7 +609,10 @@ void main() {
         issueNumber: 3,
         publisher: 'Altro editore',
       );
-      await repo.aggiungiCopia(edizioneId: edizione3, status: StatoCopia.posseduta);
+      await repo.aggiungiCopia(
+        edizioneId: edizione3,
+        status: StatoCopia.posseduta,
+      );
 
       final dettaglio = await repo.watchSerieDettaglio(serieId).first;
 
@@ -464,109 +625,302 @@ void main() {
       expect(dettaglio.completa, isFalse);
       expect(dettaglio.duplicati, 1);
       expect(dettaglio.publisher, 'Bao Publishing'); // più frequente (2 su 3)
-      expect(dettaglio.annoInizio, 2018); // minimo fra le edizioni con anno noto
+      expect(
+        dettaglio.annoInizio,
+        2018,
+      ); // minimo fra le edizioni con anno noto
     });
 
-    test('senza numero totale: numeriMancanti vuota e non è mai completa', () async {
-      final serieId = await repo.aggiungiSerie(name: 'Senza totale');
-      final opera = await repo.aggiungiOpera(title: 'X #1');
-      final edizione = await repo.aggiungiEdizione(
-        operaId: opera,
+    test(
+      'senza numero totale: numeriMancanti vuota e non è mai completa',
+      () async {
+        final serieId = await repo.aggiungiSerie(name: 'Senza totale');
+        final opera = await repo.aggiungiOpera(title: 'X #1');
+        final edizione = await repo.aggiungiEdizione(
+          operaId: opera,
+          serieId: serieId,
+          issueNumber: 1,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizione,
+          status: StatoCopia.posseduta,
+        );
+
+        final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+
+        expect(dettaglio!.numeriTotali, isNull);
+        expect(dettaglio.numeriPosseduti, [1]);
+        expect(dettaglio.numeriMancanti, isEmpty);
+        expect(dettaglio.completa, isFalse);
+      },
+    );
+
+    test(
+      'cover di default: la prima Edizione posseduta per numero, non per data di catalogazione',
+      () async {
+        final serieId = await repo.aggiungiSerie(name: 'Cover default');
+        // Il #2 è stato catalogato per primo (createdAt più vecchio) ma il
+        // #1 ha un numero più basso — vince il numero, non l'ordine di
+        // inserimento.
+        await edizioneConCopia(
+          titolo: 'X #2',
+          serieId: serieId,
+          issueNumber: 2,
+          status: StatoCopia.posseduta,
+          coverImage: 'https://example.com/2.jpg',
+          edizioneCreatedAt: DateTime(2020),
+        );
+        await edizioneConCopia(
+          titolo: 'X #1',
+          serieId: serieId,
+          issueNumber: 1,
+          status: StatoCopia.posseduta,
+          coverImage: 'https://example.com/1.jpg',
+          edizioneCreatedAt: DateTime(2021),
+        );
+
+        final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+        expect(dettaglio!.coverImage, 'https://example.com/1.jpg');
+        expect(dettaglio.coverImageOverride, isNull);
+      },
+    );
+
+    test(
+      'cover di default: ignora le Edizioni senza copie possedute',
+      () async {
+        final serieId = await repo.aggiungiSerie(name: 'Cover default 2');
+        await edizioneConCopia(
+          titolo: 'Y #1',
+          serieId: serieId,
+          issueNumber: 1,
+          status: StatoCopia.venduta,
+          coverImage: 'https://example.com/venduta.jpg',
+          edizioneCreatedAt: DateTime(2019),
+        );
+        await edizioneConCopia(
+          titolo: 'Y #2',
+          serieId: serieId,
+          issueNumber: 2,
+          status: StatoCopia.posseduta,
+          coverImage: 'https://example.com/posseduta.jpg',
+          edizioneCreatedAt: DateTime(2022),
+        );
+
+        final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+        expect(dettaglio!.coverImage, 'https://example.com/posseduta.jpg');
+      },
+    );
+
+    test('cover override: vince sempre sulla cover di default', () async {
+      final serieId = await repo.aggiungiSerie(name: 'Cover override');
+      await edizioneConCopia(
+        titolo: 'Z #1',
         serieId: serieId,
         issueNumber: 1,
+        status: StatoCopia.posseduta,
+        coverImage: 'https://example.com/default.jpg',
       );
-      await repo.aggiungiCopia(edizioneId: edizione, status: StatoCopia.posseduta);
+      await repo.aggiornaSerie(
+        id: serieId,
+        name: 'Cover override',
+        coverImage: 'https://example.com/scelta.jpg',
+      );
 
       final dettaglio = await repo.watchSerieDettaglio(serieId).first;
-
-      expect(dettaglio!.numeriTotali, isNull);
-      expect(dettaglio.numeriPosseduti, [1]);
-      expect(dettaglio.numeriMancanti, isEmpty);
-      expect(dettaglio.completa, isFalse);
+      expect(dettaglio!.coverImage, 'https://example.com/scelta.jpg');
+      expect(dettaglio.coverImageOverride, 'https://example.com/scelta.jpg');
     });
   });
 
   group('aggiornaSerie (§11, deciso su #99)', () {
-    test('scrive nome/numero totale/issn — finora popolati solo da aggiungiSerie', () async {
-      final serieId = await repo.aggiungiSerie(name: 'Ombre di Marte');
+    test(
+      'scrive nome/numero totale/issn — finora popolati solo da aggiungiSerie',
+      () async {
+        final serieId = await repo.aggiungiSerie(name: 'Ombre di Marte');
 
-      await repo.aggiornaSerie(
-        id: serieId,
-        name: 'Ombre di Marte',
-        totalIssues: 16,
-        issn: '5566-7788',
-      );
+        await repo.aggiornaSerie(
+          id: serieId,
+          name: 'Ombre di Marte',
+          totalIssues: 16,
+          issn: '5566-7788',
+        );
 
-      final dettaglio = await repo.watchSerieDettaglio(serieId).first;
-      expect(dettaglio!.numeriTotali, 16);
-      expect(dettaglio.issn, '5566-7788');
-    });
+        final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+        expect(dettaglio!.numeriTotali, 16);
+        expect(dettaglio.issn, '5566-7788');
+      },
+    );
 
-    test('totale/issn null: torna una serie senza numero totale/issn', () async {
-      final serieId = await repo.aggiungiSerie(
-        name: 'Con totale',
-        totalIssues: 10,
-        issn: '1111-2222',
-      );
+    test(
+      'totale/issn null: torna una serie senza numero totale/issn',
+      () async {
+        final serieId = await repo.aggiungiSerie(
+          name: 'Con totale',
+          totalIssues: 10,
+          issn: '1111-2222',
+        );
 
-      await repo.aggiornaSerie(id: serieId, name: 'Con totale');
+        await repo.aggiornaSerie(id: serieId, name: 'Con totale');
 
-      final dettaglio = await repo.watchSerieDettaglio(serieId).first;
-      expect(dettaglio!.numeriTotali, isNull);
-      expect(dettaglio.issn, isNull);
+        final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+        expect(dettaglio!.numeriTotali, isNull);
+        expect(dettaglio.issn, isNull);
+      },
+    );
+
+    test(
+      "coverImage null: azzera l'override, torna alla cover di default",
+      () async {
+        final serieId = await repo.aggiungiSerie(name: 'Ombre di Marte');
+        await edizioneConCopia(
+          titolo: 'Ombre #1',
+          serieId: serieId,
+          issueNumber: 1,
+          status: StatoCopia.posseduta,
+          coverImage: 'https://example.com/default.jpg',
+        );
+        await repo.aggiornaSerie(
+          id: serieId,
+          name: 'Ombre di Marte',
+          coverImage: 'https://example.com/scelta.jpg',
+        );
+        expect(
+          (await repo.watchSerieDettaglio(serieId).first)!.coverImageOverride,
+          isNotNull,
+        );
+
+        await repo.aggiornaSerie(id: serieId, name: 'Ombre di Marte');
+
+        final dettaglio = await repo.watchSerieDettaglio(serieId).first;
+        expect(dettaglio!.coverImageOverride, isNull);
+        expect(dettaglio.coverImage, 'https://example.com/default.jpg');
+      },
+    );
+  });
+
+  group('edizioniPosseduteDiSerie / coverDefaultDiSerie', () {
+    test(
+      'edizioniPosseduteDiSerie: solo possedute, ordinate per numero poi data',
+      () async {
+        final serieId = await repo.aggiungiSerie(name: 'Variant');
+        await edizioneConCopia(
+          titolo: 'V #4 variant',
+          serieId: serieId,
+          issueNumber: 4,
+          issueNumberLabel: '4 Variant',
+          status: StatoCopia.posseduta,
+          edizioneCreatedAt: DateTime(2022),
+        );
+        await edizioneConCopia(
+          titolo: 'V #4',
+          serieId: serieId,
+          issueNumber: 4,
+          issueNumberLabel: '4',
+          status: StatoCopia.posseduta,
+          edizioneCreatedAt: DateTime(2021),
+        );
+        await edizioneConCopia(
+          titolo: 'V #1',
+          serieId: serieId,
+          issueNumber: 1,
+          status: StatoCopia.posseduta,
+        );
+        await edizioneConCopia(
+          titolo: 'V #2 venduta',
+          serieId: serieId,
+          issueNumber: 2,
+          status: StatoCopia.venduta,
+        );
+
+        final edizioni = await repo.edizioniPosseduteDiSerie(serieId);
+
+        expect(edizioni.map((e) => e.issueNumberLabel ?? '${e.issueNumber}'), [
+          '1',
+          '4', // createdAt 2021, prima del variant
+          '4 Variant',
+        ]);
+      },
+    );
+
+    test('coverDefaultDiSerie: null se nessuna Edizione posseduta', () async {
+      final serieId = await repo.aggiungiSerie(name: 'Vuota');
+      expect(await repo.coverDefaultDiSerie(serieId), isNull);
     });
   });
 
   group('€ speso finora', () {
-    test('somma i prezzi delle copie possedute, ignora quelle senza prezzo', () async {
-      final operaConPrezzo = await repo.aggiungiOpera(title: 'Con prezzo');
-      final edizioneConPrezzo = await repo.aggiungiEdizione(operaId: operaConPrezzo);
-      await repo.aggiungiCopia(
-        edizioneId: edizioneConPrezzo,
-        status: StatoCopia.posseduta,
-        purchasePrice: 12.5,
-      );
+    test(
+      'somma i prezzi delle copie possedute, ignora quelle senza prezzo',
+      () async {
+        final operaConPrezzo = await repo.aggiungiOpera(title: 'Con prezzo');
+        final edizioneConPrezzo = await repo.aggiungiEdizione(
+          operaId: operaConPrezzo,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneConPrezzo,
+          status: StatoCopia.posseduta,
+          purchasePrice: 12.5,
+        );
 
-      final operaSenzaPrezzo = await repo.aggiungiOpera(title: 'Senza prezzo');
-      final edizioneSenzaPrezzo = await repo.aggiungiEdizione(operaId: operaSenzaPrezzo);
-      await repo.aggiungiCopia(edizioneId: edizioneSenzaPrezzo, status: StatoCopia.posseduta);
+        final operaSenzaPrezzo = await repo.aggiungiOpera(
+          title: 'Senza prezzo',
+        );
+        final edizioneSenzaPrezzo = await repo.aggiungiEdizione(
+          operaId: operaSenzaPrezzo,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneSenzaPrezzo,
+          status: StatoCopia.posseduta,
+        );
 
-      final operaVenduta = await repo.aggiungiOpera(title: 'Venduta con prezzo');
-      final edizioneVenduta = await repo.aggiungiEdizione(operaId: operaVenduta);
-      await repo.aggiungiCopia(
-        edizioneId: edizioneVenduta,
-        status: StatoCopia.venduta,
-        purchasePrice: 999,
-      );
+        final operaVenduta = await repo.aggiungiOpera(
+          title: 'Venduta con prezzo',
+        );
+        final edizioneVenduta = await repo.aggiungiEdizione(
+          operaId: operaVenduta,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneVenduta,
+          status: StatoCopia.venduta,
+          purchasePrice: 999,
+        );
 
-      final kpis = await repo.watchDashboardKpis().first;
-      expect(kpis.spesoFinora, closeTo(12.5, 0.0001));
-    });
+        final kpis = await repo.watchDashboardKpis().first;
+        expect(kpis.spesoFinora, closeTo(12.5, 0.0001));
+      },
+    );
   });
 
   group('N aggiunti nel mese corrente', () {
-    test('conta solo le copie possedute create nel mese solare corrente', () async {
-      final ora = DateTime.now();
-      final meseScorso = DateTime(ora.year, ora.month - 1, 15);
+    test(
+      'conta solo le copie possedute create nel mese solare corrente',
+      () async {
+        final ora = DateTime.now();
+        final meseScorso = DateTime(ora.year, ora.month - 1, 15);
 
-      final operaId = await repo.aggiungiOpera(title: 'Opera');
-      final edizioneQuestoMese = await repo.aggiungiEdizione(operaId: operaId);
-      await repo.aggiungiCopia(
-        edizioneId: edizioneQuestoMese,
-        status: StatoCopia.posseduta,
-        createdAt: ora,
-      );
+        final operaId = await repo.aggiungiOpera(title: 'Opera');
+        final edizioneQuestoMese = await repo.aggiungiEdizione(
+          operaId: operaId,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneQuestoMese,
+          status: StatoCopia.posseduta,
+          createdAt: ora,
+        );
 
-      final edizioneMeseScorso = await repo.aggiungiEdizione(operaId: operaId);
-      await repo.aggiungiCopia(
-        edizioneId: edizioneMeseScorso,
-        status: StatoCopia.posseduta,
-        createdAt: meseScorso,
-      );
+        final edizioneMeseScorso = await repo.aggiungiEdizione(
+          operaId: operaId,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneMeseScorso,
+          status: StatoCopia.posseduta,
+          createdAt: meseScorso,
+        );
 
-      final kpis = await repo.watchDashboardKpis().first;
-      expect(kpis.aggiuntiMeseCorrente, 1);
-    });
+        final kpis = await repo.watchDashboardKpis().first;
+        expect(kpis.aggiuntiMeseCorrente, 1);
+      },
+    );
   });
 
   group('aggiunti di recente', () {
@@ -580,10 +934,13 @@ void main() {
       }
 
       final recenti = await repo.watchAggiuntiDiRecente().first;
-      expect(recenti.map((c) => c.titolo), unorderedEquals([
-        StatoCopia.posseduta.name,
-        StatoCopia.prestata.name,
-      ]));
+      expect(
+        recenti.map((c) => c.titolo),
+        unorderedEquals([
+          StatoCopia.posseduta.name,
+          StatoCopia.prestata.name,
+        ]),
+      );
     });
 
     test('ordina per data di aggiunta, più recente prima', () async {
@@ -609,7 +966,10 @@ void main() {
         publisher: 'Kodama Manga',
         issueNumber: 4,
       );
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
 
       final recente = (await repo.watchAggiuntiDiRecente().first).single;
       expect(recente.edizioneId, edizioneId);
@@ -619,23 +979,32 @@ void main() {
       expect(recente.numeroVisualizzato, '#4');
     });
 
-    test('numero testuale ("4 Variant") ha priorità sul numero intero in visualizzazione', () async {
-      final operaId = await repo.aggiungiOpera(title: 'Notturno');
-      final edizioneId = await repo.aggiungiEdizione(
-        operaId: operaId,
-        issueNumber: 4,
-        issueNumberLabel: '4 Variant',
-      );
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+    test(
+      'numero testuale ("4 Variant") ha priorità sul numero intero in visualizzazione',
+      () async {
+        final operaId = await repo.aggiungiOpera(title: 'Notturno');
+        final edizioneId = await repo.aggiungiEdizione(
+          operaId: operaId,
+          issueNumber: 4,
+          issueNumberLabel: '4 Variant',
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
 
-      final recente = (await repo.watchAggiuntiDiRecente().first).single;
-      expect(recente.numeroVisualizzato, '#4 Variant');
-    });
+        final recente = (await repo.watchAggiuntiDiRecente().first).single;
+        expect(recente.numeroVisualizzato, '#4 Variant');
+      },
+    );
 
     test('coverImage null se assente', () async {
       final operaId = await repo.aggiungiOpera(title: 'Senza cover');
       final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
 
       final recente = (await repo.watchAggiuntiDiRecente().first).single;
       expect(recente.coverImage, null);
@@ -654,7 +1023,10 @@ void main() {
           operaId: operaId,
           coverImage: 'https://comicvine.example/cover.jpg',
         );
-        await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
 
         // `repo` (dal `setUp`) usa il `CopertinaDownloader` di default, la
         // cui `baseDirectory` è il vero `path_provider` — non mockato in
@@ -674,10 +1046,16 @@ void main() {
           operaId: operaId,
           coverImage: '${Directory.systemTemp.path}/una_cover.png',
         );
-        await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
 
         final recente = (await repo.watchAggiuntiDiRecente().first).single;
-        expect(recente.coverImage, '${Directory.systemTemp.path}/una_cover.png');
+        expect(
+          recente.coverImage,
+          '${Directory.systemTemp.path}/una_cover.png',
+        );
       },
     );
 
@@ -696,14 +1074,20 @@ void main() {
           ),
         );
 
-        final operaId = await repoConBase.aggiungiOpera(title: 'Con cover relativa');
+        final operaId = await repoConBase.aggiungiOpera(
+          title: 'Con cover relativa',
+        );
         final edizioneId = await repoConBase.aggiungiEdizione(
           operaId: operaId,
           coverImage: p.join('copertine', '1.jpg'),
         );
-        await repoConBase.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+        await repoConBase.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
 
-        final recente = (await repoConBase.watchAggiuntiDiRecente().first).single;
+        final recente =
+            (await repoConBase.watchAggiuntiDiRecente().first).single;
         expect(recente.coverImage, p.join(tempBase.path, 'copertine', '1.jpg'));
       },
     );
@@ -724,7 +1108,9 @@ void main() {
           ),
         );
 
-        final operaId = await repoConBase.aggiungiOpera(title: 'Con cover legacy');
+        final operaId = await repoConBase.aggiungiOpera(
+          title: 'Con cover legacy',
+        );
         // Simula un percorso persistito con un container ormai inesistente
         // (installazione precedente): assoluto, con lo stesso suffisso
         // relativo `copertine/<file>` che iOS migra fisicamente al
@@ -735,9 +1121,13 @@ void main() {
               '/var/mobile/Containers/Data/Application/VECCHIO-UUID/'
               'Library/Application Support/copertine/1.jpg',
         );
-        await repoConBase.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+        await repoConBase.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
 
-        final recente = (await repoConBase.watchAggiuntiDiRecente().first).single;
+        final recente =
+            (await repoConBase.watchAggiuntiDiRecente().first).single;
         expect(recente.coverImage, p.join(tempBase.path, 'copertine', '1.jpg'));
       },
     );

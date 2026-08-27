@@ -1104,8 +1104,17 @@ SELECT
   s.id AS serie_id,
   s.name AS nome,
   s.total_issues AS numeri_totali,
+  s.cover_image AS cover_override,
   COALESCE(pc.n, 0) AS numeri_posseduti,
-  COALESCE(mc.n, 0) AS numeri_mancanti
+  COALESCE(mc.n, 0) AS numeri_mancanti,
+  (SELECT e3.cover_image FROM edizioni e3
+     WHERE e3.serie_id = s.id
+     AND EXISTS (
+       SELECT 1 FROM copie c3
+       WHERE c3.edizione_id = e3.id AND c3.status IN ('posseduta', 'prestata')
+     )
+     ORDER BY (e3.issue_number IS NULL), e3.issue_number ASC,
+       e3.created_at ASC, e3.id ASC LIMIT 1) AS cover_default
 FROM serie s
 JOIN serie_posseduta sp ON sp.serie_id = s.id
 LEFT JOIN posseduti_count pc ON pc.serie_id = s.id
@@ -1114,17 +1123,22 @@ LEFT JOIN mancanti_count mc ON mc.serie_id = s.id
           readsFrom: {_db.serieTable, _db.edizioni, _db.copie},
         )
         .watch()
-        .map((rows) {
+        .asyncMap((rows) async {
           final incomplete = <SerieRiga>[];
           final complete = <SerieRiga>[];
           final senzaTotale = <SerieRiga>[];
 
           for (final row in rows) {
+            final coverOverride = row.readNullable<String>('cover_override');
+            final coverDefault = row.readNullable<String>('cover_default');
             final riga = SerieRiga(
               serieId: row.read<int>('serie_id'),
               nome: row.read<String>('nome'),
               numeriPosseduti: row.read<int>('numeri_posseduti'),
               numeriTotali: row.readNullable<int>('numeri_totali'),
+              coverImage: await risolviCoverImage(
+                coverOverride ?? coverDefault,
+              ),
             );
             if (riga.numeriTotali == null) {
               senzaTotale.add(riga);
@@ -1153,8 +1167,10 @@ LEFT JOIN mancanti_count mc ON mc.serie_id = s.id
 
   /// Il dettaglio `/serie/:id`: numeri posseduti, editore/anno derivati
   /// aggregando le edizioni della serie (nessun nuovo campo su
-  /// `SerieTable`, deciso su #97), duplicati. Null se la Serie non esiste
-  /// (più cancellata nel frattempo).
+  /// `SerieTable`, deciso su #97), duplicati, cover (override o derivata
+  /// dalla prima Edizione posseduta per numero, non per data di
+  /// catalogazione). Null se la Serie non esiste (più cancellata nel
+  /// frattempo).
   Stream<SerieDettaglio?> watchSerieDettaglio(int serieId) {
     return _db
         .customSelect(
@@ -1170,6 +1186,7 @@ SELECT
   s.name AS nome,
   s.total_issues AS numeri_totali,
   s.issn AS issn,
+  s.cover_image AS cover_override,
   p.n AS numero_posseduto,
   (SELECT publisher FROM edizioni WHERE serie_id = ?1 AND publisher IS NOT NULL
      GROUP BY publisher ORDER BY COUNT(*) DESC, publisher LIMIT 1) AS publisher,
@@ -1179,7 +1196,15 @@ SELECT
      JOIN copie c2 ON c2.edizione_id = e2.id AND c2.status IN ('posseduta', 'prestata')
      WHERE e2.serie_id = ?1
      GROUP BY e2.id HAVING COUNT(*) >= 2
-   )) AS duplicati
+   )) AS duplicati,
+  (SELECT e3.cover_image FROM edizioni e3
+     WHERE e3.serie_id = ?1
+     AND EXISTS (
+       SELECT 1 FROM copie c3
+       WHERE c3.edizione_id = e3.id AND c3.status IN ('posseduta', 'prestata')
+     )
+     ORDER BY (e3.issue_number IS NULL), e3.issue_number ASC,
+       e3.created_at ASC, e3.id ASC LIMIT 1) AS cover_default
 FROM serie s
 LEFT JOIN posseduti p ON 1 = 1
 WHERE s.id = ?1
@@ -1189,9 +1214,11 @@ ORDER BY p.n
           readsFrom: {_db.serieTable, _db.edizioni, _db.copie},
         )
         .watch()
-        .map((rows) {
+        .asyncMap((rows) async {
           if (rows.isEmpty) return null;
           final first = rows.first;
+          final coverOverride = first.readNullable<String>('cover_override');
+          final coverDefault = first.readNullable<String>('cover_default');
           return SerieDettaglio(
             serieId: first.read<int>('serie_id'),
             nome: first.read<String>('nome'),
@@ -1205,28 +1232,118 @@ ORDER BY p.n
             duplicati: first.read<int>('duplicati'),
             publisher: first.readNullable<String>('publisher'),
             annoInizio: first.readNullable<int>('anno_inizio'),
+            coverImage: await risolviCoverImage(coverOverride ?? coverDefault),
+            coverImageOverride: coverOverride,
           );
         });
   }
 
-  /// Aggiorna nome/numero totale/ISSN di una Serie (§11, deciso su #99) —
-  /// unica scrittura UI su questi campi, finora popolati solo da
-  /// `aggiungiSerie()` (ingestion AI). Nessun vincolo qui sul numero totale
-  /// rispetto ai numeri già posseduti: lo valida la UI (`ModificaSerieSheet`)
-  /// prima di chiamare questo metodo.
+  /// Aggiorna nome/numero totale/ISSN/cover di una Serie (§11, deciso su
+  /// #99; cover aggiunta in sessione successiva) — unica scrittura UI su
+  /// questi campi, finora popolati solo da `aggiungiSerie()` (ingestion AI).
+  /// Nessun vincolo qui sul numero totale rispetto ai numeri già posseduti:
+  /// lo valida la UI (`ModificaSerieSheet`) prima di chiamare questo
+  /// metodo. `coverImage` è sempre scritto così com'è (null incluso):
+  /// azzera l'override e fa tornare la Serie alla cover di default se lo
+  /// sheet lo passa esplicitamente a null — stesso comportamento
+  /// "sovrascrivi sempre" degli altri campi di questo metodo.
   Future<void> aggiornaSerie({
     required int id,
     required String name,
     int? totalIssues,
     String? issn,
+    String? coverImage,
   }) {
     return (_db.update(_db.serieTable)..where((s) => s.id.equals(id))).write(
       SerieTableCompanion(
         name: Value(name.trim()),
         totalIssues: Value(totalIssues),
         issn: Value(issn),
+        coverImage: Value(coverImage),
       ),
     );
+  }
+
+  /// Le Edizioni possedute di una Serie, ordinate per numero e poi per data
+  /// di catalogazione — usate sia dal tap su un numero della Scheda Serie
+  /// (naviga diretto se una sola corrispondenza, altrimenti mostra un
+  /// selettore quando più Edizioni condividono lo stesso `issueNumber`,
+  /// es. variant) sia dal selettore "scegli da un'edizione della serie"
+  /// nell'edit della cover.
+  Future<List<EdizioneCatalogo>> edizioniPosseduteDiSerie(int serieId) async {
+    final query =
+        _db.select(_db.edizioni).join([
+            innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+            innerJoin(
+              _db.copie,
+              _db.copie.edizioneId.equalsExp(_db.edizioni.id),
+            ),
+          ])
+          ..where(
+            _db.edizioni.serieId.equals(serieId) &
+                _db.copie.status.isInValues(const [
+                  StatoCopia.posseduta,
+                  StatoCopia.prestata,
+                ]),
+          )
+          ..groupBy([_db.edizioni.id])
+          ..orderBy([
+            OrderingTerm.asc(_db.edizioni.issueNumber),
+            OrderingTerm.asc(_db.edizioni.createdAt),
+          ]);
+
+    final rows = await query.get();
+    final risultati = <EdizioneCatalogo>[];
+    for (final row in rows) {
+      final edizione = row.readTable(_db.edizioni);
+      risultati.add(
+        EdizioneCatalogo(
+          edizioneId: edizione.id,
+          title: row.readTable(_db.opere).title,
+          serieId: edizione.serieId,
+          seriesName: null,
+          publisher: edizione.publisher,
+          issueNumber: edizione.issueNumber,
+          issueNumberLabel: edizione.issueNumberLabel,
+          coverImage: await risolviCoverImage(edizione.coverImage),
+        ),
+      );
+    }
+    return risultati;
+  }
+
+  /// La cover della prima Edizione posseduta di una Serie per numero (a
+  /// parità di numero, per data di catalogazione) — stessa derivazione
+  /// usata da [watchSerieDettaglio]
+  /// quando non c'è override, usata da `ModificaSerieSheet` per
+  /// l'anteprima dopo "torna al default" (l'override appena rimosso in UI
+  /// non è ancora stato salvato, quindi il default va richiesto a parte).
+  Future<String?> coverDefaultDiSerie(int serieId) async {
+    final query =
+        _db.select(_db.edizioni).join([
+            innerJoin(
+              _db.copie,
+              _db.copie.edizioneId.equalsExp(_db.edizioni.id),
+            ),
+          ])
+          ..where(
+            _db.edizioni.serieId.equals(serieId) &
+                _db.copie.status.isInValues(const [
+                  StatoCopia.posseduta,
+                  StatoCopia.prestata,
+                ]),
+          )
+          ..orderBy([
+            OrderingTerm.asc(_db.edizioni.issueNumber.isNull()),
+            OrderingTerm.asc(_db.edizioni.issueNumber),
+            OrderingTerm.asc(_db.edizioni.createdAt),
+            OrderingTerm.asc(_db.edizioni.id),
+          ])
+          ..limit(1);
+
+    final row = await query.getSingleOrNull();
+    if (row == null) return null;
+    return risolviCoverImage(row.readTable(_db.edizioni).coverImage);
   }
 
   /// Quante copie mostrare nel carosello "Aggiunti di recente" — oltre lo

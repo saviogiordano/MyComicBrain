@@ -52,6 +52,14 @@ class SerieTable extends Table {
   /// la testata periodica nel suo complesso, non la singola Edizione: sta
   /// su `Serie`/collana, non su `Edizioni`.
   TextColumn get issn => text().nullable()();
+
+  /// Cover scelta esplicitamente dall'utente per la Serie (override) —
+  /// null quando non è mai stata impostata o è stata rimossa: in quel caso
+  /// la UI deriva a runtime la cover della prima Edizione posseduta per
+  /// numero (`ComicsRepository.watchSerieDettaglio`), stesso principio dei
+  /// campi derivati publisher/annoInizio (deciso su #97) ma con la
+  /// possibilità di scelta manuale che quei due campi non hanno.
+  TextColumn get coverImage => text().nullable()();
 }
 
 /// `Edizione`: la pubblicazione specifica di un'opera — l'unità catalogata.
@@ -453,13 +461,19 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from10To11: (m, schema) async {
+        await m.addColumn(schema.serie, schema.serie.coverImage);
+      },
       from9To10: (m, schema) async {
-        await m.addColumn(schema.analisiCopertina, schema.analisiCopertina.year);
+        await m.addColumn(
+          schema.analisiCopertina,
+          schema.analisiCopertina.year,
+        );
       },
       from8To9: (m, schema) async {
         await m.addColumn(schema.edizioni, schema.edizioni.year);

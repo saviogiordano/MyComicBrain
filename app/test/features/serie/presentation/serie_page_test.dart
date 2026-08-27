@@ -21,7 +21,10 @@ void main() {
 
   setUp(() {
     db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
     );
     repository = ComicsRepository(db);
   });
@@ -65,7 +68,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('collezione senza serie: stato vuoto a schermo intero', (tester) async {
+  testWidgets('collezione senza serie: stato vuoto a schermo intero', (
+    tester,
+  ) async {
     await pumpSerie(tester);
 
     expect(find.text('Nessuna serie in collezione'), findsOneWidget);
@@ -79,21 +84,39 @@ void main() {
       name: 'A incompleta',
       totalIssues: 2,
     );
-    await edizioneConCopia(titolo: 'A #1', serieId: incompletaA, issueNumber: 1);
+    await edizioneConCopia(
+      titolo: 'A #1',
+      serieId: incompletaA,
+      issueNumber: 1,
+    );
     final incompletaB = await repository.aggiungiSerie(
       name: 'B incompleta',
       totalIssues: 4,
     );
-    await edizioneConCopia(titolo: 'B #1', serieId: incompletaB, issueNumber: 1);
+    await edizioneConCopia(
+      titolo: 'B #1',
+      serieId: incompletaB,
+      issueNumber: 1,
+    );
 
     final completaZeta = await repository.aggiungiSerie(
       name: 'Zeta completa',
       totalIssues: 1,
     );
-    await edizioneConCopia(titolo: 'Zeta #1', serieId: completaZeta, issueNumber: 1);
+    await edizioneConCopia(
+      titolo: 'Zeta #1',
+      serieId: completaZeta,
+      issueNumber: 1,
+    );
 
-    final senzaTotale = await repository.aggiungiSerie(name: 'Rho senza totale');
-    await edizioneConCopia(titolo: 'Rho #1', serieId: senzaTotale, issueNumber: 1);
+    final senzaTotale = await repository.aggiungiSerie(
+      name: 'Rho senza totale',
+    );
+    await edizioneConCopia(
+      titolo: 'Rho #1',
+      serieId: senzaTotale,
+      issueNumber: 1,
+    );
 
     await pumpSerie(tester);
 
@@ -114,7 +137,11 @@ void main() {
       name: 'Kaiju Bianco',
       totalIssues: 5,
     );
-    await edizioneConCopia(titolo: 'Kaiju #1', serieId: serieId, issueNumber: 1);
+    await edizioneConCopia(
+      titolo: 'Kaiju #1',
+      serieId: serieId,
+      issueNumber: 1,
+    );
 
     await pumpSerie(tester);
     await tester.tap(find.text('Kaiju Bianco'));

@@ -16,6 +16,7 @@ class ComicCoverImage extends StatelessWidget {
     required this.titolo,
     required this.numero,
     required this.etichetta,
+    this.compatto = false,
     super.key,
   });
 
@@ -27,13 +28,22 @@ class ComicCoverImage extends StatelessWidget {
   final int numero;
   final String etichetta;
 
+  /// Il testo di [ProceduralComicCover] non entra in celle sotto i ~90px
+  /// di larghezza (pensata per griglie tipo Collezione, §9). `true` per un
+  /// fallback minimo senza testo — usarlo dove titolo/numero sono già
+  /// mostrati a fianco della cover (righe di lista, header), non nelle
+  /// griglie dove il testo procedurale è l'unica etichetta della cella.
+  final bool compatto;
+
   @override
   Widget build(BuildContext context) {
-    final procedurale = ProceduralComicCover(
-      titolo: titolo,
-      numero: numero,
-      etichetta: etichetta,
-    );
+    final procedurale = compatto
+        ? const _PlaceholderCompatto()
+        : ProceduralComicCover(
+            titolo: titolo,
+            numero: numero,
+            etichetta: etichetta,
+          );
     final immagine = coverImage;
     if (immagine == null) return procedurale;
 
@@ -54,6 +64,28 @@ class ComicCoverImage extends StatelessWidget {
             ),
     );
     return SizedBox.expand(child: risolta);
+  }
+}
+
+/// Fallback minimo per [ComicCoverImage.compatto] — nessun testo, solo
+/// un'icona, per celle troppo piccole per [ProceduralComicCover].
+class _PlaceholderCompatto extends StatelessWidget {
+  const _PlaceholderCompatto();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: AppRadii.xsRadius,
+      ),
+      child: Icon(
+        Icons.auto_stories_outlined,
+        color: AppColors.textDisabled,
+        size: 16,
+      ),
+    );
   }
 }
 

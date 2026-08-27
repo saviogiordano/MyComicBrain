@@ -114,6 +114,18 @@ class _SerieRigaCard extends StatelessWidget {
       ),
       child: Row(
         children: [
+          SizedBox(
+            width: 32,
+            height: 44,
+            child: ComicCoverImage(
+              coverImage: item.coverImage,
+              titolo: item.nome,
+              numero: item.serieId,
+              etichetta: '',
+              compatto: true,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

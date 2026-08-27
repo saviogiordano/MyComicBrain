@@ -7,12 +7,17 @@ class SerieRiga {
     required this.serieId,
     required this.nome,
     required this.numeriPosseduti,
+    required this.coverImage,
     this.numeriTotali,
   });
 
   final int serieId;
   final String nome;
   final int numeriPosseduti;
+
+  /// Override esplicito o cover della prima Edizione posseduta per numero
+  /// — stessa risoluzione di `SerieDettaglio.coverImage`.
+  final String? coverImage;
 
   /// Null: la serie non ha un numero totale impostato — mai valutabile
   /// come completa o incompleta (CONTEXT.md, "Serie completa").

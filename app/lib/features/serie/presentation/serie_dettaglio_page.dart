@@ -1,15 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
 import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
 import 'package:mycomicbrain/features/serie/presentation/modifica_serie_sheet.dart';
 
-/// Dettaglio `/serie/:id` (§11, deciso su #97): header con statistiche
-/// derivate, griglia dei numeri posseduti/mancanti (se il numero totale è
-/// impostato) o solo l'elenco dei numeri posseduti con un invito a
-/// impostarlo (deciso su #99). Modifica di nome/numero totale/issn tramite
-/// bottom sheet (`ModificaSerieSheet`, variante B scelta su #99).
+/// Dettaglio `/serie/:id` (§11, deciso su #97): header con cover,
+/// statistiche derivate, griglia dei numeri posseduti/mancanti (se il
+/// numero totale è impostato) o solo l'elenco dei numeri posseduti con un
+/// invito a impostarlo (deciso su #99). Modifica di nome/numero totale/
+/// issn/cover tramite bottom sheet (`ModificaSerieSheet`, variante B scelta
+/// su #99). Toccare un numero posseduto naviga alla Scheda dell'Edizione
+/// corrispondente — se più Edizioni condividono lo stesso numero (variant),
+/// mostra prima un selettore invece di scegliere in automatico.
 class SerieDettaglioPage extends ConsumerWidget {
   const SerieDettaglioPage({required this.serieId, super.key});
 
@@ -63,7 +70,11 @@ class SerieDettaglioPage extends ConsumerWidget {
                 ),
               );
             }
-            return _Corpo(serie: s);
+            return _Corpo(
+              serie: s,
+              onNumero: (numero) =>
+                  _apriNumero(context, ref, s.serieId, numero),
+            );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, stackTrace) => Center(
@@ -85,9 +96,10 @@ class SerieDettaglioPage extends ConsumerWidget {
 }
 
 class _Corpo extends StatelessWidget {
-  const _Corpo({required this.serie});
+  const _Corpo({required this.serie, required this.onNumero});
 
   final SerieDettaglio serie;
+  final void Function(int numero) onNumero;
 
   @override
   Widget build(BuildContext context) {
@@ -103,24 +115,48 @@ class _Corpo extends StatelessWidget {
         AppSpacing.xxl,
       ),
       children: [
-        Text(
-          serie.nome,
-          style: AppTypography.headline.copyWith(
-            color: AppColors.textPrimary,
-            fontSize: 24,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          [
-            if (serie.publisher != null) serie.publisher!,
-            if (serie.annoInizio != null) 'dal ${serie.annoInizio}',
-            if (serie.numeriTotali != null)
-              '${serie.numeriTotali} numeri usciti',
-          ].join(' · '),
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textTertiary,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 72,
+              height: 108,
+              child: ComicCoverImage(
+                coverImage: serie.coverImage,
+                titolo: serie.nome,
+                numero: serie.serieId,
+                etichetta: '',
+                compatto: true,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    serie.nome,
+                    style: AppTypography.headline.copyWith(
+                      color: AppColors.textPrimary,
+                      fontSize: 24,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    [
+                      if (serie.publisher != null) serie.publisher!,
+                      if (serie.annoInizio != null) 'dal ${serie.annoInizio}',
+                      if (serie.numeriTotali != null)
+                        '${serie.numeriTotali} numeri usciti',
+                    ].join(' · '),
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         if (serie.issn != null) ...[
           const SizedBox(height: AppSpacing.xxs),
@@ -182,9 +218,9 @@ class _Corpo extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         if (serie.numeriTotali == null)
-          _SenzaTotale(serie: serie)
+          _SenzaTotale(serie: serie, onNumero: onNumero)
         else
-          _ConTotale(serie: serie),
+          _ConTotale(serie: serie, onNumero: onNumero),
       ],
     );
   }
@@ -208,7 +244,10 @@ class _StatTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(value, style: AppTypography.kpiValue.copyWith(color: valueColor)),
+          Text(
+            value,
+            style: AppTypography.kpiValue.copyWith(color: valueColor),
+          ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
             label,
@@ -225,9 +264,10 @@ class _StatTile extends StatelessWidget {
 /// Il caso che motiva #99: senza numero totale non esiste una griglia
 /// possibile — solo l'elenco dei numeri posseduti e un invito a impostarlo.
 class _SenzaTotale extends StatelessWidget {
-  const _SenzaTotale({required this.serie});
+  const _SenzaTotale({required this.serie, required this.onNumero});
 
   final SerieDettaglio serie;
+  final void Function(int numero) onNumero;
 
   @override
   Widget build(BuildContext context) {
@@ -241,7 +281,7 @@ class _SenzaTotale extends StatelessWidget {
           runSpacing: AppSpacing.xs,
           children: [
             for (final n in serie.numeriPosseduti)
-              AppChip(label: '#$n', selected: true),
+              AppChip(label: '#$n', selected: true, onTap: () => onNumero(n)),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -273,7 +313,8 @@ class _SenzaTotale extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               OutlinedButton(
-                onPressed: () => mostraModificaSerieSheet(context, serie: serie),
+                onPressed: () =>
+                    mostraModificaSerieSheet(context, serie: serie),
                 child: const Text('Imposta numero totale'),
               ),
             ],
@@ -285,9 +326,10 @@ class _SenzaTotale extends StatelessWidget {
 }
 
 class _ConTotale extends StatelessWidget {
-  const _ConTotale({required this.serie});
+  const _ConTotale({required this.serie, required this.onNumero});
 
   final SerieDettaglio serie;
+  final void Function(int numero) onNumero;
 
   @override
   Widget build(BuildContext context) {
@@ -318,7 +360,11 @@ class _ConTotale extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           children: [
             for (var n = 1; n <= serie.numeriTotali!; n++)
-              _NumeroCell(numero: n, posseduto: posseduti.contains(n)),
+              _NumeroCell(
+                numero: n,
+                posseduto: posseduti.contains(n),
+                onTap: posseduti.contains(n) ? () => onNumero(n) : null,
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -333,7 +379,11 @@ class _ConTotale extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.check_circle, color: AppColors.accentLight, size: 18),
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.accentLight,
+                  size: 18,
+                ),
                 const SizedBox(width: AppSpacing.xxs),
                 Text(
                   'Serie completa',
@@ -405,31 +455,45 @@ class _Legenda extends StatelessWidget {
 }
 
 class _NumeroCell extends StatelessWidget {
-  const _NumeroCell({required this.numero, required this.posseduto});
+  const _NumeroCell({
+    required this.numero,
+    required this.posseduto,
+    required this.onTap,
+  });
 
   final int numero;
   final bool posseduto;
 
+  /// Null per i numeri mancanti — nessuna Edizione a cui navigare.
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: posseduto
-            ? AppColors.accentAlpha(0.16)
-            : AppColors.amberAlpha(0.1),
-        border: Border.all(
-          color: posseduto
-              ? AppColors.accentAlpha(0.3)
-              : AppColors.amberAlpha(0.4),
-        ),
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: AppRadii.xsRadius,
-      ),
-      child: Text(
-        '$numero',
-        style: AppTypography.monoLabel.copyWith(
-          color: posseduto ? AppColors.accentLight : AppColors.amber,
-          fontSize: 11,
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: posseduto
+                ? AppColors.accentAlpha(0.16)
+                : AppColors.amberAlpha(0.1),
+            border: Border.all(
+              color: posseduto
+                  ? AppColors.accentAlpha(0.3)
+                  : AppColors.amberAlpha(0.4),
+            ),
+            borderRadius: AppRadii.xsRadius,
+          ),
+          child: Text(
+            '$numero',
+            style: AppTypography.monoLabel.copyWith(
+              color: posseduto ? AppColors.accentLight : AppColors.amber,
+              fontSize: 11,
+            ),
+          ),
         ),
       ),
     );
@@ -443,4 +507,108 @@ String _missingLabel(List<int> numeri) {
   final visibili = numeri.take(soglia).map((n) => '#$n').join(', ');
   if (numeri.length <= soglia) return visibili;
   return '$visibili e altri ${numeri.length - soglia}';
+}
+
+/// Tap su un numero posseduto: naviga diretto alla Scheda se una sola
+/// Edizione lo copre, altrimenti mostra un selettore — più Edizioni possono
+/// condividere lo stesso `issueNumber` (variant, es. "4 Variant" copre il
+/// buco del numero 4, CONTEXT.md).
+Future<void> _apriNumero(
+  BuildContext context,
+  WidgetRef ref,
+  int serieId,
+  int numero,
+) async {
+  final edizioni = await ref
+      .read(comicsRepositoryProvider)
+      .edizioniPosseduteDiSerie(serieId);
+  final corrispondenti = edizioni
+      .where((e) => e.issueNumber == numero)
+      .toList();
+  if (!context.mounted || corrispondenti.isEmpty) return;
+
+  if (corrispondenti.length == 1) {
+    unawaited(context.push('/scheda/${corrispondenti.first.edizioneId}'));
+    return;
+  }
+
+  final scelta = await showModalBottomSheet<EdizioneCatalogo>(
+    context: context,
+    backgroundColor: AppColors.surfaceRaised,
+    builder: (context) => _SceltaEdizioneSheet(edizioni: corrispondenti),
+  );
+  if (scelta != null && context.mounted) {
+    unawaited(context.push('/scheda/${scelta.edizioneId}'));
+  }
+}
+
+/// Selettore mostrato quando più Edizioni condividono lo stesso numero —
+/// vedi [_apriNumero].
+class _SceltaEdizioneSheet extends StatelessWidget {
+  const _SceltaEdizioneSheet({required this.edizioni});
+
+  final List<EdizioneCatalogo> edizioni;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeader(
+              label: 'più edizioni per il #${edizioni.first.issueNumber}',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            for (final e in edizioni)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: AppCard(
+                  onTap: () => Navigator.of(context).pop(e),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 40,
+                        height: 60,
+                        child: ComicCoverImage(
+                          coverImage: e.coverImage,
+                          titolo: e.title,
+                          numero: e.issueNumber ?? 0,
+                          etichetta: e.issueNumberLabel ?? '',
+                          compatto: true,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              e.issueNumberLabel ?? '#${e.issueNumber}',
+                              style: AppTypography.titleMedium.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            if (e.publisher != null)
+                              Text(
+                                e.publisher!,
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
