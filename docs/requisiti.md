@@ -439,11 +439,7 @@ Esempi:
 
 > "Quanti fumetti Marvel ho?"
 
-> "Mostrami i fumetti comprati nel 2025."
-
 > "Quali sono le serie quasi complete?"
-
-> "Quali fumetti ho letto ma non hanno una recensione?"
 
 > "Trova i duplicati."
 
