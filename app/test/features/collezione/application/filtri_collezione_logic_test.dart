@@ -8,7 +8,7 @@ import 'package:mycomicbrain/features/collezione/application/filtri_collezione_l
 /// (ticket #85 di #79): AND fra assi, OR nello stesso asse, regola "almeno
 /// una copia", ordinamento primario+secondario, "Senza serie" (#94).
 void main() {
-  EdizioneCollezione edizione({
+  EdizioneCollezioneIndice edizione({
     required int id,
     required String titolo,
     String? serieName,
@@ -16,7 +16,7 @@ void main() {
     int? year,
     List<CopiaAsseCollezione> copie = const [],
   }) {
-    return EdizioneCollezione(
+    return EdizioneCollezioneIndice(
       edizioneId: id,
       titolo: titolo,
       serieId: null,
@@ -24,7 +24,6 @@ void main() {
       publisher: publisher,
       issueNumber: null,
       issueNumberLabel: null,
-      coverImage: null,
       year: year,
       format: null,
       language: null,

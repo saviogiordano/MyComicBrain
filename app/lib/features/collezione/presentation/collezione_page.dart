@@ -10,7 +10,8 @@ import 'package:mycomicbrain/features/collezione/application/filtri_collezione_l
 
 /// Schermo Collezione (§9, deciso su #90, prototipo visivo validato su #96):
 /// griglia a copertine di tutte le Edizioni possedute, filtrabile sui 12
-/// assi e ordinabile, con due stati vuoti distinti. Dalla Dashboard, il KPI
+/// assi e ordinabile, con due stati vuoti distinti, caricata a finestra con
+/// scroll infinito (§9, deciso su #112/#115). Dalla Dashboard, il KPI
 /// "aggiunti nel mese corrente" apre lo schermo pre-filtrato (deciso su
 /// #91) — [soloAggiuntiMeseCorrente] porta quell'intento; non è uno dei 12
 /// assi del pannello Filtri, è un pre-filtro d'ingresso a sé, rimovibile
@@ -25,22 +26,38 @@ class CollezionePage extends ConsumerStatefulWidget {
 }
 
 class _CollezionePageState extends ConsumerState<CollezionePage> {
-  late bool _soloAggiuntiMeseCorrente = widget.soloAggiuntiMeseCorrente;
+  @override
+  void initState() {
+    super.initState();
+    // Sincronizza il pre-filtro (provider, deciso su #115) con l'intento di
+    // navigazione di questa istanza — sempre, non solo quando `true`,
+    // altrimenti un rientro in Collezione dalla bottom nav erediterebbe lo
+    // stato lasciato da una precedente visita dalla Dashboard. Rimandato a
+    // dopo il primo build (Riverpod non permette di modificare un provider
+    // durante il ciclo di vita del widget che lo osserva).
+    Future(
+      () => ref
+          .read(soloAggiuntiMeseCorrenteProvider.notifier)
+          .imposta(valore: widget.soloAggiuntiMeseCorrente),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final edizioniAsync = ref.watch(collezioneEdizioniProvider);
+    final indiceAsync = ref.watch(indiceCollezioneProvider);
     final filtri = ref.watch(filtriCollezioneProvider);
+    final soloAggiuntiMeseCorrente = ref.watch(soloAggiuntiMeseCorrenteProvider);
 
     return Scaffold(
       body: SafeArea(
-        child: edizioniAsync.when(
+        child: indiceAsync.when(
           data: (tutte) => _Collezione(
-            tutte: tutte,
+            totale: tutte.length,
             filtri: filtri,
-            soloAggiuntiMeseCorrente: _soloAggiuntiMeseCorrente,
-            onRimuoviAggiuntiMeseCorrente: () =>
-                setState(() => _soloAggiuntiMeseCorrente = false),
+            soloAggiuntiMeseCorrente: soloAggiuntiMeseCorrente,
+            onRimuoviAggiuntiMeseCorrente: () => ref
+                .read(soloAggiuntiMeseCorrenteProvider.notifier)
+                .imposta(valore: false),
           ),
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, stackTrace) => Center(
@@ -61,32 +78,22 @@ class _CollezionePageState extends ConsumerState<CollezionePage> {
   }
 }
 
-bool _aggiuntaMeseCorrente(EdizioneCollezione edizione, DateTime ora) {
-  final inizioMese = DateTime(ora.year, ora.month);
-  final inizioMeseProssimo = DateTime(ora.year, ora.month + 1);
-  return edizione.copiePossedute.any(
-    (c) =>
-        !c.createdAt.isBefore(inizioMese) &&
-        c.createdAt.isBefore(inizioMeseProssimo),
-  );
-}
-
 class _Collezione extends ConsumerWidget {
   const _Collezione({
-    required this.tutte,
+    required this.totale,
     required this.filtri,
     required this.soloAggiuntiMeseCorrente,
     required this.onRimuoviAggiuntiMeseCorrente,
   });
 
-  final List<EdizioneCollezione> tutte;
+  final int totale;
   final FiltriCollezioneState filtri;
   final bool soloAggiuntiMeseCorrente;
   final VoidCallback onRimuoviAggiuntiMeseCorrente;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (tutte.isEmpty) {
+    if (totale == 0) {
       return const Padding(
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
@@ -102,13 +109,9 @@ class _Collezione extends ConsumerWidget {
       );
     }
 
-    var visibili = edizioniVisibili(tutte, filtri);
-    if (soloAggiuntiMeseCorrente) {
-      final ora = DateTime.now();
-      visibili = visibili
-          .where((ed) => _aggiuntaMeseCorrente(ed, ora))
-          .toList();
-    }
+    final visibili = ref.watch(edizioniVisibiliProvider).valueOrNull ?? const [];
+    final finestra =
+        ref.watch(edizioniFinestraCollezioneProvider).valueOrNull ?? const [];
     final haFiltriAttivi = filtri.haFiltriAttivi || soloAggiuntiMeseCorrente;
 
     return Padding(
@@ -121,7 +124,7 @@ class _Collezione extends ConsumerWidget {
             child: _Titolo(),
           ),
           _ContaLinea(
-            totale: tutte.length,
+            totale: totale,
             visibili: visibili.length,
             filtrato: haFiltriAttivi,
           ),
@@ -149,7 +152,10 @@ class _Collezione extends ConsumerWidget {
                     padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
                     child: _EmptyRisultati(),
                   )
-                : _Griglia(edizioni: visibili),
+                : _Griglia(
+                    edizioni: finestra,
+                    haAltriRisultati: finestra.length < visibili.length,
+                  ),
           ),
         ],
       ),
@@ -395,10 +401,44 @@ class _FiltriButton extends StatelessWidget {
   }
 }
 
-class _Griglia extends StatelessWidget {
-  const _Griglia({required this.edizioni});
+/// La griglia della finestra caricata — richiede lo step successivo (§9,
+/// deciso su #112/#115) quando lo scroll costruisce una card a meno di 15
+/// elementi dalla fine, senza alcuno stato di caricamento a fondo griglia
+/// dedicato (deciso su #115: l'indice è già tutto in memoria, l'unica
+/// latenza è la cover per-card).
+class _Griglia extends ConsumerStatefulWidget {
+  const _Griglia({required this.edizioni, required this.haAltriRisultati});
 
-  final List<EdizioneCollezione> edizioni;
+  final List<EdizioneCollezioneFinestra> edizioni;
+  final bool haAltriRisultati;
+
+  @override
+  ConsumerState<_Griglia> createState() => _GrigliaState();
+}
+
+class _GrigliaState extends ConsumerState<_Griglia> {
+  bool _richiestaInviata = false;
+
+  @override
+  void didUpdateWidget(covariant _Griglia oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.edizioni.length != oldWidget.edizioni.length) {
+      _richiestaInviata = false;
+    }
+  }
+
+  /// Tra 12 e 18 elementi dalla fine (§9, deciso su #112) — un valore
+  /// intermedio fisso.
+  static const _sogliaPrefetch = 15;
+
+  void _eventualeCaricaAltro(int index) {
+    if (_richiestaInviata || !widget.haAltriRisultati) return;
+    if (index < widget.edizioni.length - _sogliaPrefetch) return;
+    _richiestaInviata = true;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => ref.read(numeroCaricatiCollezioneProvider.notifier).caricaAltro(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -415,8 +455,11 @@ class _Griglia extends StatelessWidget {
         mainAxisSpacing: AppSpacing.xs + 2,
         childAspectRatio: 0.6,
       ),
-      itemCount: edizioni.length,
-      itemBuilder: (context, index) => _CardEdizione(edizione: edizioni[index]),
+      itemCount: widget.edizioni.length,
+      itemBuilder: (context, index) {
+        _eventualeCaricaAltro(index);
+        return _CardEdizione(edizione: widget.edizioni[index]);
+      },
     );
   }
 }
@@ -424,7 +467,7 @@ class _Griglia extends StatelessWidget {
 class _CardEdizione extends StatelessWidget {
   const _CardEdizione({required this.edizione});
 
-  final EdizioneCollezione edizione;
+  final EdizioneCollezioneFinestra edizione;
 
   @override
   Widget build(BuildContext context) {
