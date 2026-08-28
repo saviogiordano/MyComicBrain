@@ -15,6 +15,7 @@ import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
 import 'package:mycomicbrain/core/domain/genere.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
+import 'package:mycomicbrain/core/domain/ricerca_assistente.dart';
 import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/serie_lista.dart';
 
@@ -1939,6 +1940,194 @@ ORDER BY p.n
       generi: generi,
       tag: tag,
       copiePossedute: copiePerId.values.toList(),
+      ean: edizione.ean,
     );
+  }
+
+  // --- Tool-calling dell'Assistente (§10, schema deciso su ADR-0002). ---
+
+  /// Cerca Serie esistenti per nome (match parziale) — usato dal filtro
+  /// `serie` di [cercaEdizioni] e dal tool `numeriMancantiSerie` (#132,
+  /// composto sopra [watchSerieIncomplete]). Il chiamante distingue nessun
+  /// match, un solo match o più match ambigui dalla lunghezza della lista
+  /// risultante, stesso pattern di [cercaCreator]/[cercaCharacter]/[cercaTag].
+  Future<List<SerieTableData>> cercaSerie(String query) {
+    return (_db.select(
+      _db.serieTable,
+    )..where((s) => s.name.like('%$query%'))).get();
+  }
+
+  /// Il tool `cercaEdizioni` dell'Assistente (§10, ADR-0002): i 9 assi di
+  /// filtro sono tutti opzionali e combinati in AND sopra un'unica lettura
+  /// di [watchIndiceCollezione] — nessuna query aggiuntiva oltre a
+  /// [cercaSerie] per risolvere `serie` (una Serie può avere più match
+  /// parziali, tutti inclusi nel filtro). `isbn` confronta
+  /// [EdizioneCollezioneIndice.ean], già presente nella riga `Edizioni` del
+  /// join sorgente. Tronca a 30 risultati: `totale` riporta il conteggio
+  /// reale solo quando `troncato` è vero.
+  Future<RisultatoCercaEdizioni> cercaEdizioni({
+    String? titolo,
+    String? serie,
+    String? autore,
+    String? editore,
+    String? personaggio,
+    String? tag,
+    int? numero,
+    String? isbn,
+    String? testoLibero,
+  }) async {
+    var risultati = await watchIndiceCollezione().first;
+
+    if (titolo != null) {
+      risultati = _filtraPerTesto(risultati, titolo, (e) => [e.titolo]);
+    }
+    if (serie != null) {
+      final serieIds = (await cercaSerie(serie)).map((s) => s.id).toSet();
+      risultati = risultati.where((e) => serieIds.contains(e.serieId)).toList();
+    }
+    if (autore != null) {
+      risultati = _filtraPerTesto(risultati, autore, (e) => e.autori);
+    }
+    if (editore != null) {
+      risultati = _filtraPerTesto(risultati, editore, (e) => [e.publisher]);
+    }
+    if (personaggio != null) {
+      risultati = _filtraPerTesto(
+        risultati,
+        personaggio,
+        (e) => e.personaggi,
+      );
+    }
+    if (tag != null) {
+      risultati = _filtraPerTesto(risultati, tag, (e) => e.tag);
+    }
+    if (numero != null) {
+      risultati = risultati.where((e) => e.issueNumber == numero).toList();
+    }
+    if (isbn != null) {
+      risultati = risultati.where((e) => e.ean == isbn).toList();
+    }
+    if (testoLibero != null) {
+      risultati = _filtraPerTesto(
+        risultati,
+        testoLibero,
+        (e) => [
+          e.titolo,
+          e.serieName,
+          e.publisher,
+          ...e.autori,
+          ...e.personaggi,
+          ...e.tag,
+        ],
+      );
+    }
+
+    final totale = risultati.length;
+    return (
+      edizioni: risultati.take(30).toList(),
+      totale: totale,
+      troncato: totale > 30,
+    );
+  }
+
+  /// Match parziale case-insensitive di [query] contro uno o più campi
+  /// testuali di ogni riga — condiviso da tutti gli assi testuali di
+  /// [cercaEdizioni] (`titolo`/`autore`/`editore`/`personaggio`/`tag`/
+  /// `testoLibero`), stesso criterio "contains" di `cercaCreator`/
+  /// `cercaCharacter`/`cercaTag` ma lato Dart: qui opera sull'indice già
+  /// caricato, non su una query.
+  List<EdizioneCollezioneIndice> _filtraPerTesto(
+    List<EdizioneCollezioneIndice> righe,
+    String query,
+    Iterable<String?> Function(EdizioneCollezioneIndice) campi,
+  ) {
+    final q = query.toLowerCase();
+    return righe
+        .where(
+          (e) => campi(e).any((v) => v?.toLowerCase().contains(q) ?? false),
+        )
+        .toList();
+  }
+
+  /// Il tool `conteggioPer` dell'Assistente (§10, ADR-0002): aggregazione
+  /// lato Dart sopra [watchIndiceCollezione] (una Edizione posseduta = un
+  /// conteggio, non una Copia: due copie della stessa Edizione contano una
+  /// volta sola, coerente con gli altri assi della Collezione). Le Edizioni
+  /// senza il campo richiesto (editore/anno assenti) sono escluse, non
+  /// raggruppate in un "non specificato". Ordinato per conteggio decrescente.
+  Future<Map<String, int>> conteggioPer(CampoConteggio campo) async {
+    final indice = await watchIndiceCollezione().first;
+    final conteggi = <String, int>{};
+    for (final edizione in indice) {
+      final valore = switch (campo) {
+        CampoConteggio.editore => edizione.publisher,
+        CampoConteggio.anno => edizione.year?.toString(),
+      };
+      if (valore == null) continue;
+      conteggi[valore] = (conteggi[valore] ?? 0) + 1;
+    }
+    final ordinati = conteggi.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return {for (final entry in ordinati) entry.key: entry.value};
+  }
+
+  /// Soglia fissa del tool `serieQuasiComplete` (§10, ADR-0002): "quasi
+  /// completa" da qui in su. Nessuna serie completa può comparire nel
+  /// risultato perché [watchSerieIncomplete] esclude già quelle senza
+  /// numeri mancanti (percentuale sempre < 100%).
+  static const _sogliaSerieQuasiCompleta = 0.8;
+
+  /// Il tool `serieQuasiComplete` dell'Assistente (§10, ADR-0002): filtro
+  /// lato Dart su [watchSerieIncomplete] per percentuale di completamento
+  /// ≥[_sogliaSerieQuasiCompleta].
+  Future<List<SerieIncompleta>> serieQuasiComplete() async {
+    final incomplete = await watchSerieIncomplete().first;
+    return incomplete
+        .where((s) => s.percentualeCompletamento >= _sogliaSerieQuasiCompleta)
+        .toList();
+  }
+
+  /// Il tool `trovaDuplicati` dell'Assistente (§10, ADR-0002): stessa CTE
+  /// `edizioni_possedute` di [watchDashboardKpis] (conteggio copie per
+  /// Edizione), qui proiettata sulle righe (titolo/serie/numero/editore)
+  /// invece che sul solo conteggio — l'unica query SQL nuova di questo
+  /// ticket, le altre riusano [watchIndiceCollezione]/[watchSerieIncomplete].
+  Future<List<EdizioneDuplicata>> trovaDuplicati() {
+    return _db
+        .customSelect('''
+WITH edizioni_possedute AS (
+  SELECT e.id AS edizione_id, e.serie_id AS serie_id, COUNT(*) AS copie_possedute
+  FROM edizioni e
+  JOIN copie c ON c.edizione_id = e.id AND c.status IN ('posseduta', 'prestata')
+  GROUP BY e.id
+)
+SELECT
+  e.id AS edizione_id,
+  o.title AS titolo,
+  s.name AS serie,
+  e.issue_number_label AS numero_label,
+  e.publisher AS editore,
+  ep.copie_possedute AS copie_possedute
+FROM edizioni_possedute ep
+JOIN edizioni e ON e.id = ep.edizione_id
+JOIN opere o ON o.id = e.opera_id
+LEFT JOIN serie s ON s.id = ep.serie_id
+WHERE ep.copie_possedute >= 2
+ORDER BY o.title, e.issue_number
+''')
+        .get()
+        .then(
+          (rows) => [
+            for (final row in rows)
+              (
+                edizioneId: row.read<int>('edizione_id'),
+                titolo: row.read<String>('titolo'),
+                serieName: row.readNullable<String>('serie'),
+                issueNumberLabel: row.readNullable<String>('numero_label'),
+                publisher: row.readNullable<String>('editore'),
+                copiePossedute: row.read<int>('copie_possedute'),
+              ),
+          ],
+        );
   }
 }

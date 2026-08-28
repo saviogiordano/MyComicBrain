@@ -27,6 +27,7 @@ class EdizioneCollezioneIndice {
     required this.generi,
     required this.tag,
     required this.copiePossedute,
+    this.ean,
   });
 
   final int edizioneId;
@@ -39,6 +40,12 @@ class EdizioneCollezioneIndice {
   final int? year;
   final FormatoEdizione? format;
   final String? language;
+
+  /// Non uno dei 12 assi di filtro/ordinamento della Collezione (§9):
+  /// aggiunto solo per il filtro `isbn` del tool `cercaEdizioni`
+  /// dell'Assistente (§10, ADR-0002) — opzionale (non `required`) per non
+  /// rompere gli altri chiamanti che costruiscono questo tipo.
+  final String? ean;
   final List<String> autori;
   final List<String> personaggi;
   final List<GenereEdizione> generi;
