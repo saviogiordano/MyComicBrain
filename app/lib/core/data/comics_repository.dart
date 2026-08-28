@@ -576,6 +576,30 @@ class ComicsRepository {
     });
   }
 
+  /// Se questa Scansione è già stata confermata: esiste già una `Copia` che
+  /// la referenzia via `scansioneId` (deciso in sessione, richiesta utente).
+  /// Copre entrambi i percorsi di conferma — [confermaCandidato] e
+  /// l'inserimento manuale (`InserisciManualmentePage`, entrambi passano da
+  /// [aggiungiCopia] con lo stesso `scansioneId`) — così il riepilogo può
+  /// distinguere le righe già "Salvata" da quelle ancora da confermare e
+  /// impedire una seconda conferma sulla stessa Scansione. `.watch()` invece
+  /// di `watchSingleOrNull()` (a differenza di [watchStatoAnalisiCopertina]):
+  /// qui il join può restituire più righe se in passato è già sfuggita una
+  /// doppia conferma sulla stessa Scansione, e non deve far esplodere lo
+  /// stream proprio nel caso che questo metodo serve a prevenire.
+  Stream<bool> watchScansioneConfermata(String image) {
+    final query = _db.select(_db.scansioni).join([
+      leftOuterJoin(
+        _db.copie,
+        _db.copie.scansioneId.equalsExp(_db.scansioni.id),
+      ),
+    ])..where(_db.scansioni.image.equals(image));
+
+    return query.watch().map((rows) {
+      return rows.any((row) => row.readTableOrNull(_db.copie) != null);
+    });
+  }
+
   /// Crea la riga `Identificazione` di una Scansione, in stato `inCorso` —
   /// la pipeline (§6.3, deciso su #53) la crea appena prende in carico la
   /// Scansione dopo il completamento dell'Analisi Copertina, sul modello di

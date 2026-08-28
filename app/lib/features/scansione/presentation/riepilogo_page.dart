@@ -270,7 +270,11 @@ class _RigaScansione extends ConsumerWidget {
     final stato = ref
         .watch(statoAnalisiCopertinaProvider(scansione.path))
         .valueOrNull;
-    final pronta = stato?.stato == StatoAnalisiCopertina.completata;
+    final confermata =
+        ref.watch(scansioneConfermataProvider(scansione.path)).valueOrNull ??
+        false;
+    final pronta =
+        stato?.stato == StatoAnalisiCopertina.completata && !confermata;
 
     return AppCard(
       onTap: pronta ? () => _apriConfermaCandidato(context, ref) : null,
@@ -296,6 +300,7 @@ class _RigaScansione extends ConsumerWidget {
           ),
           _ChipStatoAnalisi(
             stato: stato?.stato,
+            confermata: confermata,
             errorMessage: stato?.errorMessage,
             onRiprova: () => ref
                 .read(analisiCopertinaPipelineProvider)
@@ -316,14 +321,21 @@ class _RigaScansione extends ConsumerWidget {
 /// provider AI non configurato (nessuna API key, deciso su #108), la chip
 /// diventa un link diretto alle Impostazioni invece del retry: riprovare
 /// senza aver configurato nulla fallirebbe di nuovo con lo stesso errore.
+/// `confermata` (già esiste una `Copia` per questa Scansione, richiesta
+/// utente) scavalca sempre lo stato di `AnalisiCopertina`: una riga già
+/// confermata resta "Salvata" per distinguerla da quelle ancora da
+/// confermare, e la riga smette di essere selezionabile (vedi `pronta` in
+/// `_RigaScansione`) per impedire una seconda conferma.
 class _ChipStatoAnalisi extends StatelessWidget {
   const _ChipStatoAnalisi({
     required this.stato,
+    required this.confermata,
     required this.errorMessage,
     required this.onRiprova,
   });
 
   final StatoAnalisiCopertina? stato;
+  final bool confermata;
   final String? errorMessage;
   final VoidCallback onRiprova;
 
@@ -334,6 +346,7 @@ class _ChipStatoAnalisi extends StatelessWidget {
         erroreConfigurazioneMancante(errorMessage);
 
     final (String label, Color colore) = switch (stato) {
+      _ when confermata => ('Salvata', AppColors.accent),
       null || StatoAnalisiCopertina.pending => ('In sospeso', AppColors.amber),
       StatoAnalisiCopertina.inCorso => ('In corso', AppColors.amber),
       StatoAnalisiCopertina.completata => ('Completata', AppColors.accent),

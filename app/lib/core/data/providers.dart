@@ -178,6 +178,18 @@ statoAnalisiCopertinaProvider =
           .watchStatoAnalisiCopertina(image);
     });
 
+/// Se una Scansione è già stata confermata (esiste già una `Copia` che la
+/// referenzia, deciso in sessione) — usata dal riepilogo per mostrare
+/// "Salvata" al posto di "Completata" e impedire una seconda conferma sulla
+/// stessa riga. Per percorso immagine, stesso motivo di
+/// [statoAnalisiCopertinaProvider].
+final StreamProviderFamily<bool, String> scansioneConfermataProvider =
+    StreamProvider.family<bool, String>((ref, image) {
+      return ref
+          .watch(comicsRepositoryProvider)
+          .watchScansioneConfermata(image);
+    });
+
 /// L'esito osservabile dell'Identificazione di una Scansione (§6.3, schermo
 /// di conferma #59), per id — a differenza di [statoAnalisiCopertinaProvider]
 /// (per percorso immagine) usa `scansioneId` perché è la chiave con cui il

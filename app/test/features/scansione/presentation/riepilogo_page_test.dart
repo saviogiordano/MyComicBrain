@@ -11,6 +11,7 @@ import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
+import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
 import 'package:path/path.dart' as p;
@@ -457,6 +458,56 @@ void main() {
       expect(
         find.text('Conferma candidato · Scansione $scansioneId'),
         findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'una riga già confermata (Copia già collegata alla Scansione) mostra '
+    '"Salvata" e non riapre più la conferma candidato',
+    (tester) async {
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = ComicsRepository(db);
+      final scansioni = scansioniFinte(1);
+      await repository.aggiungiScansione(image: scansioni.single.path);
+      final scansioneId = await repository.idScansionePerImmagine(
+        scansioni.single.path,
+      );
+      final analisiId = await repository.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
+      await repository.completaAnalisiCopertina(
+        id: analisiId,
+        rawResponse: '{}',
+      );
+
+      final operaId = await repository.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repository.aggiungiEdizione(operaId: operaId);
+      await repository.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+        scansioneId: scansioneId,
+      );
+
+      await pumpRiepilogo(tester, scansioni, repository: repository);
+
+      expect(find.text('Salvata'), findsOneWidget);
+      expect(find.text('Completata'), findsNothing);
+
+      await tester.tap(find.byType(AppCard));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Riepilogo batch'),
+        findsOneWidget,
+        reason:
+            'già confermata: il tocco non deve riaprire la conferma candidato',
       );
     },
   );
