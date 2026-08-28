@@ -10,14 +10,24 @@ import 'package:mycomicbrain/features/impostazioni/application/ai_provider.dart'
 /// `SettingsRepository` (#105): nessun pulsante "Salva" a livello di
 /// schermo, coerente col pattern "modifica singolo campo" del layout #104.
 ///
-/// I provider AI sono mostrati tutti insieme, ciascuno con la propria card
-/// sempre espansa (§12, richiesto dall'utente dopo #111: le config per
-/// provider erano già salvate separatamente in `SettingsRepository` — API
-/// key e modello sono mappe per `AiProvider`, non sovrascritte al cambio —
-/// ma la UI ne mostrava una sola alla volta dietro una bottom sheet di
-/// selezione, obbligando a riaprire il selettore per rivedere/modificare la
-/// config di un provider non attivo). Il chip "Attivo" seleziona quale dei
-/// quattro è il provider usato a runtime da `coverAnalysisClientProvider`.
+/// I provider AI sono mostrati in due sezioni indipendenti, una per
+/// `RuoloProviderAi` (Visivo/Testuale, schema deciso su #127): ciascuna con
+/// le sue quattro card sempre espanse (§12, richiesto dall'utente dopo #111,
+/// vedi sotto). Il chip "Attivo" di una sezione seleziona quale dei quattro
+/// è il provider usato a runtime per quel ruolo (`coverAnalysisClientProvider`
+/// per il Visivo; il Testuale non ha ancora un client a runtime — l'Assistente
+/// è implementazione futura, #118). La sezione Testuale non mostra "Verifica
+/// connessione" (deciso qui, #129): a differenza del Visivo non esiste ancora
+/// un client AI per il ruolo Testuale da interrogare — arriverà con
+/// l'implementazione dell'Assistente/tool-calling (#126), stesso momento in
+/// cui questa card guadagnerà la riga.
+///
+/// Le card restano sempre espanse invece che dietro un selettore (§12, dopo
+/// #111: le config per provider erano già salvate separatamente in
+/// `SettingsRepository` — API key e modello sono mappe per `AiProvider`, non
+/// sovrascritte al cambio — ma la UI ne mostrava una sola alla volta dietro
+/// una bottom sheet di selezione, obbligando a riaprire il selettore per
+/// rivedere/modificare la config di un provider non attivo).
 class ImpostazioniPage extends ConsumerStatefulWidget {
   const ImpostazioniPage({super.key});
 
@@ -27,13 +37,27 @@ class ImpostazioniPage extends ConsumerStatefulWidget {
 
 class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   bool _caricamento = true;
-  AiProvider _providerAttivo = AiProvider.claude;
-  final Map<AiProvider, String> _apiKeyAi = {};
-  final Map<AiProvider, String> _modello = {};
-  String _urlLocale = '';
+
+  // Stato per (ruolo, provider): Visivo e Testuale hanno configurazioni
+  // pienamente indipendenti (ADR-0001, #127).
+  final Map<RuoloProviderAi, AiProvider> _providerAttivo = {
+    for (final r in RuoloProviderAi.values) r: AiProvider.claude,
+  };
+  final Map<RuoloProviderAi, Map<AiProvider, String>> _apiKeyAi = {
+    for (final r in RuoloProviderAi.values) r: {},
+  };
+  final Map<RuoloProviderAi, Map<AiProvider, String>> _modello = {
+    for (final r in RuoloProviderAi.values) r: {},
+  };
+  final Map<RuoloProviderAi, String> _urlLocale = {
+    for (final r in RuoloProviderAi.values) r: '',
+  };
 
   String _apiKeyComics = '';
 
+  // "Verifica connessione" resta solo per il ruolo Visivo (vedi commento
+  // sulla classe): nessun client per il ruolo Testuale, quindi nessuno
+  // stato di verifica da tenere per lui.
   final Map<AiProvider, ({bool loading, EsitoVerifica? esito})> _verificaAi = {
     for (final p in AiProvider.values) p: (loading: false, esito: null),
   };
@@ -49,43 +73,51 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     _caricaImpostazioni();
   }
 
-  /// Precarica lo stato dal `SettingsRepository` (#105): il provider AI
-  /// attivo e i modelli sono sincroni (`shared_preferences`), le API key
-  /// passano da `flutter_secure_storage` e vanno attese — una per provider,
-  /// in parallelo. Default a Claude quando l'utente non ha ancora scelto un
-  /// provider — stesso default di `coverAnalysisClientProvider`
-  /// (`core/data/providers.dart`).
+  /// Precarica lo stato dal `SettingsRepository` (#105), per entrambi i
+  /// ruoli (#129): il provider AI attivo e i modelli sono sincroni
+  /// (`shared_preferences`), le API key passano da `flutter_secure_storage`
+  /// e vanno attese — una per provider, in parallelo entro ciascun ruolo.
+  /// Default a Claude quando l'utente non ha ancora scelto un provider per
+  /// quel ruolo — stesso default di `coverAnalysisClientProvider`
+  /// (`core/data/providers.dart`) per il Visivo.
   Future<void> _caricaImpostazioni() async {
     final repo = ref.read(settingsRepositoryProvider);
-    final provider =
-        repo.providerAi(RuoloProviderAi.visivo) ?? AiProvider.claude;
-    final apiKeys = await Future.wait([
-      for (final p in AiProvider.values)
-        repo.apiKeyAi(RuoloProviderAi.visivo, p),
-    ]);
     final apiKeyComics = await repo.apiKeyComics;
+    final perRuolo = <RuoloProviderAi, (AiProvider, List<String?>)>{};
+    for (final ruolo in RuoloProviderAi.values) {
+      final provider = repo.providerAi(ruolo) ?? AiProvider.claude;
+      final apiKeys = await Future.wait([
+        for (final p in AiProvider.values) repo.apiKeyAi(ruolo, p),
+      ]);
+      perRuolo[ruolo] = (provider, apiKeys);
+    }
     if (!mounted) return;
     setState(() {
-      _providerAttivo = provider;
-      for (final (i, p) in AiProvider.values.indexed) {
-        _apiKeyAi[p] = apiKeys[i] ?? '';
-        _modello[p] =
-            repo.modello(RuoloProviderAi.visivo, p) ??
-            p.modelloDefault(RuoloProviderAi.visivo);
+      for (final ruolo in RuoloProviderAi.values) {
+        final (provider, apiKeys) = perRuolo[ruolo]!;
+        _providerAttivo[ruolo] = provider;
+        for (final (i, p) in AiProvider.values.indexed) {
+          _apiKeyAi[ruolo]![p] = apiKeys[i] ?? '';
+          _modello[ruolo]![p] =
+              repo.modello(ruolo, p) ?? p.modelloDefault(ruolo);
+        }
+        _urlLocale[ruolo] = repo.urlLocale(ruolo) ?? '';
       }
-      _urlLocale = repo.urlLocale(RuoloProviderAi.visivo) ?? '';
       _apiKeyComics = apiKeyComics ?? '';
       _caricamento = false;
     });
   }
 
-  Future<void> _selezionaProviderAttivo(AiProvider provider) async {
-    if (provider == _providerAttivo) return;
+  Future<void> _selezionaProviderAttivo(
+    RuoloProviderAi ruolo,
+    AiProvider provider,
+  ) async {
+    if (provider == _providerAttivo[ruolo]) return;
     await ref
         .read(settingsRepositoryProvider)
-        .impostaProviderAi(RuoloProviderAi.visivo, provider);
+        .impostaProviderAi(ruolo, provider);
     if (!mounted) return;
-    setState(() => _providerAttivo = provider);
+    setState(() => _providerAttivo[ruolo] = provider);
   }
 
   Future<void> _verificaConnessioneAi(AiProvider provider) async {
@@ -136,9 +168,12 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     );
   }
 
-  Future<void> _apriSheetModello(AiProvider provider) async {
+  Future<void> _apriSheetModello(
+    RuoloProviderAi ruolo,
+    AiProvider provider,
+  ) async {
     final attuale =
-        _modello[provider] ?? provider.modelloDefault(RuoloProviderAi.visivo);
+        _modello[ruolo]![provider] ?? provider.modelloDefault(ruolo);
     final curati = provider.modelliCurati;
     if (curati != null) {
       final scelto = await showModalBottomSheet<String>(
@@ -163,7 +198,7 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
           ],
         ),
       );
-      if (scelto != null) await _salvaModello(provider, scelto);
+      if (scelto != null) await _salvaModello(ruolo, provider, scelto);
       return;
     }
     final testo = await _apriSheetTestoLibero(
@@ -171,35 +206,42 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
       valoreIniziale: attuale,
       hint: provider == AiProvider.locale ? 'es. llama3' : null,
     );
-    if (testo != null) await _salvaModello(provider, testo);
+    if (testo != null) await _salvaModello(ruolo, provider, testo);
   }
 
-  Future<void> _salvaModello(AiProvider provider, String modello) async {
+  Future<void> _salvaModello(
+    RuoloProviderAi ruolo,
+    AiProvider provider,
+    String modello,
+  ) async {
     await ref
         .read(settingsRepositoryProvider)
-        .impostaModello(RuoloProviderAi.visivo, provider, modello);
+        .impostaModello(ruolo, provider, modello);
     if (!mounted) return;
-    setState(() => _modello[provider] = modello);
+    setState(() => _modello[ruolo]![provider] = modello);
   }
 
-  Future<void> _modificaApiKeyAi(AiProvider provider) async {
+  Future<void> _modificaApiKeyAi(
+    RuoloProviderAi ruolo,
+    AiProvider provider,
+  ) async {
     final v = await _apriSheetTestoLibero(
       titolo: 'API key',
-      valoreIniziale: _apiKeyAi[provider] ?? '',
+      valoreIniziale: _apiKeyAi[ruolo]![provider] ?? '',
       mascherato: true,
     );
     if (v == null) return;
     await ref
         .read(settingsRepositoryProvider)
-        .impostaApiKeyAi(RuoloProviderAi.visivo, provider, v);
+        .impostaApiKeyAi(ruolo, provider, v);
     if (!mounted) return;
-    setState(() => _apiKeyAi[provider] = v);
+    setState(() => _apiKeyAi[ruolo]![provider] = v);
   }
 
-  Future<void> _modificaUrlLocale() async {
+  Future<void> _modificaUrlLocale(RuoloProviderAi ruolo) async {
     final v = await _apriSheetTestoLibero(
       titolo: 'URL API',
-      valoreIniziale: _urlLocale,
+      valoreIniziale: _urlLocale[ruolo] ?? '',
       hint: 'http://localhost:11434/v1',
       validatore: (testo) {
         if (testo.trim().isEmpty) return null;
@@ -209,11 +251,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
       },
     );
     if (v == null) return;
-    await ref
-        .read(settingsRepositoryProvider)
-        .impostaUrlLocale(RuoloProviderAi.visivo, v);
+    await ref.read(settingsRepositoryProvider).impostaUrlLocale(ruolo, v);
     if (!mounted) return;
-    setState(() => _urlLocale = v);
+    setState(() => _urlLocale[ruolo] = v);
   }
 
   Future<String?> _apriSheetTestoLibero({
@@ -282,6 +322,36 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     );
   }
 
+  /// Le quattro card provider AI per [ruolo] (§12). [mostraVerifica]
+  /// controlla la riga "Verifica connessione" — `false` per il Testuale, che
+  /// non ha ancora un client da interrogare (vedi commento sulla classe).
+  List<Widget> _cardsProviderAi(
+    RuoloProviderAi ruolo, {
+    required bool mostraVerifica,
+  }) {
+    return [
+      for (final provider in AiProvider.values) ...[
+        _ProviderCard(
+          provider: provider,
+          attivo: provider == _providerAttivo[ruolo],
+          apiKey: _apiKeyAi[ruolo]![provider] ?? '',
+          modello: _modello[ruolo]![provider] ?? provider.modelloDefault(ruolo),
+          urlLocale: _urlLocale[ruolo] ?? '',
+          verifica: mostraVerifica ? _verificaAi[provider] : null,
+          onSelezionaAttivo: () => _selezionaProviderAttivo(ruolo, provider),
+          onModificaApiKey: () => _modificaApiKeyAi(ruolo, provider),
+          onModificaModello: () => _apriSheetModello(ruolo, provider),
+          onModificaUrl: () => _modificaUrlLocale(ruolo),
+          onVerifica: !mostraVerifica || _verificaAi[provider]!.loading
+              ? null
+              : () => _verificaConnessioneAi(provider),
+        ),
+        if (provider != AiProvider.values.last)
+          const SizedBox(height: AppSpacing.sm),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -303,30 +373,25 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                   AppSpacing.xxl,
                 ),
                 children: [
-                  const SectionHeader(label: 'Provider AI'),
+                  const SectionHeader(label: 'Provider AI Visivo'),
                   const SizedBox(height: AppSpacing.sm),
-                  for (final provider in AiProvider.values) ...[
-                    _ProviderCard(
-                      provider: provider,
-                      attivo: provider == _providerAttivo,
-                      apiKey: _apiKeyAi[provider] ?? '',
-                      modello:
-                          _modello[provider] ??
-                          provider.modelloDefault(RuoloProviderAi.visivo),
-                      urlLocale: _urlLocale,
-                      verifica: _verificaAi[provider]!,
-                      onSelezionaAttivo: () =>
-                          _selezionaProviderAttivo(provider),
-                      onModificaApiKey: () => _modificaApiKeyAi(provider),
-                      onModificaModello: () => _apriSheetModello(provider),
-                      onModificaUrl: _modificaUrlLocale,
-                      onVerifica: _verificaAi[provider]!.loading
-                          ? null
-                          : () => _verificaConnessioneAi(provider),
+                  Column(
+                    key: const ValueKey('sezione-provider-ai-visivo'),
+                    children: _cardsProviderAi(
+                      RuoloProviderAi.visivo,
+                      mostraVerifica: true,
                     ),
-                    if (provider != AiProvider.values.last)
-                      const SizedBox(height: AppSpacing.sm),
-                  ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const SectionHeader(label: 'Provider AI Testuale'),
+                  const SizedBox(height: AppSpacing.sm),
+                  Column(
+                    key: const ValueKey('sezione-provider-ai-testuale'),
+                    children: _cardsProviderAi(
+                      RuoloProviderAi.testuale,
+                      mostraVerifica: false,
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.lg),
                   const SectionHeader(label: 'Provider fumetti'),
                   const SizedBox(height: AppSpacing.sm),
@@ -418,7 +483,7 @@ class _ProviderCard extends StatelessWidget {
   final String apiKey;
   final String modello;
   final String urlLocale;
-  final ({bool loading, EsitoVerifica? esito}) verifica;
+  final ({bool loading, EsitoVerifica? esito})? verifica;
   final VoidCallback onSelezionaAttivo;
   final VoidCallback onModificaApiKey;
   final VoidCallback onModificaModello;
@@ -474,24 +539,26 @@ class _ProviderCard extends StatelessWidget {
               onTap: onModificaUrl,
             ),
           ],
-          const _Divisore(),
-          _Riga(
-            titolo: 'Verifica connessione',
-            valore: switch ((verifica.loading, verifica.esito)) {
-              (true, _) => 'In corso…',
-              (false, null) => 'Non verificata',
-              (false, EsitoVerifica(:final ok, :final messaggio)) =>
-                ok ? 'OK' : messaggio,
-            },
-            valoreColore: switch ((verifica.loading, verifica.esito)) {
-              (true, _) => AppColors.textSecondary,
-              (false, null) => AppColors.textMuted,
-              (false, EsitoVerifica(:final ok)) =>
-                ok ? AppColors.accent : AppColors.amberStrong,
-            },
-            onTap: onVerifica,
-            mostraChevron: false,
-          ),
+          if (verifica != null) ...[
+            const _Divisore(),
+            _Riga(
+              titolo: 'Verifica connessione',
+              valore: switch ((verifica!.loading, verifica!.esito)) {
+                (true, _) => 'In corso…',
+                (false, null) => 'Non verificata',
+                (false, EsitoVerifica(:final ok, :final messaggio)) =>
+                  ok ? 'OK' : messaggio,
+              },
+              valoreColore: switch ((verifica!.loading, verifica!.esito)) {
+                (true, _) => AppColors.textSecondary,
+                (false, null) => AppColors.textMuted,
+                (false, EsitoVerifica(:final ok)) =>
+                  ok ? AppColors.accent : AppColors.amberStrong,
+              },
+              onTap: onVerifica,
+              mostraChevron: false,
+            ),
+          ],
         ],
       ),
     );

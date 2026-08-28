@@ -95,27 +95,103 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// La sezione (Visivo/Testuale, #129) identificata dalla `Key` che
+  /// [ImpostazioniPage] assegna a ciascuna — necessaria perché le due
+  /// sezioni mostrano le stesse quattro etichette di provider ("Claude",
+  /// "OpenAI", ...), quindi `find.text` da solo non basta più a distinguerle.
+  Finder sezioneRuolo({bool testuale = false}) => find.byKey(
+    ValueKey(
+      testuale ? 'sezione-provider-ai-testuale' : 'sezione-provider-ai-visivo',
+    ),
+  );
+
   /// Individua la riga [titoloRiga] (es. "API key", "Attivo") dentro la card
-  /// del provider AI [labelProvider] (es. "Claude") — con tutte e quattro le
-  /// card sempre visibili (§12, dopo #111), `find.text('API key')` da solo
-  /// non basta più a identificare quella di un provider specifico.
-  Finder rigaProvider(String labelProvider, String titoloRiga) {
+  /// del provider AI [labelProvider] (es. "Claude") nella sezione Visivo o
+  /// Testuale (#129) — con tutte e quattro le card sempre visibili (§12,
+  /// dopo #111), `find.text('API key')` da solo non basta più a identificare
+  /// quella di un provider specifico.
+  Finder rigaProvider(
+    String labelProvider,
+    String titoloRiga, {
+    bool testuale = false,
+  }) {
     final card = find
-        .ancestor(of: find.text(labelProvider), matching: find.byType(AppCard))
+        .descendant(
+          of: sezioneRuolo(testuale: testuale),
+          matching: find.ancestor(
+            of: find.text(labelProvider),
+            matching: find.byType(AppCard),
+          ),
+        )
         .first;
     return find.descendant(of: card, matching: find.text(titoloRiga));
   }
 
-  testWidgets('senza provider salvato mostra il default Claude', (
-    tester,
-  ) async {
-    await pumpImpostazioni(tester);
+  testWidgets(
+    'senza provider salvato mostra il default Claude su entrambi i ruoli '
+    '(#129), ciascuno col proprio modello di default',
+    (tester) async {
+      await pumpImpostazioni(tester);
 
-    expect(find.text('Claude'), findsOneWidget);
-    expect(find.text('claude-sonnet-5'), findsOneWidget);
-    // 4 card provider AI + ComicVine, nessuna con API key impostata.
-    expect(find.text('Non impostata'), findsNWidgets(5));
-  });
+      // Una card "Claude" per sezione (Visivo + Testuale).
+      expect(find.text('Claude'), findsNWidgets(2));
+      // Modello di default indipendente per ruolo (#121/#127).
+      expect(find.text('claude-sonnet-5'), findsOneWidget);
+      expect(find.text('claude-haiku-4-5'), findsOneWidget);
+      // 4 card provider AI per sezione (×2) + ComicVine, nessuna con API
+      // key impostata.
+      expect(find.text('Non impostata'), findsNWidgets(9));
+    },
+  );
+
+  testWidgets(
+    'la sezione Provider AI Testuale non mostra "Verifica connessione" '
+    '(#129: nessun client testuale ancora da interrogare)',
+    (tester) async {
+      await pumpImpostazioni(tester);
+
+      expect(
+        find.descendant(
+          of: sezioneRuolo(testuale: true),
+          matching: find.text('Verifica connessione'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: sezioneRuolo(),
+          matching: find.text('Verifica connessione'),
+        ),
+        findsNWidgets(4),
+      );
+    },
+  );
+
+  testWidgets(
+    'modificare la API key del Provider AI Testuale la persiste separata '
+    'da quella Visivo (#129, indipendenza dei ruoli decisa su #127)',
+    (tester) async {
+      await pumpImpostazioni(tester);
+
+      await tester.tap(rigaProvider('Claude', 'API key', testuale: true));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'chiave-claude-testuale');
+      await tester.tap(find.text('Salva'));
+      await tester.pumpAndSettle();
+
+      expect(
+        await repo.apiKeyAi(RuoloProviderAi.testuale, AiProvider.claude),
+        'chiave-claude-testuale',
+      );
+      expect(
+        await repo.apiKeyAi(RuoloProviderAi.visivo, AiProvider.claude),
+        isNull,
+      );
+      // Solo la card Testuale mostra la chiave mascherata: quella Visivo
+      // resta "Non impostata".
+      expect(find.text('••••••••'), findsOneWidget);
+    },
+  );
 
   testWidgets('modificare la API key AI la persiste nel repository', (
     tester,
@@ -164,7 +240,9 @@ void main() {
       await repo.impostaProviderAi(RuoloProviderAi.visivo, AiProvider.locale);
       await pumpImpostazioni(tester);
 
-      await tester.tap(find.text('URL API'));
+      // Locale mostra "URL API" in entrambe le sezioni (#129): la riga non
+      // dipende dal provider "Attivo", solo dal provider Locale stesso.
+      await tester.tap(rigaProvider('Locale', 'URL API'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'non-una-url');
       await tester.tap(find.text('Salva'));
