@@ -194,20 +194,24 @@ class _InserisciManualmentePageState
     );
 
     if (!mounted) return;
-    // `context.pop()` tornerebbe a `ConfermaCandidatoPage`, ancora sullo
-    // stack sotto questa pagina con un Candidato preselezionato: l'utente
-    // poteva poi premere "Conferma" lì per sbaglio, creando una seconda
-    // Copia per la stessa Scansione (bug osservato). `go` sostituisce
-    // l'intero stack, chiudendo anche `ConfermaCandidatoPage` invece di
-    // lasciarla raggiungibile.
-    context.go('/dashboard');
+    // Un solo `context.pop()` tornerebbe a `ConfermaCandidatoPage`, ancora
+    // sullo stack sotto questa pagina con un Candidato preselezionato:
+    // l'utente poteva poi premere "Conferma" lì per sbaglio, creando una
+    // seconda Copia per la stessa Scansione (bug osservato). Due pop invece
+    // di un `go('/dashboard')` (comportamento precedente, richiesta utente):
+    // il primo chiude questa pagina, il secondo chiude anche
+    // `ConfermaCandidatoPage`, riportando al riepilogo del batch — stessa
+    // destinazione della conferma di un Candidato
+    // (`ConfermaCandidatoPage._conferma`) — dove la riga ormai risulta
+    // "Salvata" e non più selezionabile.
+    final router = GoRouter.of(context);
+    router.pop();
+    router.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    ref
-        .watch(analisiCopertinaProvider(widget.scansioneId))
-        .whenData(_prefill);
+    ref.watch(analisiCopertinaProvider(widget.scansioneId)).whenData(_prefill);
 
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,

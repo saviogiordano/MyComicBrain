@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
@@ -77,23 +78,39 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    // Router a tre livelli, sul modello reale (`RiepilogoPage` ->
+    // `ConfermaCandidatoPage` -> `InserisciManualmentePage`, tutti
+    // `context.push`): `InserisciManualmentePage._salva()` fa due `pop()`
+    // (deciso dopo un bug osservato — vedi il test dedicato sotto), quindi
+    // serve davvero uno stub intermedio da attraversare, non un solo
+    // livello, o il secondo `pop()` non avrebbe nulla da rimuovere.
     final router = GoRouter(
-      // `InserisciManualmentePage._salva()` fa `context.go('/dashboard')`
-      // (deciso dopo un bug osservato — vedi il test dedicato sotto):
-      // questa route deve esistere anche nel router minimo di test, o
-      // `go` lancerebbe un'eccezione di route non trovata.
-      initialLocation: '/dashboard',
+      initialLocation: '/scansione/riepilogo',
       routes: [
         GoRoute(
-          path: '/dashboard',
+          path: '/scansione/riepilogo',
+          builder: (context, state) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => context.push(
+                  '/scansione/conferma-candidato',
+                  extra: scansioneId,
+                ),
+                child: const Text('vai'),
+              ),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/scansione/conferma-candidato',
           builder: (context, state) => Scaffold(
             body: Center(
               child: ElevatedButton(
                 onPressed: () => context.push(
                   '/scansione/inserisci-manualmente',
-                  extra: scansioneId,
+                  extra: state.extra,
                 ),
-                child: const Text('vai'),
+                child: const Text('Conferma'),
               ),
             ),
           ),
@@ -113,6 +130,8 @@ void main() {
     );
     await tester.tap(find.text('vai'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Conferma'));
+    await tester.pumpAndSettle();
   }
 
   testWidgets('"Salva" è disabilitato finché il Titolo è vuoto', (
@@ -124,7 +143,10 @@ void main() {
     final button = tester.widget<FilledButton>(find.byType(FilledButton));
     expect(button.onPressed, isNull);
 
-    await tester.enterText(find.widgetWithText(TextField, 'es. Batman'), 'Saga');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'es. Batman'),
+      'Saga',
+    );
     await tester.pump();
 
     final buttonAbilitato = tester.widget<FilledButton>(
@@ -150,7 +172,7 @@ void main() {
       expect(
         find.text('vai'),
         findsOneWidget,
-        reason: 'torna alla dashboard',
+        reason: 'torna al riepilogo del batch',
       );
 
       final opere = await db.select(db.opere).get();
@@ -340,10 +362,10 @@ void main() {
   );
 
   testWidgets(
-    'dopo "Salva" torna alla dashboard invece che a "Possibile '
-    'corrispondenza" — bug osservato: si poteva confermare per sbaglio '
-    'anche il Candidato preselezionato lì sotto, creando 2 Copie per la '
-    'stessa Scansione',
+    'dopo "Salva" torna al riepilogo del batch invece che a "Possibile '
+    'corrispondenza" (richiesta utente) — bug osservato: si poteva '
+    'confermare per sbaglio anche il Candidato preselezionato lì sotto, '
+    'creando 2 Copie per la stessa Scansione',
     (tester) async {
       tester.view.physicalSize = const Size(800, 3000);
       tester.view.devicePixelRatio = 1;
@@ -358,12 +380,13 @@ void main() {
       // per la stessa Scansione.
       var confermeCandidato = 0;
       final router = GoRouter(
-        initialLocation: '/dashboard',
+        initialLocation: '/scansione/riepilogo',
         routes: [
           GoRoute(
-            path: '/dashboard',
-            builder: (context, state) =>
-                const Scaffold(body: Center(child: Text('Dashboard'))),
+            path: '/scansione/riepilogo',
+            builder: (context, state) => const Scaffold(
+              body: Center(child: Text('Riepilogo batch')),
+            ),
           ),
           GoRoute(
             path: '/scansione/conferma-candidato',
@@ -396,7 +419,7 @@ void main() {
           child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
         ),
       );
-      router.go('/scansione/conferma-candidato');
+      unawaited(router.push('/scansione/conferma-candidato'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Conferma'));
       await tester.pumpAndSettle();
@@ -409,7 +432,7 @@ void main() {
       await tester.tap(find.text('Salva'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Dashboard'), findsOneWidget);
+      expect(find.text('Riepilogo batch'), findsOneWidget);
       expect(
         find.text('Conferma'),
         findsNothing,
@@ -420,7 +443,8 @@ void main() {
       expect(
         confermeCandidato,
         1,
-        reason: "mai più chiamato di quanto l'utente abbia effettivamente premuto",
+        reason:
+            "mai più chiamato di quanto l'utente abbia effettivamente premuto",
       );
 
       final copie = await db.select(db.copie).get();
