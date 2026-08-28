@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:mycomicbrain/core/data/database.steps.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
+import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
@@ -25,6 +26,22 @@ class StringListConverter extends TypeConverter<List<String>, String> {
 
   @override
   String toSql(List<String> value) => jsonEncode(value);
+}
+
+/// Converter per `MessaggioTable.edizioneIds` (deciso su #128) — lista di id
+/// Edizione, serializzata come JSON: riferimento vivo risolto a runtime via
+/// `ComicsRepository`, mai una copia congelata dei dati (stesso principio
+/// del caso `source = interno` di `CandidatiTable.edizioneId`). Parallelo a
+/// [StringListConverter] ma per `List<int>`.
+class IntListConverter extends TypeConverter<List<int>, String> {
+  const IntListConverter();
+
+  @override
+  List<int> fromSql(String fromDb) =>
+      (jsonDecode(fromDb) as List<dynamic>).cast<int>();
+
+  @override
+  String toSql(List<int> value) => jsonEncode(value);
 }
 
 /// `Opera`: la storia/testata a prescindere da come è stata pubblicata.
@@ -436,6 +453,44 @@ class EdizioneGenere extends Table {
   ];
 }
 
+/// `Conversazione`: il thread persistito, unico e continuo, degli scambi fra
+/// l'utente e l'Assistente (§10, deciso su #122/#128). Tabella normale — un
+/// solo record in pratica, vincolo solo applicativo (nessun precedente di
+/// singleton Drift nel codebase: le Impostazioni vivono in
+/// `SharedPreferences`/`SecureStorage`, non qui).
+class ConversazioneTable extends Table {
+  @override
+  String get tableName => 'conversazione';
+
+  IntColumn get id => integer().autoIncrement()();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
+/// `Messaggio`: un singolo scambio nella Conversazione — domanda
+/// dell'utente, risposta dell'Assistente, o messaggio di sistema (§10/§24,
+/// deciso su #124/#128). `sottotipoSistema` valorizzato solo per
+/// `ruolo = sistema`, assi ortogonali in colonne separate come
+/// `Copie.status`/`readingStatus`. `edizioneIds` è il blocco strutturato di
+/// un Messaggio assistente (variante A, #125): riferimento vivo (lista di
+/// id Edizione, mai denormalizzato) risolto a runtime via
+/// `ComicsRepository`, non una tabella ponte — il blocco è scritto una sola
+/// volta, è piccolo (tetto di 30 da `cercaEdizioni`), e nessuna query di
+/// questa mappa richiede "trova i Messaggi che citano l'Edizione X".
+class MessaggioTable extends Table {
+  @override
+  String get tableName => 'messaggio';
+
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get conversazioneId =>
+      integer().references(ConversazioneTable, #id)();
+  TextColumn get ruolo => textEnum<RuoloMessaggio>()();
+  TextColumn get sottotipoSistema => textEnum<SottotipoSistema>().nullable()();
+  TextColumn get testo => text()();
+  TextColumn get edizioneIds =>
+      text().nullable().map(const IntListConverter())();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
 @DriftDatabase(
   tables: [
     Opere,
@@ -453,6 +508,8 @@ class EdizioneGenere extends Table {
     Character,
     ComicCharacter,
     EdizioneGenere,
+    ConversazioneTable,
+    MessaggioTable,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -461,11 +518,15 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from11To12: (m, schema) async {
+        await m.createTable(schema.conversazione);
+        await m.createTable(schema.messaggio);
+      },
       from10To11: (m, schema) async {
         await m.addColumn(schema.serie, schema.serie.coverImage);
       },

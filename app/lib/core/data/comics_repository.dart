@@ -6,6 +6,7 @@ import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
+import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
@@ -2129,5 +2130,101 @@ ORDER BY o.title, e.issue_number
               ),
           ],
         );
+  }
+
+  // --- Conversazione dell'Assistente (§10/§24, deciso su #122/#124/#128). ---
+
+  /// Id dell'unica Conversazione, creandola se non esiste ancora — vincolo
+  /// di singleton solo applicativo (#128), non imposto dallo schema.
+  Future<int> getOrCreaConversazione() async {
+    final esistente = await _db.select(_db.conversazioneTable).get();
+    if (esistente.isNotEmpty) return esistente.single.id;
+
+    return _db
+        .into(_db.conversazioneTable)
+        .insert(ConversazioneTableCompanion.insert(createdAt: DateTime.now()));
+  }
+
+  /// Aggiunge un Messaggio alla Conversazione (§10/§24, deciso su #128).
+  /// [edizioneIds] valorizzato solo per un Messaggio assistente con un
+  /// risultato strutturato (variante A, #125) — riferimento vivo, risolto a
+  /// runtime da [watchMessaggi], mai denormalizzato. [sottotipoSistema] solo
+  /// per `ruolo = sistema`.
+  Future<int> aggiungiMessaggio({
+    required int conversazioneId,
+    required RuoloMessaggio ruolo,
+    required String testo,
+    SottotipoSistema? sottotipoSistema,
+    List<int> edizioneIds = const [],
+    DateTime? createdAt,
+  }) {
+    return _db
+        .into(_db.messaggioTable)
+        .insert(
+          MessaggioTableCompanion.insert(
+            conversazioneId: conversazioneId,
+            ruolo: ruolo,
+            testo: testo,
+            sottotipoSistema: Value(sottotipoSistema),
+            edizioneIds: edizioneIds.isEmpty
+                ? const Value.absent()
+                : Value(edizioneIds),
+            createdAt: createdAt ?? DateTime.now(),
+          ),
+        );
+  }
+
+  /// I Messaggi della Conversazione in ordine cronologico, col blocco
+  /// Edizioni risolto a runtime (#128) sopra [watchIndiceCollezione] — un
+  /// `edizioneId` non più presente (Edizione cancellata) è omesso in
+  /// silenzio, nessun placeholder.
+  Stream<List<Messaggio>> watchMessaggi(int conversazioneId) {
+    final query = _db.select(_db.messaggioTable)
+      ..where((m) => m.conversazioneId.equals(conversazioneId))
+      ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]);
+
+    return query.watch().asyncMap((righe) async {
+      if (righe.isEmpty) return const <Messaggio>[];
+
+      final tuttiGliId = {
+        for (final riga in righe) ...?riga.edizioneIds,
+      };
+      final edizioniPerId = tuttiGliId.isEmpty
+          ? const <int, EdizioneCollezioneIndice>{}
+          : {
+              for (final edizione in await watchIndiceCollezione().first)
+                if (tuttiGliId.contains(edizione.edizioneId))
+                  edizione.edizioneId: edizione,
+            };
+
+      return [
+        for (final riga in righe)
+          Messaggio(
+            id: riga.id,
+            ruolo: riga.ruolo,
+            sottotipoSistema: riga.sottotipoSistema,
+            testo: riga.testo,
+            createdAt: riga.createdAt,
+            edizioni: [
+              for (final id in riga.edizioneIds ?? const <int>[])
+                ?edizioniPerId[id],
+            ],
+          ),
+      ];
+    });
+  }
+
+  /// Cancella l'intera Conversazione — tutti i suoi Messaggi, poi la riga
+  /// stessa (§10, deciso su #122/#128) — mai singoli Messaggi. Cascata
+  /// gestita in Dart, stesso pattern di [eliminaEdizione].
+  Future<void> eliminaConversazione(int conversazioneId) {
+    return _db.transaction(() async {
+      await (_db.delete(
+        _db.messaggioTable,
+      )..where((m) => m.conversazioneId.equals(conversazioneId))).go();
+      await (_db.delete(
+        _db.conversazioneTable,
+      )..where((c) => c.id.equals(conversazioneId))).go();
+    });
   }
 }
