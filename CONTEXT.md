@@ -5,7 +5,7 @@ Catalogo personale di fumetti: cattura una collezione fisica con scansione/ricon
 ## Language
 
 **Opera**:
-La storia/testata a prescindere da come è stata pubblicata (es. "Spider-Man"). Distinta dall'edizione (§31 dei requisiti).
+La storia/testata a prescindere da come è stata pubblicata (es. "Spider-Man"). Distinta dall'edizione (§30 dei requisiti).
 _Avoid_: Titolo, fumetto (quando si intende l'opera e non l'edizione)
 
 **Edizione**:
@@ -88,3 +88,18 @@ _Avoid_: Riconoscimento (il processo AI generico di §6 in prosa tecnica, non il
 **Punteggio di confidenza**:
 Un valore 0–100% assegnato a un Candidato durante l'identificazione (§6.3), che ne esprime la probabilità di essere la corrispondenza corretta. Calcolato combinando più segnali (non una cascata a livelli con stop al primo che risponde — tutti i segnali applicabili concorrono allo stesso punteggio): un segnale testuale dominante (somiglianza fra i campi letti nell'Analisi Copertina e i campi del Candidato), un boost secondario da Personaggi raffigurati/Tag di stile copertina/Tag di elementi visivi caratteristici/loghi riconosciuti (corrobora un match testuale già presente, non ne genera uno da solo), e un bonus additivo di contesto (stessa Serie già in catalogo con un numero adiacente o mancante fra le copie possedute). Barcode/ISBN letti nell'Analisi Copertina non contribuiscono al punteggio: nessuna delle due fonti di matching li supporta oggi come chiave di ricerca. I pesi relativi fra i segnali non sono fissati come valori di dominio: sono un dettaglio implementativo tarabile, non un concetto della collezione. Dettagli in [#52](https://github.com/saviogiordano/MyComicBrain/issues/52).
 _Avoid_: Score (ok in prosa tecnica, non come termine di modello), affidabilità (ambiguo con la condizione fisica della Copia)
+
+**Assistente**:
+L'unica funzione di ricerca dell'app (§10): un'interfaccia conversazionale (testo o voce) raggiungibile dalla voce "Cerca" della bottom nav, che interroga la collezione dell'utente in linguaggio naturale e non inventa informazioni mancanti. Fonde in un'unica funzione l'ex ricerca a campi strutturati e l'ex "AI Assistant" (§14, ora confluito in §10) — non esiste più una schermata di ricerca a campi separata. Deciso su [Mappa — Ricerca conversazionale e Assistente](https://github.com/saviogiordano/MyComicBrain/issues/118).
+_Avoid_: Ricerca (ambiguo — nome del requisito/funzionalità in prosa, non di questa interfaccia specifica), Cerca (nome della voce di navigazione, non dell'interfaccia stessa)
+
+**Provider AI Visivo** / **Provider AI Testuale**:
+Le due selezioni indipendenti di provider AI in Impostazioni (§12) — ciascuna con proprio brand (OpenAI/Claude/OpenRouter/Locale), API key, modello e, per Locale, URL. Il Visivo serve l'Analisi Copertina (§6, invariato); il Testuale serve l'Assistente. Possono coincidere o differire (es. visione su un brand cloud, testo su Locale), scelta pensata per ottimizzare il costo delle chiamate testuali rispetto a quelle di visione. Non esiste più un `AiProvider` unico condiviso fra i due usi. Vedi [ADR-0001](docs/adr/0001-provider-ai-visivo-testuale-separati.md).
+_Avoid_: Provider AI (ambiguo dopo lo sdoppiamento — specificare sempre Visivo o Testuale)
+
+**Conversazione**:
+Il thread persistito degli scambi fra l'utente e l'Assistente (§10): multi-turno (l'Assistente mantiene il contesto degli scambi precedenti), unico e continuo — nessun concetto di "nuova conversazione" o cronologia di più conversazioni distinte, a differenza dei thread separati tipici dei chatbot generici. Sopravvive alla chiusura dell'app, conservata indefinitamente finché l'utente non la cancella esplicitamente (azione dedicata, indipendente dall'eliminazione dell'account di §19 Privacy, che comunque la include). La cancellazione svuota sempre l'intera Conversazione, mai singoli Messaggi. Composta da una sequenza di Messaggi. Deciso su [Memoria conversazionale e persistenza della cronologia chat dell'Assistente](https://github.com/saviogiordano/MyComicBrain/issues/122).
+_Avoid_: Cronologia, chat (ok in prosa per descrivere l'interfaccia o il comportamento, non come nome dell'entità persistita)
+
+**Messaggio**:
+Un singolo scambio (domanda dell'utente o risposta dell'Assistente) all'interno della Conversazione. Non cancellabile singolarmente: la cancellazione è sempre dell'intera Conversazione, mai di un Messaggio isolato — vedi Conversazione.

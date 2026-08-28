@@ -192,7 +192,7 @@ Confidenza: 96%
 [ Inserisci manualmente ]
 ```
 
-L'AI non deve modificare automaticamente la collezione senza controllo dell'utente: ogni candidato richiede conferma esplicita, e l'utente deve poter modificare qualsiasi campo prima del salvataggio, scegliere un'alternativa tra i candidati proposti o inserire i dati manualmente (vedi anche le soglie di confidenza in §23).
+L'AI non deve modificare automaticamente la collezione senza controllo dell'utente: ogni candidato richiede conferma esplicita, e l'utente deve poter modificare qualsiasi campo prima del salvataggio, scegliere un'alternativa tra i candidati proposti o inserire i dati manualmente (vedi anche le soglie di confidenza in §22).
 
 ## 6.4 Acquisizione dei metadati
 
@@ -417,7 +417,9 @@ Esempio:
 
 # 10. Ricerca
 
-La ricerca deve supportare:
+L'unica funzione di ricerca dell'app è l'**Assistente**: un'interfaccia conversazionale (testo o voce), raggiungibile esclusivamente dalla voce "Cerca" della bottom nav — non esiste una schermata di ricerca a campi separata, né un pulsante/schermo AI distinto altrove (in particolare il pulsante AI in alto a destra sulla Dashboard è eliminato, senza sostituto). Fonde in sé quello che nelle versioni precedenti di questo documento era descritto separatamente come §14 "AI Assistant" — vedi [Mappa — Ricerca conversazionale e Assistente](https://github.com/saviogiordano/MyComicBrain/issues/118).
+
+L'Assistente deve poter rispondere a richieste sia di filtro puntuale sia di analisi/aggregazione sulla collezione, operando sempre sui dati reali dell'utente — non deve mai inventare informazioni mancanti. Copre almeno la ricerca per:
 
 - titolo;
 - numero;
@@ -429,11 +431,25 @@ La ricerca deve supportare:
 - tag;
 - testo libero.
 
-Esempio:
+Esempi:
 
 > "Batman numeri 1-50 che mi mancano"
 
-L'AI dovrebbe poter trasformare la richiesta in un filtro strutturato.
+> "Quali numeri di Dylan Dog mi mancano?"
+
+> "Quanti fumetti Marvel ho?"
+
+> "Mostrami i fumetti comprati nel 2025."
+
+> "Quali sono le serie quasi complete?"
+
+> "Quali fumetti ho letto ma non hanno una recensione?"
+
+> "Trova i duplicati."
+
+Essendo un'interfaccia conversazionale mediata da un modello linguistico, l'Assistente richiede in generale una connessione attiva (o un Provider AI Testuale Locale raggiungibile in rete — vedi §12): a differenza della ricerca a campi della versione precedente di questo documento, non è garantito un funzionamento offline (vedi §18 Offline mode).
+
+La conversazione è multi-turno (l'Assistente mantiene il contesto degli scambi precedenti) ed è persistita: un'unica conversazione continua, che sopravvive alla chiusura dell'app e non ha scadenza automatica — nessun concetto di "nuova conversazione" o cronologia di più conversazioni distinte. L'utente può cancellarla esplicitamente in qualsiasi momento (azione dedicata, indipendente dall'eliminazione dell'account — vedi §19 Privacy); la cancellazione svuota l'intera conversazione, mai singoli messaggi. Deciso su [Memoria conversazionale e persistenza della cronologia chat dell'Assistente](https://github.com/saviogiordano/MyComicBrain/issues/122).
 
 ---
 
@@ -475,10 +491,19 @@ L'app deve fornire una schermata di impostazioni personalizzate che permetta all
 
 ## Provider AI
 
-- provider AI: OpenAI, Claude, OpenRouter, locale (LLM self-hosted);
+Il Provider AI **non è un'unica selezione**: l'app distingue due ruoli indipendenti, ciascuno configurabile separatamente, per ottimizzare costo e latenza delle chiamate in base al tipo di richiesta (vedi [ADR-0001](../docs/adr/0001-provider-ai-visivo-testuale-separati.md)):
+
+- **Provider AI Visivo** — usato dall'Analisi Copertina (§6): richiede un modello capace di computer vision e structured output;
+- **Provider AI Testuale** — usato dall'Assistente (§10): comprensione del linguaggio naturale e orchestrazione delle richieste sui dati locali, senza bisogno di capacità di visione — può quindi usare un modello più economico, anche di un brand diverso da quello Visivo.
+
+Per ciascuno dei due ruoli, indipendentemente:
+
+- provider: OpenAI, Claude, OpenRouter, locale (LLM self-hosted);
 - API key del provider selezionato;
 - modello LLM da utilizzare (dipende dal provider scelto);
 - URL dell'API, richiesto solo quando il provider è locale.
+
+I due ruoli possono condividere lo stesso brand o differire liberamente (es. Visivo su un provider cloud, Testuale su un provider locale). Alla prima configurazione, entrambi i ruoli partono dalla stessa impostazione (nessuno dei due richiede una configurazione separata per iniziare a funzionare).
 
 ## Provider database fumetti
 
@@ -492,15 +517,19 @@ Esempio:
 ```text
 Impostazioni
 
-Provider AI: [ Claude ▾ ]
+Provider AI Visivo: [ Claude ▾ ]
 API key: ••••••••••••
 Modello: [ claude-sonnet-4.5 ▾ ]
+
+Provider AI Testuale: [ Claude ▾ ]
+API key: ••••••••••••
+Modello: [ claude-haiku-4.5 ▾ ]
 
 Provider fumetti: [ ComicVine ▾ ]
 API key: ••••••••••••
 ```
 
-Le chiavi API sono dati sensibili e devono essere conservate in modo sicuro sul device (vedi §27 Sicurezza).
+Le chiavi API sono dati sensibili e devono essere conservate in modo sicuro sul device (vedi §26 Sicurezza).
 
 ---
 
@@ -527,29 +556,7 @@ L'utente può scegliere:
 
 ---
 
-# 14. AI Assistant
-
-L'app può includere un assistente conversazionale.
-
-Esempi:
-
-> "Quali numeri di Dylan Dog mi mancano?"
-
-> "Quanti fumetti Marvel ho?"
-
-> "Mostrami i fumetti comprati nel 2025."
-
-> "Quali sono le serie quasi complete?"
-
-> "Quali fumetti ho letto ma non hanno una recensione?"
-
-> "Trova i duplicati."
-
-L'assistente deve operare sui dati della collezione dell'utente e non inventare informazioni mancanti.
-
----
-
-# 15. Statistiche
+# 14. Statistiche
 
 Dashboard statistiche:
 
@@ -568,7 +575,7 @@ Dashboard statistiche:
 
 ---
 
-# 16. Posizione fisica
+# 15. Posizione fisica
 
 L'utente deve poter indicare dove è conservato ogni fumetto.
 
@@ -586,7 +593,7 @@ La posizione deve essere ricercabile.
 
 ---
 
-# 17. Importazione ed esportazione
+# 16. Importazione ed esportazione
 
 L'app deve supportare:
 
@@ -606,7 +613,7 @@ L'app deve supportare:
 
 ---
 
-# 18. Sincronizzazione
+# 17. Sincronizzazione
 
 La collezione deve essere sincronizzata tra:
 
@@ -623,15 +630,16 @@ Il sistema deve supportare:
 
 ---
 
-# 19. Offline mode
+# 18. Offline mode
 
 Le funzioni fondamentali devono essere utilizzabili offline:
 
 - visualizzazione collezione;
-- ricerca;
 - modifica;
 - aggiunta manuale;
 - visualizzazione delle cover.
+
+La ricerca (§10, l'Assistente conversazionale) **non** rientra in questo elenco: richiede in generale una connessione attiva verso il Provider AI Testuale configurato (o un provider Locale raggiungibile in rete) — non esiste più un percorso di ricerca deterministico che funzioni del tutto offline.
 
 Le funzioni AI e il recupero dei metadati possono richiedere connessione.
 
@@ -639,7 +647,7 @@ Le operazioni effettuate offline devono essere sincronizzate successivamente.
 
 ---
 
-# 20. Privacy
+# 19. Privacy
 
 L'utente deve avere il controllo sulle proprie fotografie e sui propri dati.
 
@@ -647,6 +655,7 @@ Requisiti:
 
 - consenso esplicito all'utilizzo dell'immagine per l'analisi AI;
 - possibilità di eliminare le fotografie;
+- possibilità di cancellare la cronologia della conversazione con l'Assistente (§10), azione dedicata indipendente dall'eliminazione dell'account (che comunque la include);
 - possibilità di eliminare completamente l'account;
 - esportazione dei propri dati;
 - cifratura dei dati sensibili;
@@ -658,7 +667,7 @@ Per utenti europei sarebbe inoltre opportuno prevedere una configurazione dell'i
 
 ---
 
-# 21. Architettura tecnica
+# 20. Architettura tecnica
 
 Una possibile architettura:
 
@@ -690,7 +699,7 @@ Una possibile architettura:
 
 ---
 
-# 22. Modello dati principale
+# 21. Modello dati principale
 
 ## Comic
 
@@ -801,7 +810,7 @@ matched_fields
 
 ---
 
-# 23. Requisiti AI
+# 22. Requisiti AI
 
 Il sistema AI deve:
 
@@ -835,7 +844,7 @@ Le soglie dovranno essere calibrate con dati reali durante il beta testing.
 
 ---
 
-# 24. Learning loop
+# 23. Learning loop
 
 Il sistema deve poter imparare dalle correzioni dell'utente.
 
@@ -860,7 +869,7 @@ Importante: il sistema deve distinguere tra apprendimento globale del modello e 
 
 ---
 
-# 25. Gestione degli errori
+# 24. Gestione degli errori
 
 L'app deve gestire:
 
@@ -888,7 +897,7 @@ Azioni:
 
 ---
 
-# 26. Performance
+# 25. Performance
 
 Obiettivi MVP:
 
@@ -910,7 +919,7 @@ Scan 4 → waiting
 
 ---
 
-# 27. Sicurezza
+# 26. Sicurezza
 
 Il backend deve prevedere:
 
@@ -927,7 +936,7 @@ Il backend deve prevedere:
 
 ---
 
-# 28. MVP
+# 27. MVP
 
 Per la prima versione eviterei di implementare tutto.
 
@@ -978,7 +987,7 @@ Per la prima versione eviterei di implementare tutto.
 
 ---
 
-# 29. Funzioni per la versione 2
+# 28. Funzioni per la versione 2
 
 Dopo aver validato il flusso principale:
 
@@ -986,7 +995,6 @@ Dopo aver validato il flusso principale:
 - riconoscimento automatico di più fumetti;
 - serie mancanti;
 - statistiche avanzate;
-- assistente AI;
 - import CSV/Excel;
 - export;
 - gestione prestiti;
@@ -999,7 +1007,7 @@ Dopo aver validato il flusso principale:
 
 ---
 
-# 30. Funzioni avanzate future
+# 29. Funzioni avanzate future
 
 ## Riconoscimento della variant
 
@@ -1032,7 +1040,7 @@ Il database deve quindi trattare **edizione** e **storia/opera** come concetti d
 
 ---
 
-# 31. Requisito fondamentale: separare opera, edizione e copia
+# 30. Requisito fondamentale: separare opera, edizione e copia
 
 Questa è una scelta architetturale molto importante.
 
@@ -1055,7 +1063,7 @@ In questo modo l'app non considera erroneamente due versioni diverse dello stess
 
 ---
 
-# 32. Criteri di successo del prodotto
+# 31. Criteri di successo del prodotto
 
 Il progetto può essere considerato riuscito se un utente riesce a:
 
@@ -1095,7 +1103,7 @@ Altri KPI:
 
 ---
 
-# 33. Priorità delle funzionalità
+# 32. Priorità delle funzionalità
 
 | Funzionalità | Priorità |
 |---|---|
@@ -1115,7 +1123,6 @@ Altri KPI:
 | Import/export | P1 |
 | Statistiche | P1 |
 | Impostazioni | P1 |
-| Assistente AI | P2 |
 | Scansione batch | P2 |
 | Stima valore | P2 |
 | Valutazione condition tramite AI | P3 |
@@ -1123,7 +1130,7 @@ Altri KPI:
 
 ---
 
-# 34. Principio UX principale
+# 33. Principio UX principale
 
 L'app non dovrebbe sembrare un database da compilare.
 
