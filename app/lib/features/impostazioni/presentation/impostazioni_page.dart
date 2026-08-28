@@ -9,6 +9,15 @@ import 'package:mycomicbrain/features/impostazioni/application/ai_provider.dart'
 /// una bottom sheet per modificarla. Ogni modifica scrive subito nel
 /// `SettingsRepository` (#105): nessun pulsante "Salva" a livello di
 /// schermo, coerente col pattern "modifica singolo campo" del layout #104.
+///
+/// I provider AI sono mostrati tutti insieme, ciascuno con la propria card
+/// sempre espansa (§12, richiesto dall'utente dopo #111: le config per
+/// provider erano già salvate separatamente in `SettingsRepository` — API
+/// key e modello sono mappe per `AiProvider`, non sovrascritte al cambio —
+/// ma la UI ne mostrava una sola alla volta dietro una bottom sheet di
+/// selezione, obbligando a riaprire il selettore per rivedere/modificare la
+/// config di un provider non attivo). Il chip "Attivo" seleziona quale dei
+/// quattro è il provider usato a runtime da `coverAnalysisClientProvider`.
 class ImpostazioniPage extends ConsumerStatefulWidget {
   const ImpostazioniPage({super.key});
 
@@ -18,17 +27,16 @@ class ImpostazioniPage extends ConsumerStatefulWidget {
 
 class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   bool _caricamento = true;
-  AiProvider _provider = AiProvider.claude;
-  String _apiKeyAi = '';
-  String _modello = '';
+  AiProvider _providerAttivo = AiProvider.claude;
+  final Map<AiProvider, String> _apiKeyAi = {};
+  final Map<AiProvider, String> _modello = {};
   String _urlLocale = '';
 
   String _apiKeyComics = '';
 
-  ({bool loading, EsitoVerifica? esito}) _verificaAi = (
-    loading: false,
-    esito: null,
-  );
+  final Map<AiProvider, ({bool loading, EsitoVerifica? esito})> _verificaAi = {
+    for (final p in AiProvider.values) p: (loading: false, esito: null),
+  };
 
   ({bool loading, EsitoVerifica? esito}) _verificaComicVine = (
     loading: false,
@@ -41,35 +49,51 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     _caricaImpostazioni();
   }
 
-  /// Precarica lo stato dal `SettingsRepository` (#105): il provider AI e
-  /// il modello sono sincroni (`shared_preferences`), le API key passano
-  /// da `flutter_secure_storage` e vanno attese. Default a Claude quando
-  /// l'utente non ha ancora scelto un provider — stesso default di
-  /// `coverAnalysisClientProvider` (`core/data/providers.dart`).
+  /// Precarica lo stato dal `SettingsRepository` (#105): il provider AI
+  /// attivo e i modelli sono sincroni (`shared_preferences`), le API key
+  /// passano da `flutter_secure_storage` e vanno attese — una per provider,
+  /// in parallelo. Default a Claude quando l'utente non ha ancora scelto un
+  /// provider — stesso default di `coverAnalysisClientProvider`
+  /// (`core/data/providers.dart`).
   Future<void> _caricaImpostazioni() async {
     final repo = ref.read(settingsRepositoryProvider);
     final provider = repo.providerAi ?? AiProvider.claude;
-    final apiKeyAi = await repo.apiKeyAi(provider);
+    final apiKeys = await Future.wait([
+      for (final p in AiProvider.values) repo.apiKeyAi(p),
+    ]);
     final apiKeyComics = await repo.apiKeyComics;
     if (!mounted) return;
     setState(() {
-      _provider = provider;
-      _modello = repo.modello(provider) ?? provider.modelloDefault;
-      _apiKeyAi = apiKeyAi ?? '';
+      _providerAttivo = provider;
+      for (final (i, p) in AiProvider.values.indexed) {
+        _apiKeyAi[p] = apiKeys[i] ?? '';
+        _modello[p] = repo.modello(p) ?? p.modelloDefault;
+      }
       _urlLocale = repo.urlLocale ?? '';
       _apiKeyComics = apiKeyComics ?? '';
       _caricamento = false;
     });
   }
 
-  Future<void> _verificaConnessioneAi() async {
-    setState(() => _verificaAi = (loading: true, esito: null));
+  Future<void> _selezionaProviderAttivo(AiProvider provider) async {
+    if (provider == _providerAttivo) return;
+    await ref.read(settingsRepositoryProvider).impostaProviderAi(provider);
+    if (!mounted) return;
+    setState(() => _providerAttivo = provider);
+  }
+
+  Future<void> _verificaConnessioneAi(AiProvider provider) async {
+    setState(
+      () => _verificaAi[provider] = (loading: true, esito: null),
+    );
     final esito = await verificaProviderAi(
-      aiClient: () => ref.read(coverAnalysisClientProvider),
+      aiClient: () => ref.read(coverAnalysisClientPerProvider(provider)),
     );
     if (!mounted) return;
-    setState(() => _verificaAi = (loading: false, esito: esito));
-    if (!esito.ok) await _mostraErroreVerifica('Provider AI', esito.messaggio);
+    setState(() => _verificaAi[provider] = (loading: false, esito: esito));
+    if (!esito.ok) {
+      await _mostraErroreVerifica(provider.label, esito.messaggio);
+    }
   }
 
   Future<void> _verificaConnessioneComicVine() async {
@@ -79,7 +103,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     );
     if (!mounted) return;
     setState(() => _verificaComicVine = (loading: false, esito: esito));
-    if (!esito.ok) await _mostraErroreVerifica('Provider fumetti', esito.messaggio);
+    if (!esito.ok) {
+      await _mostraErroreVerifica('Provider fumetti', esito.messaggio);
+    }
   }
 
   /// Mostra il motivo del fallimento per esteso in un popup (§12, richiesto
@@ -104,44 +130,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     );
   }
 
-  Future<void> _apriSheetProvider() async {
-    final scelto = await showModalBottomSheet<AiProvider>(
-      context: context,
-      backgroundColor: AppColors.surfaceRaised,
-      builder: (context) => _SheetLista(
-        titolo: 'Provider AI',
-        children: [
-          for (final p in AiProvider.values)
-            ListTile(
-              title: Text(
-                p.label,
-                style: AppTypography.bodyLarge.copyWith(
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              trailing: p == _provider
-                  ? const Icon(Icons.check, color: AppColors.accent)
-                  : null,
-              onTap: () => Navigator.pop(context, p),
-            ),
-        ],
-      ),
-    );
-    if (scelto == null || scelto == _provider) return;
-    final repo = ref.read(settingsRepositoryProvider);
-    await repo.impostaProviderAi(scelto);
-    final apiKeyAi = await repo.apiKeyAi(scelto);
-    if (!mounted) return;
-    setState(() {
-      _provider = scelto;
-      _modello = repo.modello(scelto) ?? scelto.modelloDefault;
-      _apiKeyAi = apiKeyAi ?? '';
-      _verificaAi = (loading: false, esito: null);
-    });
-  }
-
-  Future<void> _apriSheetModello() async {
-    final curati = _provider.modelliCurati;
+  Future<void> _apriSheetModello(AiProvider provider) async {
+    final attuale = _modello[provider] ?? provider.modelloDefault;
+    final curati = provider.modelliCurati;
     if (curati != null) {
       final scelto = await showModalBottomSheet<String>(
         context: context,
@@ -157,7 +148,7 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                     color: AppColors.textPrimary,
                   ),
                 ),
-                trailing: m == _modello
+                trailing: m == attuale
                     ? const Icon(Icons.check, color: AppColors.accent)
                     : null,
                 onTap: () => Navigator.pop(context, m),
@@ -165,23 +156,53 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
           ],
         ),
       );
-      if (scelto != null) await _salvaModello(scelto);
+      if (scelto != null) await _salvaModello(provider, scelto);
       return;
     }
     final testo = await _apriSheetTestoLibero(
       titolo: 'Modello',
-      valoreIniziale: _modello,
-      hint: _provider == AiProvider.locale ? 'es. llama3' : null,
+      valoreIniziale: attuale,
+      hint: provider == AiProvider.locale ? 'es. llama3' : null,
     );
-    if (testo != null) await _salvaModello(testo);
+    if (testo != null) await _salvaModello(provider, testo);
   }
 
-  Future<void> _salvaModello(String modello) async {
+  Future<void> _salvaModello(AiProvider provider, String modello) async {
     await ref
         .read(settingsRepositoryProvider)
-        .impostaModello(_provider, modello);
+        .impostaModello(provider, modello);
     if (!mounted) return;
-    setState(() => _modello = modello);
+    setState(() => _modello[provider] = modello);
+  }
+
+  Future<void> _modificaApiKeyAi(AiProvider provider) async {
+    final v = await _apriSheetTestoLibero(
+      titolo: 'API key',
+      valoreIniziale: _apiKeyAi[provider] ?? '',
+      mascherato: true,
+    );
+    if (v == null) return;
+    await ref.read(settingsRepositoryProvider).impostaApiKeyAi(provider, v);
+    if (!mounted) return;
+    setState(() => _apiKeyAi[provider] = v);
+  }
+
+  Future<void> _modificaUrlLocale() async {
+    final v = await _apriSheetTestoLibero(
+      titolo: 'URL API',
+      valoreIniziale: _urlLocale,
+      hint: 'http://localhost:11434/v1',
+      validatore: (testo) {
+        if (testo.trim().isEmpty) return null;
+        return urlLocaleValido(testo)
+            ? null
+            : 'URL non valido: usa un endpoint http/https completo.';
+      },
+    );
+    if (v == null) return;
+    await ref.read(settingsRepositoryProvider).impostaUrlLocale(v);
+    if (!mounted) return;
+    setState(() => _urlLocale = v);
   }
 
   Future<String?> _apriSheetTestoLibero({
@@ -273,101 +294,26 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                 children: [
                   const SectionHeader(label: 'Provider AI'),
                   const SizedBox(height: AppSpacing.sm),
-                  AppCard(
-                    padding: EdgeInsets.zero,
-                    child: Column(
-                      children: [
-                        _Riga(
-                          titolo: 'Provider',
-                          valore: _provider.label,
-                          onTap: _apriSheetProvider,
-                        ),
-                        const _Divisore(),
-                        _Riga(
-                          titolo: 'API key',
-                          valore: _apiKeyAi.isEmpty
-                              ? 'Non impostata'
-                              : '••••••••',
-                          onTap: () async {
-                            final v = await _apriSheetTestoLibero(
-                              titolo: 'API key',
-                              valoreIniziale: _apiKeyAi,
-                              mascherato: true,
-                            );
-                            if (v == null) return;
-                            await ref
-                                .read(settingsRepositoryProvider)
-                                .impostaApiKeyAi(_provider, v);
-                            if (!mounted) return;
-                            setState(() => _apiKeyAi = v);
-                          },
-                        ),
-                        const _Divisore(),
-                        _Riga(
-                          titolo: 'Modello',
-                          valore: _modello.isEmpty ? 'Non impostato' : _modello,
-                          onTap: _apriSheetModello,
-                        ),
-                        if (_provider.richiedeUrl) ...[
-                          const _Divisore(),
-                          _Riga(
-                            titolo: 'URL API',
-                            valore: _urlLocale.isEmpty
-                                ? 'Non impostato'
-                                : _urlLocale,
-                            onTap: () async {
-                              final v = await _apriSheetTestoLibero(
-                                titolo: 'URL API',
-                                valoreIniziale: _urlLocale,
-                                hint: 'http://localhost:11434/v1',
-                                validatore: (testo) {
-                                  if (testo.trim().isEmpty) return null;
-                                  return urlLocaleValido(testo)
-                                      ? null
-                                      : 'URL non valido: usa un endpoint http/https completo.';
-                                },
-                              );
-                              if (v == null) return;
-                              await ref
-                                  .read(settingsRepositoryProvider)
-                                  .impostaUrlLocale(v);
-                              if (!mounted) return;
-                              setState(() => _urlLocale = v);
-                            },
-                          ),
-                        ],
-                        const _Divisore(),
-                        _Riga(
-                          titolo: 'Verifica connessione',
-                          valore: switch ((
-                            _verificaAi.loading,
-                            _verificaAi.esito,
-                          )) {
-                            (true, _) => 'In corso…',
-                            (false, null) => 'Non verificata',
-                            (
-                              false,
-                              EsitoVerifica(:final ok, :final messaggio),
-                            ) =>
-                              ok ? 'OK' : messaggio,
-                          },
-                          valoreColore: switch ((
-                            _verificaAi.loading,
-                            _verificaAi.esito,
-                          )) {
-                            (true, _) => AppColors.textSecondary,
-                            (false, null) => AppColors.textMuted,
-                            (false, EsitoVerifica(:final ok)) =>
-                              ok ? AppColors.accent : AppColors.amberStrong,
-                          },
-                          onTap: _verificaAi.loading
-                              ? null
-                              : _verificaConnessioneAi,
-                          mostraChevron: false,
-                        ),
-                      ],
+                  for (final provider in AiProvider.values) ...[
+                    _ProviderCard(
+                      provider: provider,
+                      attivo: provider == _providerAttivo,
+                      apiKey: _apiKeyAi[provider] ?? '',
+                      modello: _modello[provider] ?? provider.modelloDefault,
+                      urlLocale: _urlLocale,
+                      verifica: _verificaAi[provider]!,
+                      onSelezionaAttivo: () =>
+                          _selezionaProviderAttivo(provider),
+                      onModificaApiKey: () => _modificaApiKeyAi(provider),
+                      onModificaModello: () => _apriSheetModello(provider),
+                      onModificaUrl: _modificaUrlLocale,
+                      onVerifica: _verificaAi[provider]!.loading
+                          ? null
+                          : () => _verificaConnessioneAi(provider),
                     ),
-                  ),
+                    if (provider != AiProvider.values.last)
+                      const SizedBox(height: AppSpacing.sm),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   const SectionHeader(label: 'Provider fumetti'),
                   const SizedBox(height: AppSpacing.sm),
@@ -430,6 +376,110 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+/// Card di un singolo provider AI: sempre espansa (§12, tutte e quattro
+/// visibili insieme, deciso dopo #111 — vedi commento su [ImpostazioniPage])
+/// con API key/modello/URL propri e il chip "Attivo" per selezionarlo come
+/// provider usato a runtime.
+class _ProviderCard extends StatelessWidget {
+  const _ProviderCard({
+    required this.provider,
+    required this.attivo,
+    required this.apiKey,
+    required this.modello,
+    required this.urlLocale,
+    required this.verifica,
+    required this.onSelezionaAttivo,
+    required this.onModificaApiKey,
+    required this.onModificaModello,
+    required this.onModificaUrl,
+    required this.onVerifica,
+  });
+
+  final AiProvider provider;
+  final bool attivo;
+  final String apiKey;
+  final String modello;
+  final String urlLocale;
+  final ({bool loading, EsitoVerifica? esito}) verifica;
+  final VoidCallback onSelezionaAttivo;
+  final VoidCallback onModificaApiKey;
+  final VoidCallback onModificaModello;
+  final VoidCallback onModificaUrl;
+  final VoidCallback? onVerifica;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                Text(
+                  provider.label,
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                AppChip(
+                  label: 'Attivo',
+                  selected: attivo,
+                  onTap: attivo ? null : onSelezionaAttivo,
+                ),
+              ],
+            ),
+          ),
+          const _Divisore(),
+          _Riga(
+            titolo: 'API key',
+            valore: apiKey.isEmpty ? 'Non impostata' : '••••••••',
+            onTap: onModificaApiKey,
+          ),
+          const _Divisore(),
+          _Riga(
+            titolo: 'Modello',
+            valore: modello.isEmpty ? 'Non impostato' : modello,
+            onTap: onModificaModello,
+          ),
+          if (provider.richiedeUrl) ...[
+            const _Divisore(),
+            _Riga(
+              titolo: 'URL API',
+              valore: urlLocale.isEmpty ? 'Non impostato' : urlLocale,
+              onTap: onModificaUrl,
+            ),
+          ],
+          const _Divisore(),
+          _Riga(
+            titolo: 'Verifica connessione',
+            valore: switch ((verifica.loading, verifica.esito)) {
+              (true, _) => 'In corso…',
+              (false, null) => 'Non verificata',
+              (false, EsitoVerifica(:final ok, :final messaggio)) =>
+                ok ? 'OK' : messaggio,
+            },
+            valoreColore: switch ((verifica.loading, verifica.esito)) {
+              (true, _) => AppColors.textSecondary,
+              (false, null) => AppColors.textMuted,
+              (false, EsitoVerifica(:final ok)) =>
+                ok ? AppColors.accent : AppColors.amberStrong,
+            },
+            onTap: onVerifica,
+            mostraChevron: false,
+          ),
+        ],
       ),
     );
   }

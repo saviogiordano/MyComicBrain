@@ -60,15 +60,29 @@ void main() {
 
   Future<void> pumpImpostazioni(
     WidgetTester tester, {
+    AiProvider? aiClientPer,
     CoverAnalysisClient? aiClient,
     ComicVineClient? comicVineClient,
   }) async {
+    // Viewport ingrandita (§12, dopo #111): con le 4 card provider AI sempre
+    // espanse il contenuto eccede gli 800x600 di default e lo `SliverList`
+    // non costruisce affatto i widget fuori dall'area visibile+cache — non
+    // solo non li fa colpire dal tap, proprio non esistono nell'albero — per
+    // cui servirebbe scrollare prima di ogni asserzione/tap. Più semplice
+    // rendere l'intera schermata visibile in un colpo solo.
+    tester.view.physicalSize = const Size(800, 3200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           settingsRepositoryProvider.overrideWithValue(repo),
           if (aiClient != null)
-            coverAnalysisClientProvider.overrideWithValue(aiClient),
+            coverAnalysisClientPerProvider(
+              aiClientPer ?? AiProvider.claude,
+            ).overrideWithValue(aiClient),
           if (comicVineClient != null)
             comicVineClientProvider.overrideWithValue(comicVineClient),
         ],
@@ -81,6 +95,17 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Individua la riga [titoloRiga] (es. "API key", "Attivo") dentro la card
+  /// del provider AI [labelProvider] (es. "Claude") — con tutte e quattro le
+  /// card sempre visibili (§12, dopo #111), `find.text('API key')` da solo
+  /// non basta più a identificare quella di un provider specifico.
+  Finder rigaProvider(String labelProvider, String titoloRiga) {
+    final card = find
+        .ancestor(of: find.text(labelProvider), matching: find.byType(AppCard))
+        .first;
+    return find.descendant(of: card, matching: find.text(titoloRiga));
+  }
+
   testWidgets('senza provider salvato mostra il default Claude', (
     tester,
   ) async {
@@ -88,7 +113,8 @@ void main() {
 
     expect(find.text('Claude'), findsOneWidget);
     expect(find.text('claude-sonnet-5'), findsOneWidget);
-    expect(find.text('Non impostata'), findsNWidgets(2));
+    // 4 card provider AI + ComicVine, nessuna con API key impostata.
+    expect(find.text('Non impostata'), findsNWidgets(5));
   });
 
   testWidgets('modificare la API key AI la persiste nel repository', (
@@ -96,7 +122,7 @@ void main() {
   ) async {
     await pumpImpostazioni(tester);
 
-    await tester.tap(find.text('API key').first);
+    await tester.tap(rigaProvider('Claude', 'API key'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'chiave-claude');
     await tester.tap(find.text('Salva'));
@@ -107,16 +133,14 @@ void main() {
   });
 
   testWidgets(
-    'cambiare provider persiste la scelta e ricarica la sua API key',
+    'selezionare "Attivo" su un altro provider persiste la scelta',
     (
       tester,
     ) async {
       await repo.impostaApiKeyAi(AiProvider.openai, 'chiave-openai');
       await pumpImpostazioni(tester);
 
-      await tester.tap(find.text('Provider').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('OpenAI'));
+      await tester.tap(rigaProvider('OpenAI', 'Attivo'));
       await tester.pumpAndSettle();
 
       expect(repo.providerAi, AiProvider.openai);
@@ -168,101 +192,124 @@ void main() {
     expect(await repo.apiKeyComics, 'chiave-comicvine');
   });
 
-  group('"Verifica connessione" (#111: test reale del provider, per sezione)', () {
-    testWidgets('con AI raggiungibile mostra "OK" solo nella sezione AI', (
-      tester,
-    ) async {
-      await pumpImpostazioni(
-        tester,
-        aiClient: _FakeCoverAnalysisClient(),
-        comicVineClient: _FakeComicVineClient(),
-      );
-
-      expect(find.text('Non verificata'), findsNWidgets(2));
-
-      await tester.tap(find.text('Verifica connessione').first);
-      await tester.pumpAndSettle();
-
-      expect(find.text('OK'), findsOneWidget);
-      expect(find.text('Non verificata'), findsOneWidget);
-    });
-
-    testWidgets('con la chiave AI non valida mostra il motivo del fallimento', (
-      tester,
-    ) async {
-      await pumpImpostazioni(
-        tester,
-        aiClient: _FakeCoverAnalysisClient(
-          eccezione: CoverAnalysisException(
-            'Claude API 401: chiave non valida',
-          ),
-        ),
-        comicVineClient: _FakeComicVineClient(),
-      );
-
-      await tester.tap(find.text('Verifica connessione').first);
-      await tester.pumpAndSettle();
-
-      // Il motivo del fallimento compare per esteso in un popup (oltre che,
-      // troncato, nella riga) — un messaggio lungo nella sola riga a una
-      // riga con ellissi risultava illeggibile.
-      expect(find.byType(AlertDialog), findsOneWidget);
-      expect(find.text('Provider AI'), findsOneWidget);
-      expect(
-        find.textContaining('Claude API 401: chiave non valida'),
-        findsNWidgets(2),
-      );
-
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
-    });
-
-    testWidgets('con ComicVine raggiungibile mostra "OK" solo nella sezione ComicVine', (
-      tester,
-    ) async {
-      await pumpImpostazioni(
-        tester,
-        aiClient: _FakeCoverAnalysisClient(),
-        comicVineClient: _FakeComicVineClient(),
-      );
-
-      await tester.tap(find.text('Verifica connessione').last);
-      await tester.pumpAndSettle();
-
-      expect(find.text('OK'), findsOneWidget);
-      expect(find.text('Non verificata'), findsOneWidget);
-    });
-
-    testWidgets(
-      'con la chiave ComicVine non valida mostra il motivo del fallimento',
-      (
-        tester,
-      ) async {
-        await pumpImpostazioni(
+  group(
+    '"Verifica connessione" (#111/#112: test reale del provider, per card)',
+    () {
+      testWidgets(
+        'con AI raggiungibile mostra "OK" solo sulla card verificata',
+        (
           tester,
-          aiClient: _FakeCoverAnalysisClient(),
-          comicVineClient: _FakeComicVineClient(
-            eccezione: ComicVineException(
-              'ComicVine status_code 100: chiave non valida',
+        ) async {
+          await pumpImpostazioni(
+            tester,
+            aiClientPer: AiProvider.claude,
+            aiClient: _FakeCoverAnalysisClient(),
+            comicVineClient: _FakeComicVineClient(),
+          );
+
+          // 4 card provider AI + ComicVine, nessuna ancora verificata.
+          expect(find.text('Non verificata'), findsNWidgets(5));
+
+          await tester.tap(rigaProvider('Claude', 'Verifica connessione'));
+          await tester.pumpAndSettle();
+
+          expect(find.text('OK'), findsOneWidget);
+          expect(find.text('Non verificata'), findsNWidgets(4));
+        },
+      );
+
+      testWidgets(
+        'con la chiave AI non valida mostra il motivo del fallimento',
+        (
+          tester,
+        ) async {
+          await pumpImpostazioni(
+            tester,
+            aiClientPer: AiProvider.claude,
+            aiClient: _FakeCoverAnalysisClient(
+              eccezione: CoverAnalysisException(
+                'Claude API 401: chiave non valida',
+              ),
             ),
-          ),
-        );
+            comicVineClient: _FakeComicVineClient(),
+          );
 
-        await tester.tap(find.text('Verifica connessione').last);
-        await tester.pumpAndSettle();
+          await tester.tap(rigaProvider('Claude', 'Verifica connessione'));
+          await tester.pumpAndSettle();
 
-        expect(find.byType(AlertDialog), findsOneWidget);
-        expect(find.text('Provider fumetti'), findsOneWidget);
-        expect(
-          find.textContaining('ComicVine status_code 100'),
-          findsNWidgets(2),
-        );
+          // Il motivo del fallimento compare per esteso in un popup (oltre che,
+          // troncato, nella riga) — un messaggio lungo nella sola riga a una
+          // riga con ellissi risultava illeggibile. Il titolo del popup è il
+          // nome del provider verificato (#112: più card verificabili
+          // singolarmente, non più un titolo fisso "Provider AI").
+          expect(find.byType(AlertDialog), findsOneWidget);
+          expect(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.text('Claude'),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.textContaining('Claude API 401: chiave non valida'),
+            findsNWidgets(2),
+          );
 
-        await tester.tap(find.text('OK'));
-        await tester.pumpAndSettle();
-        expect(find.byType(AlertDialog), findsNothing);
-      },
-    );
-  });
+          await tester.tap(find.text('OK'));
+          await tester.pumpAndSettle();
+          expect(find.byType(AlertDialog), findsNothing);
+        },
+      );
+
+      testWidgets(
+        'con ComicVine raggiungibile mostra "OK" solo nella sezione ComicVine',
+        (
+          tester,
+        ) async {
+          await pumpImpostazioni(
+            tester,
+            comicVineClient: _FakeComicVineClient(),
+          );
+
+          await tester.tap(find.text('Verifica connessione').last);
+          await tester.pumpAndSettle();
+
+          expect(find.text('OK'), findsOneWidget);
+          // Le 4 card provider AI restano "Non verificata".
+          expect(find.text('Non verificata'), findsNWidgets(4));
+        },
+      );
+
+      testWidgets(
+        'con la chiave ComicVine non valida mostra il motivo del fallimento',
+        (
+          tester,
+        ) async {
+          await pumpImpostazioni(
+            tester,
+            aiClient: _FakeCoverAnalysisClient(),
+            comicVineClient: _FakeComicVineClient(
+              eccezione: ComicVineException(
+                'ComicVine status_code 100: chiave non valida',
+              ),
+            ),
+          );
+
+          await tester.tap(find.text('Verifica connessione').last);
+          await tester.pumpAndSettle();
+
+          expect(find.byType(AlertDialog), findsOneWidget);
+          expect(find.text('Provider fumetti'), findsOneWidget);
+          expect(
+            find.textContaining('ComicVine status_code 100'),
+            findsNWidgets(2),
+          );
+
+          await tester.tap(find.text('OK'));
+          await tester.pumpAndSettle();
+          expect(find.byType(AlertDialog), findsNothing);
+        },
+      );
+    },
+  );
 }

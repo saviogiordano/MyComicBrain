@@ -101,19 +101,38 @@ final localeCoverAnalysisClientProvider = Provider<LocaleCoverAnalysisClient>(
   ),
 );
 
+/// Il client AI per uno specifico [AiProvider], indipendentemente da quale
+/// sia l'attivo (§12, deciso dopo #111: la schermata Impostazioni mostra
+/// tutti i provider insieme e deve poter verificare la connessione di
+/// ciascuna card anche quando non è quella attiva). Punto di override unico
+/// per i test, dato che le implementazioni concrete
+/// (`claudeCoverAnalysisClientProvider` e affini) sono tipizzate sulla
+/// classe concreta e non sull'interfaccia [CoverAnalysisClient].
+final ProviderFamily<CoverAnalysisClient, AiProvider>
+coverAnalysisClientPerProvider =
+    Provider.family<CoverAnalysisClient, AiProvider>((
+      ref,
+      provider,
+    ) {
+      return switch (provider) {
+        AiProvider.openai => ref.watch(openAiCoverAnalysisClientProvider),
+        AiProvider.claude => ref.watch(claudeCoverAnalysisClientProvider),
+        AiProvider.openRouter => ref.watch(
+          openRouterCoverAnalysisClientProvider,
+        ),
+        AiProvider.locale => ref.watch(localeCoverAnalysisClientProvider),
+      };
+    });
+
 /// Il client del provider AI configurato per l'Analisi Copertina, letto a
 /// runtime dalle Impostazioni (§12, deciso su #101/#102, migrato su #106) —
 /// non più a build-time. Default a Claude quando l'utente non ha ancora
 /// scelto un provider (nessuno schermo Impostazioni funzionante prima di
 /// #107). OpenRouter/Locale hanno un client implementato da #109.
 final coverAnalysisClientProvider = Provider<CoverAnalysisClient>((ref) {
-  final providerAi = ref.watch(settingsRepositoryProvider).providerAi;
-  return switch (providerAi) {
-    AiProvider.openai => ref.watch(openAiCoverAnalysisClientProvider),
-    AiProvider.claude || null => ref.watch(claudeCoverAnalysisClientProvider),
-    AiProvider.openRouter => ref.watch(openRouterCoverAnalysisClientProvider),
-    AiProvider.locale => ref.watch(localeCoverAnalysisClientProvider),
-  };
+  final providerAi =
+      ref.watch(settingsRepositoryProvider).providerAi ?? AiProvider.claude;
+  return ref.watch(coverAnalysisClientPerProvider(providerAi));
 });
 
 final comicVineClientProvider = Provider<ComicVineClient>(
