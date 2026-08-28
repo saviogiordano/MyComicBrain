@@ -3,13 +3,14 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/splash_background" />
 
-    <!-- Nuvoletta dell'app icon, senza lo sfondo a pois (pensato per
-         l'home screen, non per uno splash che deve fondersi col resto
-         dell'esperienza scura) — riusa il layer foreground dell'adaptive
-         icon già presente in ogni densità mipmap. -->
+    <!-- Icona completa dell'app (nuvoletta + retino), con angoli
+         arrotondati come sull'home screen. Asset dedicato (non il layer
+         foreground dell'adaptive icon): quello è ritagliato per la safe
+         zone e risulterebbe minuscolo qui, dove non c'è nessuna maschera
+         a limitarne le dimensioni. -->
     <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/ic_launcher_foreground" />
+            android:src="@mipmap/splash_logo" />
     </item>
 </layer-list>
