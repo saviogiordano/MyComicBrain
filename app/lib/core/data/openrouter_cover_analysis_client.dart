@@ -53,15 +53,21 @@ class OpenRouterCoverAnalysisClient implements CoverAnalysisClient {
         '${prefissoConfigurazioneMancante}Nessuna API key configurata per OpenRouter nelle Impostazioni.',
       );
     }
-    final apiKey = await settingsRepository.apiKeyAi(AiProvider.openRouter);
+    final apiKey = await settingsRepository.apiKeyAi(
+      RuoloProviderAi.visivo,
+      AiProvider.openRouter,
+    );
     if (apiKey == null || apiKey.isEmpty) {
       throw CoverAnalysisException(
         '${prefissoConfigurazioneMancante}Nessuna API key configurata per OpenRouter nelle Impostazioni.',
       );
     }
     final modello =
-        settingsRepository.modello(AiProvider.openRouter) ??
-        AiProvider.openRouter.modelloDefault;
+        settingsRepository.modello(
+          RuoloProviderAi.visivo,
+          AiProvider.openRouter,
+        ) ??
+        AiProvider.openRouter.modelloDefault(RuoloProviderAi.visivo);
     return (apiKey: apiKey, modello: modello);
   }
 

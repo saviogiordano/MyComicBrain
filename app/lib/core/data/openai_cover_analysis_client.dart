@@ -30,7 +30,7 @@ const Map<String, Object?> _textFormat = {
 /// #101/#102, migrato su #106) — non più a build-time. Modello di default
 /// `gpt-5.6-terra` (fascia intermedia, comparabile a `claude-sonnet-5` per
 /// rapporto capacità/costo — vision + structured outputs strict mode), vedi
-/// `AiProvider.openai.modelloDefault`.
+/// `AiProvider.openai.modelloDefault(RuoloProviderAi.visivo)`.
 class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
   OpenAiCoverAnalysisClient({
     SettingsRepository? settingsRepository,
@@ -52,15 +52,18 @@ class OpenAiCoverAnalysisClient implements CoverAnalysisClient {
         '${prefissoConfigurazioneMancante}Nessuna API key configurata per OpenAI nelle Impostazioni.',
       );
     }
-    final apiKey = await settingsRepository.apiKeyAi(AiProvider.openai);
+    final apiKey = await settingsRepository.apiKeyAi(
+      RuoloProviderAi.visivo,
+      AiProvider.openai,
+    );
     if (apiKey == null || apiKey.isEmpty) {
       throw CoverAnalysisException(
         '${prefissoConfigurazioneMancante}Nessuna API key configurata per OpenAI nelle Impostazioni.',
       );
     }
     final modello =
-        settingsRepository.modello(AiProvider.openai) ??
-        AiProvider.openai.modelloDefault;
+        settingsRepository.modello(RuoloProviderAi.visivo, AiProvider.openai) ??
+        AiProvider.openai.modelloDefault(RuoloProviderAi.visivo);
     return (apiKey: apiKey, modello: modello);
   }
 

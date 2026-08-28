@@ -49,10 +49,21 @@ String _rispostaRifiuto(String motivo) => jsonEncode({
 
 Future<SettingsRepository> _settingsConUrlEModello({String? apiKey}) async {
   final settings = SettingsRepository.inMemoria();
-  await settings.impostaUrlLocale('http://localhost:11434/v1');
-  await settings.impostaModello(AiProvider.locale, 'llama3');
+  await settings.impostaUrlLocale(
+    RuoloProviderAi.visivo,
+    'http://localhost:11434/v1',
+  );
+  await settings.impostaModello(
+    RuoloProviderAi.visivo,
+    AiProvider.locale,
+    'llama3',
+  );
   if (apiKey != null) {
-    await settings.impostaApiKeyAi(AiProvider.locale, apiKey);
+    await settings.impostaApiKeyAi(
+      RuoloProviderAi.visivo,
+      AiProvider.locale,
+      apiKey,
+    );
   }
   return settings;
 }
@@ -132,8 +143,15 @@ void main() {
 
   test("normalizza uno slash finale nell'URL configurato", () async {
     final settings = SettingsRepository.inMemoria();
-    await settings.impostaUrlLocale('http://localhost:11434/v1/');
-    await settings.impostaModello(AiProvider.locale, 'llama3');
+    await settings.impostaUrlLocale(
+      RuoloProviderAi.visivo,
+      'http://localhost:11434/v1/',
+    );
+    await settings.impostaModello(
+      RuoloProviderAi.visivo,
+      AiProvider.locale,
+      'llama3',
+    );
     final fake = _FakeHttpClient(
       statusCode: 200,
       risposta: _rispostaChatCompletions(_campiCompleti),
@@ -217,7 +235,11 @@ void main() {
     'senza URL configurato nelle Impostazioni solleva CoverAnalysisException senza chiamare la rete',
     () async {
       final settings = SettingsRepository.inMemoria();
-      await settings.impostaModello(AiProvider.locale, 'llama3');
+      await settings.impostaModello(
+        RuoloProviderAi.visivo,
+        AiProvider.locale,
+        'llama3',
+      );
       final fake = _FakeHttpClient(
         statusCode: 200,
         risposta: _rispostaChatCompletions(_campiCompleti),
@@ -239,7 +261,10 @@ void main() {
     'senza modello configurato nelle Impostazioni solleva CoverAnalysisException senza chiamare la rete',
     () async {
       final settings = SettingsRepository.inMemoria();
-      await settings.impostaUrlLocale('http://localhost:11434/v1');
+      await settings.impostaUrlLocale(
+        RuoloProviderAi.visivo,
+        'http://localhost:11434/v1',
+      );
       final fake = _FakeHttpClient(
         statusCode: 200,
         risposta: _rispostaChatCompletions(_campiCompleti),
@@ -286,7 +311,11 @@ void main() {
       'senza URL configurato solleva un errore di configurazione mancante, senza chiamare la rete',
       () async {
         final settings = SettingsRepository.inMemoria();
-        await settings.impostaModello(AiProvider.locale, 'llama3');
+        await settings.impostaModello(
+          RuoloProviderAi.visivo,
+          AiProvider.locale,
+          'llama3',
+        );
         final fake = _FakeHttpClient(statusCode: 200, risposta: '{}');
         final client = LocaleCoverAnalysisClient(
           settingsRepository: settings,

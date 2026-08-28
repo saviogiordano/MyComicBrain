@@ -29,7 +29,11 @@ class _FakeHttpClient extends http.BaseClient {
 
 Future<SettingsRepository> _settingsConApiKey() async {
   final settings = SettingsRepository.inMemoria();
-  await settings.impostaApiKeyAi(AiProvider.claude, 'chiave-test');
+  await settings.impostaApiKeyAi(
+    RuoloProviderAi.visivo,
+    AiProvider.claude,
+    'chiave-test',
+  );
   return settings;
 }
 

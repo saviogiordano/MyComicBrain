@@ -54,21 +54,24 @@ class LocaleCoverAnalysisClient implements CoverAnalysisClient {
         '${prefissoConfigurazioneMancante}Nessun URL configurato per il provider Locale nelle Impostazioni.',
       );
     }
-    final url = settingsRepository.urlLocale;
+    final url = settingsRepository.urlLocale(RuoloProviderAi.visivo);
     if (url == null || url.isEmpty) {
       throw CoverAnalysisException(
         '${prefissoConfigurazioneMancante}Nessun URL configurato per il provider Locale nelle Impostazioni.',
       );
     }
     final modello =
-        settingsRepository.modello(AiProvider.locale) ??
-        AiProvider.locale.modelloDefault;
+        settingsRepository.modello(RuoloProviderAi.visivo, AiProvider.locale) ??
+        AiProvider.locale.modelloDefault(RuoloProviderAi.visivo);
     if (modello.isEmpty) {
       throw CoverAnalysisException(
         '${prefissoConfigurazioneMancante}Nessun modello configurato per il provider Locale nelle Impostazioni.',
       );
     }
-    final apiKey = await settingsRepository.apiKeyAi(AiProvider.locale);
+    final apiKey = await settingsRepository.apiKeyAi(
+      RuoloProviderAi.visivo,
+      AiProvider.locale,
+    );
     return (url: url, modello: modello, apiKey: apiKey);
   }
 

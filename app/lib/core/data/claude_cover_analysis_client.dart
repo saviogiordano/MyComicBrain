@@ -44,15 +44,18 @@ class ClaudeCoverAnalysisClient implements CoverAnalysisClient {
         '${prefissoConfigurazioneMancante}Nessuna API key configurata per Claude nelle Impostazioni.',
       );
     }
-    final apiKey = await settingsRepository.apiKeyAi(AiProvider.claude);
+    final apiKey = await settingsRepository.apiKeyAi(
+      RuoloProviderAi.visivo,
+      AiProvider.claude,
+    );
     if (apiKey == null || apiKey.isEmpty) {
       throw CoverAnalysisException(
         '${prefissoConfigurazioneMancante}Nessuna API key configurata per Claude nelle Impostazioni.',
       );
     }
     final modello =
-        settingsRepository.modello(AiProvider.claude) ??
-        AiProvider.claude.modelloDefault;
+        settingsRepository.modello(RuoloProviderAi.visivo, AiProvider.claude) ??
+        AiProvider.claude.modelloDefault(RuoloProviderAi.visivo);
     return (apiKey: apiKey, modello: modello);
   }
 

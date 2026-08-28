@@ -115,16 +115,16 @@ Future<void> main(List<String> args) async {
     if (section == null) continue;
     final apiKey = section['apiKey'] as String?;
     if (apiKey != null && apiKey.isNotEmpty) {
-      await settings.impostaApiKeyAi(p, apiKey);
+      await settings.impostaApiKeyAi(RuoloProviderAi.visivo, p, apiKey);
     }
     final modello = section['modello'] as String?;
     if (modello != null && modello.isNotEmpty) {
-      await settings.impostaModello(p, modello);
+      await settings.impostaModello(RuoloProviderAi.visivo, p, modello);
     }
     if (p == AiProvider.locale) {
       final url = section['url'] as String?;
       if (url != null && url.isNotEmpty) {
-        await settings.impostaUrlLocale(url);
+        await settings.impostaUrlLocale(RuoloProviderAi.visivo, url);
       }
     }
   }

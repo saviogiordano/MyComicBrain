@@ -50,10 +50,15 @@ final copertinaDownloaderProvider = Provider<CopertinaDownloader>(
 /// #105): unico punto di accesso alle Impostazioni per lo schermo omonimo
 /// (#107) e per i client AI/ComicVine migrati su #106.
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
-  return SettingsRepository(
+  final repository = SettingsRepository(
     preferences: SharedPreferencesAdapter(ref.watch(sharedPreferencesProvider)),
     secureStorage: const FlutterSecureStorageAdapter(),
   );
+  // Semina i due ruoli Visivo/Testuale dalla configurazione singola
+  // preesistente al primo avvio dopo lo split (ADR-0001, #127) — stesso
+  // pattern fire-and-forget di `comicsRepositoryProvider` sotto.
+  unawaited(repository.migraSeNecessario());
+  return repository;
 });
 
 final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
@@ -131,7 +136,10 @@ coverAnalysisClientPerProvider =
 /// #107). OpenRouter/Locale hanno un client implementato da #109.
 final coverAnalysisClientProvider = Provider<CoverAnalysisClient>((ref) {
   final providerAi =
-      ref.watch(settingsRepositoryProvider).providerAi ?? AiProvider.claude;
+      ref
+          .watch(settingsRepositoryProvider)
+          .providerAi(RuoloProviderAi.visivo) ??
+      AiProvider.claude;
   return ref.watch(coverAnalysisClientPerProvider(providerAi));
 });
 

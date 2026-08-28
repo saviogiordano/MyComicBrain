@@ -57,9 +57,11 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   /// (`core/data/providers.dart`).
   Future<void> _caricaImpostazioni() async {
     final repo = ref.read(settingsRepositoryProvider);
-    final provider = repo.providerAi ?? AiProvider.claude;
+    final provider =
+        repo.providerAi(RuoloProviderAi.visivo) ?? AiProvider.claude;
     final apiKeys = await Future.wait([
-      for (final p in AiProvider.values) repo.apiKeyAi(p),
+      for (final p in AiProvider.values)
+        repo.apiKeyAi(RuoloProviderAi.visivo, p),
     ]);
     final apiKeyComics = await repo.apiKeyComics;
     if (!mounted) return;
@@ -67,9 +69,11 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
       _providerAttivo = provider;
       for (final (i, p) in AiProvider.values.indexed) {
         _apiKeyAi[p] = apiKeys[i] ?? '';
-        _modello[p] = repo.modello(p) ?? p.modelloDefault;
+        _modello[p] =
+            repo.modello(RuoloProviderAi.visivo, p) ??
+            p.modelloDefault(RuoloProviderAi.visivo);
       }
-      _urlLocale = repo.urlLocale ?? '';
+      _urlLocale = repo.urlLocale(RuoloProviderAi.visivo) ?? '';
       _apiKeyComics = apiKeyComics ?? '';
       _caricamento = false;
     });
@@ -77,7 +81,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
 
   Future<void> _selezionaProviderAttivo(AiProvider provider) async {
     if (provider == _providerAttivo) return;
-    await ref.read(settingsRepositoryProvider).impostaProviderAi(provider);
+    await ref
+        .read(settingsRepositoryProvider)
+        .impostaProviderAi(RuoloProviderAi.visivo, provider);
     if (!mounted) return;
     setState(() => _providerAttivo = provider);
   }
@@ -131,7 +137,8 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   }
 
   Future<void> _apriSheetModello(AiProvider provider) async {
-    final attuale = _modello[provider] ?? provider.modelloDefault;
+    final attuale =
+        _modello[provider] ?? provider.modelloDefault(RuoloProviderAi.visivo);
     final curati = provider.modelliCurati;
     if (curati != null) {
       final scelto = await showModalBottomSheet<String>(
@@ -170,7 +177,7 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   Future<void> _salvaModello(AiProvider provider, String modello) async {
     await ref
         .read(settingsRepositoryProvider)
-        .impostaModello(provider, modello);
+        .impostaModello(RuoloProviderAi.visivo, provider, modello);
     if (!mounted) return;
     setState(() => _modello[provider] = modello);
   }
@@ -182,7 +189,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
       mascherato: true,
     );
     if (v == null) return;
-    await ref.read(settingsRepositoryProvider).impostaApiKeyAi(provider, v);
+    await ref
+        .read(settingsRepositoryProvider)
+        .impostaApiKeyAi(RuoloProviderAi.visivo, provider, v);
     if (!mounted) return;
     setState(() => _apiKeyAi[provider] = v);
   }
@@ -200,7 +209,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
       },
     );
     if (v == null) return;
-    await ref.read(settingsRepositoryProvider).impostaUrlLocale(v);
+    await ref
+        .read(settingsRepositoryProvider)
+        .impostaUrlLocale(RuoloProviderAi.visivo, v);
     if (!mounted) return;
     setState(() => _urlLocale = v);
   }
@@ -299,7 +310,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                       provider: provider,
                       attivo: provider == _providerAttivo,
                       apiKey: _apiKeyAi[provider] ?? '',
-                      modello: _modello[provider] ?? provider.modelloDefault,
+                      modello:
+                          _modello[provider] ??
+                          provider.modelloDefault(RuoloProviderAi.visivo),
                       urlLocale: _urlLocale,
                       verifica: _verificaAi[provider]!,
                       onSelezionaAttivo: () =>

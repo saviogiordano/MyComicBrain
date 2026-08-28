@@ -129,7 +129,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('••••••••'), findsOneWidget);
-    expect(await repo.apiKeyAi(AiProvider.claude), 'chiave-claude');
+    expect(
+      await repo.apiKeyAi(RuoloProviderAi.visivo, AiProvider.claude),
+      'chiave-claude',
+    );
   });
 
   testWidgets(
@@ -137,13 +140,17 @@ void main() {
     (
       tester,
     ) async {
-      await repo.impostaApiKeyAi(AiProvider.openai, 'chiave-openai');
+      await repo.impostaApiKeyAi(
+        RuoloProviderAi.visivo,
+        AiProvider.openai,
+        'chiave-openai',
+      );
       await pumpImpostazioni(tester);
 
       await tester.tap(rigaProvider('OpenAI', 'Attivo'));
       await tester.pumpAndSettle();
 
-      expect(repo.providerAi, AiProvider.openai);
+      expect(repo.providerAi(RuoloProviderAi.visivo), AiProvider.openai);
       expect(find.text('••••••••'), findsOneWidget);
       expect(find.text('gpt-5.6-terra'), findsOneWidget);
     },
@@ -154,7 +161,7 @@ void main() {
     (
       tester,
     ) async {
-      await repo.impostaProviderAi(AiProvider.locale);
+      await repo.impostaProviderAi(RuoloProviderAi.visivo, AiProvider.locale);
       await pumpImpostazioni(tester);
 
       await tester.tap(find.text('URL API'));
@@ -164,7 +171,7 @@ void main() {
       await tester.pump();
 
       expect(find.textContaining('URL non valido'), findsOneWidget);
-      expect(repo.urlLocale, isNull);
+      expect(repo.urlLocale(RuoloProviderAi.visivo), isNull);
 
       await tester.enterText(
         find.byType(TextField),
@@ -173,7 +180,10 @@ void main() {
       await tester.tap(find.text('Salva'));
       await tester.pumpAndSettle();
 
-      expect(repo.urlLocale, 'http://localhost:11434/v1');
+      expect(
+        repo.urlLocale(RuoloProviderAi.visivo),
+        'http://localhost:11434/v1',
+      );
       expect(find.text('http://localhost:11434/v1'), findsOneWidget);
     },
   );

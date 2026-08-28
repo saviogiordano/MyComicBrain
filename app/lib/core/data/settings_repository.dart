@@ -29,58 +29,131 @@ class SettingsRepository {
   final Preferences _preferences;
   final SecureStorage _secureStorage;
 
-  static const _chiaveProviderAi = 'settings.aiProvider';
-  static const _chiaveUrlLocale = 'settings.aiProvider.locale.url';
-  static const _prefissoModello = 'settings.aiProvider.modello.';
-  static const _prefissoApiKeyAi = 'settings.aiProvider.apiKey.';
   static const _chiaveApiKeyComics = 'settings.comics.apiKey';
 
-  // --- Provider AI selezionato (non sensibile) ---
+  // --- Chiavi pre-split (#127): un solo scalare/mappa condiviso da tutte le
+  // chiamate AI, senza distinzione di ruolo. Lette solo da
+  // `migraSeNecessario` per seminare le chiavi per-ruolo sotto — mai più
+  // scritte dopo la migrazione.
+  static const _chiaveProviderAiLegacy = 'settings.aiProvider';
+  static const _chiaveUrlLocaleLegacy = 'settings.aiProvider.locale.url';
+  static const _prefissoModelloLegacy = 'settings.aiProvider.modello.';
+  static const _prefissoApiKeyAiLegacy = 'settings.aiProvider.apiKey.';
 
-  /// Il provider AI attualmente selezionato, `null` se l'utente non ha
-  /// ancora scelto (nessun default forzato: lo decide la UI di #107).
-  AiProvider? get providerAi {
-    final raw = _preferences.getString(_chiaveProviderAi);
+  // --- Chiavi per-ruolo (ADR-0001, #127): Visivo (Analisi Copertina) e
+  // Testuale (Assistente) hanno ciascuno la propria selezione di brand, API
+  // key, modello e URL — indipendenti anche a parità di brand. ---
+
+  String _chiaveProviderAi(RuoloProviderAi ruolo) =>
+      'settings.aiProvider.${ruolo.name}';
+
+  String _chiaveApiKeyAi(RuoloProviderAi ruolo, AiProvider provider) =>
+      'settings.aiProvider.apiKey.${ruolo.name}.${provider.name}';
+
+  String _chiaveModello(RuoloProviderAi ruolo, AiProvider provider) =>
+      'settings.aiProvider.modello.${ruolo.name}.${provider.name}';
+
+  String _chiaveUrlLocale(RuoloProviderAi ruolo) =>
+      'settings.aiProvider.locale.url.${ruolo.name}';
+
+  // --- Provider AI selezionato per ruolo (non sensibile) ---
+
+  /// Il provider AI attualmente selezionato per [ruolo], `null` se l'utente
+  /// non ha ancora scelto (nessun default forzato: lo decide la UI di #107).
+  AiProvider? providerAi(RuoloProviderAi ruolo) {
+    final raw = _preferences.getString(_chiaveProviderAi(ruolo));
     if (raw == null) return null;
     return AiProvider.values.asNameMap()[raw];
   }
 
-  Future<void> impostaProviderAi(AiProvider provider) {
-    return _preferences.setString(_chiaveProviderAi, provider.name);
+  Future<void> impostaProviderAi(RuoloProviderAi ruolo, AiProvider provider) {
+    return _preferences.setString(_chiaveProviderAi(ruolo), provider.name);
   }
 
-  // --- API key per provider AI (mappa provider→key, sensibile) ---
+  // --- API key per (ruolo, provider AI), sensibile ---
 
-  Future<String?> apiKeyAi(AiProvider provider) {
-    return _secureStorage.read('$_prefissoApiKeyAi${provider.name}');
+  Future<String?> apiKeyAi(RuoloProviderAi ruolo, AiProvider provider) {
+    return _secureStorage.read(_chiaveApiKeyAi(ruolo, provider));
   }
 
-  /// `null` o stringa vuota cancella la chiave salvata per [provider].
-  Future<void> impostaApiKeyAi(AiProvider provider, String? apiKey) {
-    return _secureStorage.write('$_prefissoApiKeyAi${provider.name}', apiKey);
+  /// `null` o stringa vuota cancella la chiave salvata per [ruolo]/[provider].
+  Future<void> impostaApiKeyAi(
+    RuoloProviderAi ruolo,
+    AiProvider provider,
+    String? apiKey,
+  ) {
+    return _secureStorage.write(_chiaveApiKeyAi(ruolo, provider), apiKey);
   }
 
-  // --- Modello selezionato per provider AI (mappa provider→modello, non
-  // sensibile) ---
+  // --- Modello selezionato per (ruolo, provider AI), non sensibile ---
 
-  String? modello(AiProvider provider) {
-    return _preferences.getString('$_prefissoModello${provider.name}');
+  String? modello(RuoloProviderAi ruolo, AiProvider provider) {
+    return _preferences.getString(_chiaveModello(ruolo, provider));
   }
 
-  Future<void> impostaModello(AiProvider provider, String modello) {
-    return _preferences.setString(
-      '$_prefissoModello${provider.name}',
-      modello,
-    );
+  Future<void> impostaModello(
+    RuoloProviderAi ruolo,
+    AiProvider provider,
+    String modello,
+  ) {
+    return _preferences.setString(_chiaveModello(ruolo, provider), modello);
   }
 
-  // --- URL del provider locale (non sensibile, usato solo quando
+  // --- URL del provider locale per ruolo (non sensibile, usato solo quando
   // `AiProvider.locale.richiedeUrl`) ---
 
-  String? get urlLocale => _preferences.getString(_chiaveUrlLocale);
+  String? urlLocale(RuoloProviderAi ruolo) {
+    return _preferences.getString(_chiaveUrlLocale(ruolo));
+  }
 
-  Future<void> impostaUrlLocale(String url) {
-    return _preferences.setString(_chiaveUrlLocale, url);
+  Future<void> impostaUrlLocale(RuoloProviderAi ruolo, String url) {
+    return _preferences.setString(_chiaveUrlLocale(ruolo), url);
+  }
+
+  /// Semina entrambi i ruoli (Visivo/Testuale) dalla configurazione singola
+  /// preesistente al primo avvio dopo lo split (ADR-0001, deciso su #127):
+  /// se l'utente aveva già configurato un provider, entrambe le selezioni
+  /// partono come copia esatta di quella — l'Analisi Copertina continua a
+  /// funzionare senza reconfigurazione, l'Assistente è utilizzabile da
+  /// subito con la stessa config, modificabile poi indipendentemente.
+  /// Rilevata dall'assenza della chiave del ruolo Visivo: se già presente,
+  /// la migrazione è già avvenuta (no-op). Se l'utente non aveva mai
+  /// configurato nulla (nessuna chiave legacy), no-op silenzioso: entrambi i
+  /// ruoli restano semplicemente non configurati. Le chiavi legacy non
+  /// vengono cancellate (dati orfani innocui, mai più letti da nessun altro
+  /// metodo). Lanciata `unawaited` da `settingsRepositoryProvider`, stesso
+  /// pattern di `ComicsRepository.unisciSerieDuplicate` (#58).
+  Future<void> migraSeNecessario() async {
+    if (providerAi(RuoloProviderAi.visivo) != null) return;
+
+    final raw = _preferences.getString(_chiaveProviderAiLegacy);
+    final providerLegacy = raw == null
+        ? null
+        : AiProvider.values.asNameMap()[raw];
+    if (providerLegacy == null) return;
+
+    final urlLegacy = _preferences.getString(_chiaveUrlLocaleLegacy);
+
+    for (final ruolo in RuoloProviderAi.values) {
+      await impostaProviderAi(ruolo, providerLegacy);
+      for (final provider in AiProvider.values) {
+        final apiKeyLegacy = await _secureStorage.read(
+          '$_prefissoApiKeyAiLegacy${provider.name}',
+        );
+        if (apiKeyLegacy != null && apiKeyLegacy.isNotEmpty) {
+          await impostaApiKeyAi(ruolo, provider, apiKeyLegacy);
+        }
+        final modelloLegacy = _preferences.getString(
+          '$_prefissoModelloLegacy${provider.name}',
+        );
+        if (modelloLegacy != null) {
+          await impostaModello(ruolo, provider, modelloLegacy);
+        }
+      }
+      if (urlLegacy != null) {
+        await impostaUrlLocale(ruolo, urlLegacy);
+      }
+    }
   }
 
   // --- API key del provider database fumetti (scalare singolo: un solo

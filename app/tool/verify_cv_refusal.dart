@@ -32,8 +32,16 @@ Future<void> main(List<String> args) async {
       : AiProvider.claude;
 
   final settings = SettingsRepository.inMemoria();
-  await settings.impostaApiKeyAi(AiProvider.claude, anthropicKey);
-  await settings.impostaApiKeyAi(AiProvider.openai, openAiKey);
+  await settings.impostaApiKeyAi(
+    RuoloProviderAi.visivo,
+    AiProvider.claude,
+    anthropicKey,
+  );
+  await settings.impostaApiKeyAi(
+    RuoloProviderAi.visivo,
+    AiProvider.openai,
+    openAiKey,
+  );
 
   final client = switch (provider) {
     AiProvider.openai => OpenAiCoverAnalysisClient(

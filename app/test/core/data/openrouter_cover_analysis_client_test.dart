@@ -49,7 +49,11 @@ String _rispostaRifiuto(String motivo) => jsonEncode({
 
 Future<SettingsRepository> _settingsConApiKey() async {
   final settings = SettingsRepository.inMemoria();
-  await settings.impostaApiKeyAi(AiProvider.openRouter, 'chiave-test');
+  await settings.impostaApiKeyAi(
+    RuoloProviderAi.visivo,
+    AiProvider.openRouter,
+    'chiave-test',
+  );
   return settings;
 }
 
