@@ -1360,6 +1360,10 @@ ORDER BY p.n
               _db.edizioni.id.equalsExp(_db.copie.edizioneId),
             ),
             innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+            leftOuterJoin(
+              _db.serieTable,
+              _db.serieTable.id.equalsExp(_db.edizioni.serieId),
+            ),
           ])
           ..where(
             _db.copie.status.isInValues(const [
@@ -1380,6 +1384,7 @@ ORDER BY p.n
           ComicRecente(
             edizioneId: row.readTable(_db.edizioni).id,
             titolo: row.readTable(_db.opere).title,
+            serieName: row.readTableOrNull(_db.serieTable)?.name,
             numero: row.readTable(_db.edizioni).issueNumber,
             numeroLabel: row.readTable(_db.edizioni).issueNumberLabel,
             editore: row.readTable(_db.edizioni).publisher,
@@ -1722,8 +1727,7 @@ ORDER BY p.n
       // (riga con Copie null): solo l'"Edizione posseduta" entra in
       // Collezione.
       righePerEdizione.removeWhere(
-        (_, righe) =>
-            righe.every((r) => r.readTableOrNull(_db.copie) == null),
+        (_, righe) => righe.every((r) => r.readTableOrNull(_db.copie) == null),
       );
       return righePerEdizione;
     });

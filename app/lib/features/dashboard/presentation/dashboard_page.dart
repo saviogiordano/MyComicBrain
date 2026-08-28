@@ -454,6 +454,12 @@ class _RecentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sottotitolo: nome serie (o editore come ripiego), poi il numero su una
+    // riga propria sotto — stessa convenzione della Collezione
+    // (`_CardEdizione`), separata per non finire in ellissi col nome serie.
+    final sottotitolo = item.serieName ?? item.editore ?? '';
+    final numero = item.numeroVisualizzato;
+
     return GestureDetector(
       onTap: () => context.push('/scheda/${item.edizioneId}'),
       child: SizedBox(
@@ -481,13 +487,24 @@ class _RecentCard extends StatelessWidget {
                 color: AppColors.textPrimary,
               ),
             ),
-            // Editore assente: riga omessa, non "—" — quel simbolo è la
+            // Sottotitolo assente: riga omessa, non "—" — quel simbolo è la
             // convenzione per "valore zero" (#8), un significato diverso da
             // "campo non compilato".
-            if (item.editore != null) ...[
+            if (sottotitolo.isNotEmpty) ...[
               const SizedBox(height: 2),
               Text(
-                item.editore!,
+                sottotitolo,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+            if (numero.isNotEmpty) ...[
+              const SizedBox(height: 1),
+              Text(
+                numero,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.bodySmall.copyWith(

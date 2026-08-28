@@ -19,7 +19,10 @@ void main() {
 
   setUp(() {
     db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
     );
     repo = ComicsRepository(db);
   });
@@ -41,7 +44,10 @@ void main() {
     (tester) async {
       await pumpDashboard(tester);
 
-      expect(find.text('È vuota — comincia dalla prima copertina'), findsOneWidget);
+      expect(
+        find.text('È vuota — comincia dalla prima copertina'),
+        findsOneWidget,
+      );
       expect(find.text('Scansiona la prima cover'), findsOneWidget);
       expect(find.byType(GridView), findsNothing);
       expect(find.byType(KpiCard), findsNothing);
@@ -52,9 +58,20 @@ void main() {
     'collezione popolata mostra il totale e la griglia KPI sempre a 6 celle',
     (tester) async {
       final operaId = await repo.aggiungiOpera(title: 'Il Corvo');
-      final serieId = await repo.aggiungiSerie(name: 'Il Corvo', totalIssues: 2);
-      final edizioneId = await repo.aggiungiEdizione(operaId: operaId, serieId: serieId, issueNumber: 1);
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta, purchasePrice: 12.5);
+      final serieId = await repo.aggiungiSerie(
+        name: 'Il Corvo',
+        totalIssues: 2,
+      );
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        serieId: serieId,
+        issueNumber: 1,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+        purchasePrice: 12.5,
+      );
 
       await pumpDashboard(tester);
 
@@ -75,8 +92,14 @@ void main() {
       // Copia posseduta senza serie: "Aggiunti di recente" ha materiale,
       // "Serie incomplete" no (nessuna serie con "numeri totali" noto).
       final operaId = await repo.aggiungiOpera(title: 'Il Corvo');
-      final edizioneId = await repo.aggiungiEdizione(operaId: operaId, issueNumber: 1);
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumber: 1,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
 
       await pumpDashboard(tester);
 
@@ -101,7 +124,10 @@ void main() {
       );
 
       final operaRecente = await repo.aggiungiOpera(title: 'Notturno');
-      final edizioneRecente = await repo.aggiungiEdizione(operaId: operaRecente, issueNumber: 4);
+      final edizioneRecente = await repo.aggiungiEdizione(
+        operaId: operaRecente,
+        issueNumber: 4,
+      );
       await repo.aggiungiCopia(
         edizioneId: edizioneRecente,
         status: StatoCopia.posseduta,
@@ -129,20 +155,41 @@ void main() {
       // Titolo dell'opera diverso dal nome della serie, per non collidere
       // con il carosello "Aggiunti di recente" nelle asserzioni sotto.
       final opera = await repo.aggiungiOpera(title: 'Storia Sconosciuta');
-      final serieId = await repo.aggiungiSerie(name: 'Kaiju Bianco', totalIssues: 5);
+      final serieId = await repo.aggiungiSerie(
+        name: 'Kaiju Bianco',
+        totalIssues: 5,
+      );
       for (final n in [1, 2, 3]) {
-        final edizioneId = await repo.aggiungiEdizione(operaId: opera, serieId: serieId, issueNumber: n);
-        await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+        final edizioneId = await repo.aggiungiEdizione(
+          operaId: opera,
+          serieId: serieId,
+          issueNumber: n,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
       }
       // Mancano #4 e #5: sotto la soglia di troncamento (3), elencati per intero.
 
       await pumpDashboard(tester);
 
       expect(find.text('SERIE INCOMPLETE'), findsOneWidget);
-      expect(find.text('Kaiju Bianco'), findsOneWidget);
       expect(find.text('3/5'), findsOneWidget);
       expect(find.text('Mancano #4, #5'), findsOneWidget);
       expect(find.byType(AppProgressBar), findsOneWidget);
+
+      // Il nome serie compare anche nelle card di "Aggiunti di recente"
+      // (stesse Edizioni), quindi si scopa la ricerca alla riga di "Serie
+      // incomplete" — la card che contiene "Mancano #4, #5".
+      final riga = find.ancestor(
+        of: find.text('Mancano #4, #5'),
+        matching: find.byType(AppCard),
+      );
+      expect(
+        find.descendant(of: riga, matching: find.text('Kaiju Bianco')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -155,8 +202,14 @@ void main() {
       addTearDown(coverFile.delete);
 
       final operaId = await repo.aggiungiOpera(title: 'Con Cover');
-      final edizioneId = await repo.aggiungiEdizione(operaId: operaId, coverImage: coverFile.path);
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        coverImage: coverFile.path,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
 
       await tester.pumpWidget(
         ProviderScope(

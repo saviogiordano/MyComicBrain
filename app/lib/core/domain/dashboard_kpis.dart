@@ -68,6 +68,7 @@ class ComicRecente {
   const ComicRecente({
     required this.edizioneId,
     required this.titolo,
+    this.serieName,
     this.numero,
     this.numeroLabel,
     this.editore,
@@ -76,6 +77,11 @@ class ComicRecente {
 
   final int edizioneId;
   final String titolo;
+
+  /// Nome della serie, se l'Edizione ne ha una assegnata — mostrato sotto il
+  /// titolo insieme a [numeroVisualizzato], stessa convenzione della
+  /// Collezione (`EdizioneCollezioneIndice.serieName`).
+  final String? serieName;
 
   /// Numero come intero — seme della copertina procedurale. Null se non noto.
   final int? numero;

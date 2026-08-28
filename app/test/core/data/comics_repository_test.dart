@@ -979,6 +979,37 @@ void main() {
       expect(recente.numeroVisualizzato, '#4');
     });
 
+    test('porta anche il nome della serie, se l\'Edizione ne ha una', () async {
+      final serieId = await repo.aggiungiSerie(name: 'Dylan Dog');
+      final operaId = await repo.aggiungiOpera(title: 'Dylan Dog 407');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        serieId: serieId,
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+
+      final recente = (await repo.watchAggiuntiDiRecente().first).single;
+      expect(recente.serieName, 'Dylan Dog');
+    });
+
+    test(
+      'un\'Edizione senza Serie ha serieName null',
+      () async {
+        final operaId = await repo.aggiungiOpera(title: 'One-shot');
+        final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
+
+        final recente = (await repo.watchAggiuntiDiRecente().first).single;
+        expect(recente.serieName, isNull);
+      },
+    );
+
     test(
       'numero testuale ("4 Variant") ha priorità sul numero intero in visualizzazione',
       () async {
@@ -1316,9 +1347,7 @@ void main() {
           coverImage: 'https://example.com/fuori.jpg',
         );
 
-        final mappa = await repo
-            .watchHydratazioneCollezione([dentroId])
-            .first;
+        final mappa = await repo.watchHydratazioneCollezione([dentroId]).first;
 
         expect(mappa, {dentroId: 'https://example.com/dentro.jpg'});
         expect(mappa.containsKey(fuoriId), isFalse);
@@ -1332,9 +1361,9 @@ void main() {
             status: StatoCopia.posseduta,
           );
 
-          final mappa = await repo
-              .watchHydratazioneCollezione([edizioneId])
-              .first;
+          final mappa = await repo.watchHydratazioneCollezione([
+            edizioneId,
+          ]).first;
 
           expect(mappa, {edizioneId: null});
         },
@@ -1351,45 +1380,49 @@ void main() {
           );
           const inesistente = 999999;
 
-          final mappa = await repo
-              .watchHydratazioneCollezione([venduta, inesistente])
-              .first;
+          final mappa = await repo.watchHydratazioneCollezione([
+            venduta,
+            inesistente,
+          ]).first;
 
           expect(mappa, isEmpty);
         },
       );
 
-      test('reattiva alla nuova copertina di un\'Edizione già emessa', () async {
-        final operaId = await repo.aggiungiOpera(title: 'Reattiva');
-        final edizioneId = await repo.aggiungiEdizione(
-          operaId: operaId,
-          coverImage: 'https://example.com/vecchia.jpg',
-        );
-        await repo.aggiungiCopia(
-          edizioneId: edizioneId,
-          status: StatoCopia.posseduta,
-        );
+      test(
+        'reattiva alla nuova copertina di un\'Edizione già emessa',
+        () async {
+          final operaId = await repo.aggiungiOpera(title: 'Reattiva');
+          final edizioneId = await repo.aggiungiEdizione(
+            operaId: operaId,
+            coverImage: 'https://example.com/vecchia.jpg',
+          );
+          await repo.aggiungiCopia(
+            edizioneId: edizioneId,
+            status: StatoCopia.posseduta,
+          );
 
-        final emissioni = <Map<int, String?>>[];
-        final subscription = repo
-            .watchHydratazioneCollezione([edizioneId])
-            .listen(emissioni.add);
-        addTearDown(subscription.cancel);
-        await pumpEventQueue();
+          final emissioni = <Map<int, String?>>[];
+          final subscription = repo
+              .watchHydratazioneCollezione([edizioneId])
+              .listen(emissioni.add);
+          addTearDown(subscription.cancel);
+          await pumpEventQueue();
 
-        await (db.update(
-          db.edizioni,
-        )..where((e) => e.id.equals(edizioneId))).write(
-          const EdizioniCompanion(
-            coverImage: Value('https://example.com/nuova.jpg'),
-          ),
-        );
-        await pumpEventQueue();
+          await (db.update(
+            db.edizioni,
+          )..where((e) => e.id.equals(edizioneId))).write(
+            const EdizioniCompanion(
+              coverImage: Value('https://example.com/nuova.jpg'),
+            ),
+          );
+          await pumpEventQueue();
 
-        expect(emissioni.last, {
-          edizioneId: 'https://example.com/nuova.jpg',
-        });
-      });
+          expect(emissioni.last, {
+            edizioneId: 'https://example.com/nuova.jpg',
+          });
+        },
+      );
     },
   );
 }

@@ -471,10 +471,8 @@ class _CardEdizione extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sottotitolo = [
-      edizione.serieName ?? edizione.publisher ?? '',
-      if (edizione.numeroVisualizzato.isNotEmpty) edizione.numeroVisualizzato,
-    ].where((s) => s.isNotEmpty).join(' · ');
+    final sottotitolo = edizione.serieName ?? edizione.publisher ?? '';
+    final numero = edizione.numeroVisualizzato;
 
     return GestureDetector(
       onTap: () => context.push('/scheda/${edizione.edizioneId}'),
@@ -514,6 +512,18 @@ class _CardEdizione extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               sottotitolo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.monoLabel.copyWith(
+                color: AppColors.textMuted,
+                fontSize: 10,
+              ),
+            ),
+          ],
+          if (numero.isNotEmpty) ...[
+            const SizedBox(height: 1),
+            Text(
+              numero,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.monoLabel.copyWith(
