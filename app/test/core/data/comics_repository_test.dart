@@ -1133,7 +1133,7 @@ void main() {
     );
   });
 
-  group('watchCollezione (§9)', () {
+  group('watchIndiceCollezione (§9, indice leggero deciso su #113)', () {
     test(
       'solo le Edizioni con almeno una copia posseduta/prestata compaiono',
       () async {
@@ -1145,9 +1145,9 @@ void main() {
         await edizioneConCopia(titolo: 'Venduta', status: StatoCopia.venduta);
         await edizioneConCopia(titolo: 'Persa', status: StatoCopia.persa);
 
-        final collezione = await repo.watchCollezione().first;
+        final indice = await repo.watchIndiceCollezione().first;
 
-        expect(collezione.map((e) => e.titolo).toSet(), {
+        expect(indice.map((e) => e.titolo).toSet(), {
           'Posseduta',
           'Prestata',
         });
@@ -1172,7 +1172,7 @@ void main() {
           status: StatoCopia.venduta,
         );
 
-        final edizione = (await repo.watchCollezione().first).single;
+        final edizione = (await repo.watchIndiceCollezione().first).single;
 
         expect(edizione.numeroCopie, 2);
       },
@@ -1196,7 +1196,7 @@ void main() {
           status: StatoCopia.posseduta,
         );
 
-        final edizione = (await repo.watchCollezione().first).single;
+        final edizione = (await repo.watchIndiceCollezione().first).single;
 
         expect(edizione.serieName, 'Dylan Dog');
         expect(edizione.publisher, 'Bonelli');
@@ -1213,7 +1213,7 @@ void main() {
           titolo: 'One-shot',
           status: StatoCopia.posseduta,
         );
-        final edizione = (await repo.watchCollezione().first).firstWhere(
+        final edizione = (await repo.watchIndiceCollezione().first).firstWhere(
           (e) => e.edizioneId == edizioneId,
         );
 
@@ -1250,7 +1250,7 @@ void main() {
         generi: {GenereEdizione.supereroi, GenereEdizione.drammatico},
       );
 
-      final edizione = (await repo.watchCollezione().first).single;
+      final edizione = (await repo.watchIndiceCollezione().first).single;
 
       expect(edizione.autori, ['Alan Moore']);
       expect(edizione.personaggi, ['Rorschach']);
@@ -1282,7 +1282,7 @@ void main() {
           location: 'Scatola 1',
         );
 
-        final edizione = (await repo.watchCollezione().first).single;
+        final edizione = (await repo.watchIndiceCollezione().first).single;
 
         expect(edizione.copiePossedute, hasLength(1));
         expect(
@@ -1294,4 +1294,102 @@ void main() {
       },
     );
   });
+
+  group(
+    'watchHydratazioneCollezione (§9, hydration paginata deciso su #113)',
+    () {
+      test('lista di id vuota produce una mappa vuota senza query', () async {
+        final mappa = await repo.watchHydratazioneCollezione(const []).first;
+
+        expect(mappa, isEmpty);
+      });
+
+      test('risolve la cover delle sole Edizioni richieste', () async {
+        final dentroId = await edizioneConCopia(
+          titolo: 'Dentro la finestra',
+          status: StatoCopia.posseduta,
+          coverImage: 'https://example.com/dentro.jpg',
+        );
+        final fuoriId = await edizioneConCopia(
+          titolo: 'Fuori dalla finestra',
+          status: StatoCopia.posseduta,
+          coverImage: 'https://example.com/fuori.jpg',
+        );
+
+        final mappa = await repo
+            .watchHydratazioneCollezione([dentroId])
+            .first;
+
+        expect(mappa, {dentroId: 'https://example.com/dentro.jpg'});
+        expect(mappa.containsKey(fuoriId), isFalse);
+      });
+
+      test(
+        'un\'Edizione posseduta senza cover impostata compare con valore null',
+        () async {
+          final edizioneId = await edizioneConCopia(
+            titolo: 'Senza cover',
+            status: StatoCopia.posseduta,
+          );
+
+          final mappa = await repo
+              .watchHydratazioneCollezione([edizioneId])
+              .first;
+
+          expect(mappa, {edizioneId: null});
+        },
+      );
+
+      test(
+        'un\'Edizione non (più) posseduta è omessa dalla mappa, mai presente '
+        'con valore null',
+        () async {
+          final venduta = await edizioneConCopia(
+            titolo: 'Venduta',
+            status: StatoCopia.venduta,
+            coverImage: 'https://example.com/venduta.jpg',
+          );
+          const inesistente = 999999;
+
+          final mappa = await repo
+              .watchHydratazioneCollezione([venduta, inesistente])
+              .first;
+
+          expect(mappa, isEmpty);
+        },
+      );
+
+      test('reattiva alla nuova copertina di un\'Edizione già emessa', () async {
+        final operaId = await repo.aggiungiOpera(title: 'Reattiva');
+        final edizioneId = await repo.aggiungiEdizione(
+          operaId: operaId,
+          coverImage: 'https://example.com/vecchia.jpg',
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
+
+        final emissioni = <Map<int, String?>>[];
+        final subscription = repo
+            .watchHydratazioneCollezione([edizioneId])
+            .listen(emissioni.add);
+        addTearDown(subscription.cancel);
+        await pumpEventQueue();
+
+        await (db.update(
+          db.edizioni,
+        )..where((e) => e.id.equals(edizioneId))).write(
+          const EdizioniCompanion(
+            coverImage: Value('https://example.com/nuova.jpg'),
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(emissioni.last, {
+          edizioneId: 'https://example.com/nuova.jpg',
+        });
+      });
+    },
+  );
 }

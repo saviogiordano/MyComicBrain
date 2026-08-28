@@ -1679,23 +1679,19 @@ ORDER BY p.n
     )..where((e) => e.id.equals(edizioneId))).go();
   }
 
-  // --- Collezione (§9, deciso su #79/#90). ---
+  // --- Collezione (§9, deciso su #79/#90, split indice/hydration #113). ---
 
-  /// Le Edizioni possedute (stessa regola "Edizione posseduta" del resto del
-  /// catalogo: almeno una Copia `posseduta`/`prestata`) con tutti i valori
-  /// dei 12 assi di filtro/ordinamento già risolti — filtro/ordinamento
-  /// veri e propri restano lato Dart (`FiltriCollezioneLogic`, #85),
-  /// nessuna paginazione (#95): il repository restituisce l'intero catalogo
-  /// posseduto a ogni emissione.
-  ///
-  /// Un'unica query di base (Edizioni+Opera+Serie+Copie possedute, per il
-  /// badge duplicato e gli assi per-Copia) più quattro letture bulk per gli
-  /// assi many-to-many (Autore, Personaggio, Genere, Tag), raggruppate per
-  /// `edizioneId` in Dart invece che unite in un solo join — un join
-  /// simultaneo di 4 relazioni many-to-many produrrebbe un prodotto
-  /// cartesiano per Edizione (lo stesso problema che [watchEdizione] evita
-  /// avendo una sola relazione many-to-many, Autori, oltre a Copie).
-  Stream<List<EdizioneCollezione>> watchCollezione() {
+  /// La query di base della Collezione — Edizioni+Opera+Serie+Copie
+  /// possedute (per il badge duplicato e gli assi per-Copia), filtrata alle
+  /// sole Edizioni con almeno una Copia `posseduta`/`prestata` (stessa
+  /// regola "Edizione posseduta" del resto del catalogo) e raggruppata per
+  /// `edizioneId` — condivisa da [watchIndiceCollezione] (nessun filtro su
+  /// [edizioneIds]) e [watchHydratazioneCollezione] (filtrata alla finestra
+  /// caricata). Reattiva: qualunque cambiamento di Edizioni/Copie che
+  /// tocchi le tabelle lette fa riemettere entrambe le stream.
+  Stream<Map<int, List<TypedResult>>> _watchRigheEdizioniPossedute({
+    Iterable<int>? edizioneIds,
+  }) {
     final query = _db.select(_db.edizioni).join([
       innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
       leftOuterJoin(
@@ -1711,8 +1707,11 @@ ORDER BY p.n
             ]),
       ),
     ]);
+    if (edizioneIds != null) {
+      query.where(_db.edizioni.id.isIn(edizioneIds));
+    }
 
-    return query.watch().asyncMap((rows) async {
+    return query.watch().map((rows) {
       final righePerEdizione = <int, List<TypedResult>>{};
       for (final row in rows) {
         righePerEdizione
@@ -1722,23 +1721,42 @@ ORDER BY p.n
       // Il leftOuterJoin include anche le Edizioni senza copie possedute
       // (riga con Copie null): solo l'"Edizione posseduta" entra in
       // Collezione.
-      final righeEdizioniPossedute = righePerEdizione.entries
-          .where(
-            (entry) =>
-                entry.value.any((r) => r.readTableOrNull(_db.copie) != null),
-          )
-          .toList();
-      if (righeEdizioniPossedute.isEmpty) return const <EdizioneCollezione>[];
+      righePerEdizione.removeWhere(
+        (_, righe) =>
+            righe.every((r) => r.readTableOrNull(_db.copie) == null),
+      );
+      return righePerEdizione;
+    });
+  }
 
-      final ids = [for (final entry in righeEdizioniPossedute) entry.key];
+  /// L'indice leggero della Collezione (§9, deciso su #112/#113): tutti i
+  /// valori dei 12 assi di filtro/ordinamento già risolti tranne la cover
+  /// — filtro/ordinamento veri e propri restano lato Dart
+  /// (`FiltriCollezioneLogic`, #85). Reattivo su tutto il catalogo
+  /// posseduto (nessuna paginazione qui, #113): la paginazione riguarda
+  /// solo l'hydration della cover, vedi [watchHydratazioneCollezione].
+  ///
+  /// Riusa la query di base di [_watchRigheEdizioniPossedute] più quattro
+  /// letture bulk per gli assi many-to-many (Autore, Personaggio, Genere,
+  /// Tag), raggruppate per `edizioneId` in Dart invece che unite in un solo
+  /// join — un join simultaneo di 4 relazioni many-to-many produrrebbe un
+  /// prodotto cartesiano per Edizione (lo stesso problema che [watchEdizione]
+  /// evita avendo una sola relazione many-to-many, Autori, oltre a Copie).
+  Stream<List<EdizioneCollezioneIndice>> watchIndiceCollezione() {
+    return _watchRigheEdizioniPossedute().asyncMap((righePerEdizione) async {
+      if (righePerEdizione.isEmpty) {
+        return const <EdizioneCollezioneIndice>[];
+      }
+
+      final ids = righePerEdizione.keys.toList();
       final autori = await _autoriPerEdizione(ids);
       final personaggi = await _personaggiPerEdizione(ids);
       final tag = await _tagPerEdizione(ids);
       final generi = await _generiPerEdizione(ids);
 
       return [
-        for (final entry in righeEdizioniPossedute)
-          await _edizioneCollezioneDaRighe(
+        for (final entry in righePerEdizione.entries)
+          _edizioneCollezioneIndiceDaRighe(
             entry.value,
             autori: autori[entry.key] ?? const [],
             personaggi: personaggi[entry.key] ?? const [],
@@ -1749,9 +1767,36 @@ ORDER BY p.n
     });
   }
 
+  /// La cover risolta ([risolviCoverImage]) delle sole Edizioni in
+  /// [edizioneIds] — la finestra caricata dallo scroll infinito della
+  /// Collezione (§9, deciso su #112/#113), separata dall'indice leggero
+  /// perché è l'unico campo costoso da risolvere per riga (vedi Note della
+  /// mappa #112). Reattiva sull'intera finestra passata: nessuno stato
+  /// tenuto fra chiamate, il caching/delta è responsabilità di #115.
+  ///
+  /// Un id il cui Edizione non è (più) posseduta è **omesso** dalla mappa
+  /// risultante, mai presente con valore `null` (che significa invece
+  /// "nessuna cover" per un'Edizione posseduta senza cover impostata).
+  Stream<Map<int, String?>> watchHydratazioneCollezione(
+    List<int> edizioneIds,
+  ) {
+    if (edizioneIds.isEmpty) return Stream.value(const <int, String?>{});
+
+    return _watchRigheEdizioniPossedute(edizioneIds: edizioneIds).asyncMap((
+      righePerEdizione,
+    ) async {
+      final risultato = <int, String?>{};
+      for (final entry in righePerEdizione.entries) {
+        final edizione = entry.value.first.readTable(_db.edizioni);
+        risultato[entry.key] = await risolviCoverImage(edizione.coverImage);
+      }
+      return risultato;
+    });
+  }
+
   /// Autori collegati (§8.1/§9), raggruppati per `edizioneId`, per
   /// l'insieme di Edizioni date — bulk equivalente di [autoriDiEdizione]
-  /// per più Edizioni insieme, usato da [watchCollezione].
+  /// per più Edizioni insieme, usato da [watchIndiceCollezione].
   Future<Map<int, List<String>>> _autoriPerEdizione(
     List<int> edizioneIds,
   ) async {
@@ -1774,7 +1819,7 @@ ORDER BY p.n
   }
 
   /// Personaggi collegati (§9, #84), raggruppati per `edizioneId`, per
-  /// l'insieme di Edizioni date — usato da [watchCollezione].
+  /// l'insieme di Edizioni date — usato da [watchIndiceCollezione].
   Future<Map<int, List<String>>> _personaggiPerEdizione(
     List<int> edizioneIds,
   ) async {
@@ -1797,7 +1842,7 @@ ORDER BY p.n
   }
 
   /// Tag collegati (§9, #82), raggruppati per `edizioneId`, per l'insieme
-  /// di Edizioni date — usato da [watchCollezione].
+  /// di Edizioni date — usato da [watchIndiceCollezione].
   Future<Map<int, List<String>>> _tagPerEdizione(List<int> edizioneIds) async {
     final query = _db.select(_db.edizioneTag).join([
       innerJoin(_db.tagTable, _db.tagTable.id.equalsExp(_db.edizioneTag.tagId)),
@@ -1827,13 +1872,13 @@ ORDER BY p.n
     return risultato;
   }
 
-  Future<EdizioneCollezione> _edizioneCollezioneDaRighe(
+  EdizioneCollezioneIndice _edizioneCollezioneIndiceDaRighe(
     List<TypedResult> righe, {
     required List<String> autori,
     required List<String> personaggi,
     required List<String> tag,
     required List<GenereEdizione> generi,
-  }) async {
+  }) {
     final edizione = righe.first.readTable(_db.edizioni);
     final opera = righe.first.readTable(_db.opere);
     final serie = righe.first.readTableOrNull(_db.serieTable);
@@ -1850,7 +1895,7 @@ ORDER BY p.n
       );
     }
 
-    return EdizioneCollezione(
+    return EdizioneCollezioneIndice(
       edizioneId: edizione.id,
       titolo: opera.title,
       serieId: serie?.id,
@@ -1858,7 +1903,6 @@ ORDER BY p.n
       publisher: edizione.publisher,
       issueNumber: edizione.issueNumber,
       issueNumberLabel: edizione.issueNumberLabel,
-      coverImage: await risolviCoverImage(edizione.coverImage),
       year: edizione.year,
       format: edizione.format,
       language: edizione.language,

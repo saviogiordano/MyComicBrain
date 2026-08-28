@@ -59,6 +59,61 @@ class EdizioneCollezione {
   }
 }
 
+/// Un'Edizione posseduta con tutti i valori dei 12 assi di filtro/
+/// ordinamento della Collezione (§9) tranne la cover — proiezione
+/// "indice leggero" per lo scroll infinito della Collezione (deciso su
+/// #113): stessi campi di [EdizioneCollezione] meno [EdizioneCollezione.coverImage],
+/// che va richiesta a parte via `ComicsRepository.watchHydratazioneCollezione`
+/// solo per la finestra caricata. Tipo distinto invece di riusare
+/// `EdizioneCollezione` con `coverImage` nullable: eviterebbe che `null`
+/// significhi sia "non ancora hydratata" sia "nessuna cover", due cose
+/// diverse.
+class EdizioneCollezioneIndice {
+  const EdizioneCollezioneIndice({
+    required this.edizioneId,
+    required this.titolo,
+    required this.serieId,
+    required this.serieName,
+    required this.publisher,
+    required this.issueNumber,
+    required this.issueNumberLabel,
+    required this.year,
+    required this.format,
+    required this.language,
+    required this.autori,
+    required this.personaggi,
+    required this.generi,
+    required this.tag,
+    required this.copiePossedute,
+  });
+
+  final int edizioneId;
+  final String titolo;
+  final int? serieId;
+  final String? serieName;
+  final String? publisher;
+  final int? issueNumber;
+  final String? issueNumberLabel;
+  final int? year;
+  final FormatoEdizione? format;
+  final String? language;
+  final List<String> autori;
+  final List<String> personaggi;
+  final List<GenereEdizione> generi;
+  final List<String> tag;
+
+  /// Vedi [EdizioneCollezione.copiePossedute].
+  final List<CopiaAsseCollezione> copiePossedute;
+
+  int get numeroCopie => copiePossedute.length;
+
+  /// Vedi [EdizioneCollezione.numeroVisualizzato].
+  String get numeroVisualizzato {
+    final label = issueNumberLabel ?? issueNumber?.toString();
+    return label == null ? '' : '#$label';
+  }
+}
+
 /// I soli campi di una Copia posseduta/prestata rilevanti per gli assi
 /// per-Copia della Collezione (§9) — proiezione minima, non l'intera Copia.
 class CopiaAsseCollezione {
