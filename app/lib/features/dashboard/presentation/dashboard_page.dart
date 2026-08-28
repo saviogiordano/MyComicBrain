@@ -125,7 +125,7 @@ class _EmptyCollection extends StatelessWidget {
 }
 
 /// Etichetta "LA TUA COLLEZIONE" + [content] (totale o messaggio a
-/// seconda dello stato) a sinistra, pulsante AI a destra.
+/// seconda dello stato).
 class _Header extends StatelessWidget {
   const _Header({required this.content});
 
@@ -133,21 +133,12 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SectionHeader(label: 'la tua collezione'),
-              const SizedBox(height: AppSpacing.xs),
-              content,
-            ],
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        _AiButton(onTap: () => context.push('/assistente')),
+        const SectionHeader(label: 'la tua collezione'),
+        const SizedBox(height: AppSpacing.xs),
+        content,
       ],
     );
   }
@@ -192,36 +183,6 @@ class _EmptyCollectionMessage extends StatelessWidget {
       child: Text(
         'È vuota — comincia dalla prima copertina',
         style: AppTypography.bodyLarge.copyWith(color: AppColors.textTertiary),
-      ),
-    );
-  }
-}
-
-class _AiButton extends StatelessWidget {
-  const _AiButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadii.mdRadius,
-        child: Container(
-          width: 38,
-          height: 38,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.borderDefault),
-            borderRadius: AppRadii.mdRadius,
-          ),
-          child: Text(
-            'AI',
-            style: AppTypography.monoLabel.copyWith(color: AppColors.accent),
-          ),
-        ),
       ),
     );
   }
