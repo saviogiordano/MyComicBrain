@@ -131,4 +131,26 @@ void main() {
     expect(find.text('Nessun fumetto corrisponde ai filtri'), findsOneWidget);
     expect(find.text('Rimuovi filtri'), findsOneWidget);
   });
+
+  testWidgets('scroll infinito: superata la soglia di prefetch carica la pagina successiva', (tester) async {
+    // 150 Edizioni, ben oltre la prima pagina di 60 (dimensionePaginaCollezione):
+    // la card 'E100' non esiste ancora nella finestra iniziale.
+    for (var i = 0; i < 150; i++) {
+      await edizionePosseduta(titolo: 'E${i.toString().padLeft(3, '0')}');
+    }
+
+    await pumpCollezione(tester);
+
+    expect(find.text('E100'), findsNothing);
+
+    for (var i = 0; i < 60 && find.text('E100').evaluate().isEmpty; i++) {
+      await tester.drag(find.byType(GridView), const Offset(0, -600));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+
+    // Il titolo compare più volte (copertina procedurale + titolo card),
+    // stessa ragione della card 'con Edizioni possedute' più sopra.
+    expect(find.text('E100'), findsWidgets);
+  });
 }
