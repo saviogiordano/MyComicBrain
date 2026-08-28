@@ -891,6 +891,32 @@ Azioni:
 
 **[ Inserisci dati ]**
 
+## Assistente (§10)
+
+L'Assistente gestisce separatamente gli errori del flusso conversazionale, distinti dagli scenari di scansione sopra — assenza di configurazione del Provider AI Testuale è coperta a parte (§10, stato bloccante):
+
+- provider AI Testuale irraggiungibile (nessuna connessione);
+- provider AI Testuale che risponde con un errore (chiave non valida, quota esaurita, risposta inattesa);
+- query dell'utente non interpretabile o senza un tool call corrispondente disponibile.
+
+In tutti i casi il messaggio appare come un Messaggio di sistema nella Conversazione (persistito con la cronologia, mai un dialogo separato) e non è previsto alcun retry automatico né un'azione dedicata di "riprova" — l'utente reinvia semplicemente il messaggio, stesso principio già in uso per Analisi Copertina e Identificazione.
+
+Esempi:
+
+> Connessione assente. Riprova quando sei di nuovo online.
+
+> Il Provider AI Testuale non risponde correttamente. Verifica la configurazione in Impostazioni.
+>
+> **[ Vai a Impostazioni ]**
+
+> Non sono riuscito a trovare questa informazione nella tua collezione. Puoi provare a riformulare?
+
+Un'ultima categoria non è un errore ma un avviso informativo con la stessa superficie (Messaggio di sistema in chat): quando lo speech-to-text ricade sul riconoscimento in rete invece che on-device (Android, sotto API 31 o senza modello scaricato), l'Assistente lo segnala esplicitamente prima del testo trascritto:
+
+> Ho usato il riconoscimento vocale in rete perché quello offline non è disponibile sul tuo dispositivo.
+
+Deciso su [Gestione errori dell'Assistente (provider irraggiungibile, query non interpretabile)](https://github.com/saviogiordano/MyComicBrain/issues/124).
+
 ---
 
 # 25. Performance
