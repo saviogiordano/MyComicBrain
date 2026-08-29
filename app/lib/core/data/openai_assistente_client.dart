@@ -8,12 +8,50 @@ import 'package:mycomicbrain/core/domain/conversazione.dart';
 
 const _apiUrl = 'https://api.openai.com/v1/responses';
 
-Map<String, Object?> _toolOpenAi(AssistenteTool tool) => {
-  'type': 'function',
-  'name': tool.nome,
-  'description': tool.descrizione,
-  'parameters': tool.parametri,
-};
+/// Converte [AssistenteTool.parametri] nella "strict mode" della Responses
+/// API di OpenAI: senza di essa, il modello riempie ogni campo opzionale
+/// non usato con un valore fittizio invece di ometterlo (stringa vuota per
+/// i campi testo, `0` per un campo intero) — letto come filtro valido da
+/// `ComicsRepository.cercaEdizioni`, azzerando i risultati di qualunque
+/// domanda (bug osservato: `numero: 0` applicato in AND a ogni ricerca).
+/// La strict mode elimina l'ambiguità: ogni proprietà non originariamente
+/// obbligatoria diventa nullable (`type: [tipo, 'null']`) mentre l'intero
+/// insieme di proprietà passa in `required`, così il modello è forzato a
+/// restituire esplicitamente `null` per un campo che non intende valorizzare
+/// invece di indovinarne un default.
+Map<String, Object?> _toolOpenAi(AssistenteTool tool) {
+  final parametri = tool.parametri;
+  final proprieta = parametri['properties']! as Map<String, Object?>;
+  final obbligatori = ((parametri['required'] as List<Object?>?) ?? const [])
+      .cast<String>()
+      .toSet();
+
+  final proprietaStrict = {
+    for (final entry in proprieta.entries)
+      entry.key: obbligatori.contains(entry.key)
+          ? entry.value
+          : {
+              ...entry.value! as Map<String, Object?>,
+              'type': [
+                (entry.value! as Map<String, Object?>)['type'],
+                'null',
+              ],
+            },
+  };
+
+  return {
+    'type': 'function',
+    'name': tool.nome,
+    'description': tool.descrizione,
+    'strict': true,
+    'parameters': {
+      'type': 'object',
+      'properties': proprietaStrict,
+      'required': proprieta.keys.toList(),
+      'additionalProperties': false,
+    },
+  };
+}
 
 /// Chiama la Responses API di OpenAI (`POST /v1/responses`) come Provider
 /// AI Testuale (§10, ruolo [RuoloProviderAi.testuale], deciso su ADR-0001),

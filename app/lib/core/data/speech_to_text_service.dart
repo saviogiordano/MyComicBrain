@@ -102,7 +102,15 @@ class PluginSpeechToTextService implements SpeechToTextService {
         onParziale(result.recognizedWords);
         if (result.finalResult) _completaAscolto(result.recognizedWords);
       },
-      listenOptions: stt.SpeechListenOptions(onDevice: true, cancelOnError: true),
+      listenOptions: stt.SpeechListenOptions(
+        onDevice: true,
+        cancelOnError: true,
+        // L'app è interamente in italiano (§10): senza localeId esplicito
+        // il plugin usa la lingua di sistema del dispositivo, non quella
+        // dell'app, riconoscendo l'audio nella lingua sbagliata su un
+        // dispositivo configurato in un'altra lingua.
+        localeId: 'it_IT',
+      ),
     );
 
     final testo = await completer.future;

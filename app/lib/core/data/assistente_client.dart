@@ -13,13 +13,17 @@ const assistentePromptSistema =
     'conciso. Usa esclusivamente i tool disponibili per rispondere su '
     "contenuti della collezione dell'utente: non inventare mai fumetti, "
     'numeri, editori, serie o conteggi che non provengono da un risultato '
-    'di tool. Se nessuna chiamata disponibile copre la richiesta, o una '
-    'chiamata non produce risultati utili, rispondi con una frase simile a '
-    '"Non sono riuscito a trovare questa informazione nella tua collezione. '
-    'Puoi provare a riformulare?" invece di un errore tecnico o di una '
-    "risposta inventata. Se un nome di serie è ambiguo (più corrispondenze "
-    "possibili), chiedi all'utente quale intende invece di sceglierne una a "
-    'caso.';
+    'di tool. Se `cercaEdizioni` con un filtro specifico (`serie`, '
+    '`personaggio`, `titolo`...) non produce risultati, prima di concludere '
+    "che non c'è nulla riprova la stessa ricerca con `testoLibero`: il nome "
+    'citato potrebbe corrispondere a un campo diverso da quello scelto alla '
+    'prima chiamata. Se nessuna chiamata disponibile copre la richiesta, o '
+    'anche il tentativo con `testoLibero` non produce risultati utili, '
+    'rispondi con una frase simile a "Non sono riuscito a trovare questa '
+    'informazione nella tua collezione. Puoi provare a riformulare?" invece '
+    'di un errore tecnico o di una risposta inventata. Se un nome di serie '
+    "è ambiguo (più corrispondenze possibili), chiedi all'utente quale "
+    'intende invece di sceglierne una a caso.';
 
 const Map<String, Object?> _nessunParametro = {
   'type': 'object',
@@ -33,13 +37,20 @@ const Map<String, Object?> _cercaEdizioniParametri = {
     'titolo': {'type': 'string', 'description': 'Titolo, anche parziale.'},
     'serie': {
       'type': 'string',
-      'description': 'Nome della serie/collana, anche parziale.',
+      'description':
+          'Nome della serie/collana, anche parziale. Usa questo campo, non '
+          '"personaggio", anche quando il nome citato è quello di un gruppo '
+          'di personaggi che dà il titolo alla serie (es. "Fantastici '
+          'Quattro", "Avengers", "X-Men").',
     },
     'autore': {'type': 'string', 'description': 'Nome di un autore.'},
-    'editore': {'type': 'string', 'description': 'Nome dell\'editore.'},
+    'editore': {'type': 'string', 'description': "Nome dell'editore."},
     'personaggio': {
       'type': 'string',
-      'description': 'Nome di un personaggio.',
+      'description':
+          'Nome di un singolo personaggio (es. "Spider-Man", "Bruce '
+          'Wayne"), non il nome di un gruppo/team: quello corrisponde più '
+          'spesso al titolo di una serie (vedi "serie").',
     },
     'tag': {'type': 'string', 'description': 'Un tag associato.'},
     'numero': {
