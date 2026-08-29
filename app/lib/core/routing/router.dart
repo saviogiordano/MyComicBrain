@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/routing/app_bottom_nav.dart';
 import 'package:mycomicbrain/core/routing/session.dart';
-import 'package:mycomicbrain/features/assistente/presentation/assistente_page.dart';
 import 'package:mycomicbrain/features/collezione/presentation/collezione_page.dart';
 import 'package:mycomicbrain/features/dashboard/presentation/dashboard_page.dart';
 import 'package:mycomicbrain/features/duplicati/presentation/duplicati_page.dart';
@@ -171,10 +170,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/statistiche',
         builder: (context, state) => const StatistichePage(),
-      ),
-      GoRoute(
-        path: '/assistente',
-        builder: (context, state) => const AssistentePage(),
       ),
     ],
   );

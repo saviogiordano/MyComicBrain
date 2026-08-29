@@ -25,6 +25,7 @@ import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
+import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
@@ -161,12 +162,11 @@ final openAiAssistenteClientProvider = Provider<OpenAiAssistenteClient>(
   ),
 );
 
-final openRouterAssistenteClientProvider =
-    Provider<OpenRouterAssistenteClient>(
-      (ref) => OpenRouterAssistenteClient(
-        settingsRepository: ref.watch(settingsRepositoryProvider),
-      ),
-    );
+final openRouterAssistenteClientProvider = Provider<OpenRouterAssistenteClient>(
+  (ref) => OpenRouterAssistenteClient(
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  ),
+);
 
 final localeAssistenteClientProvider = Provider<LocaleAssistenteClient>(
   (ref) => LocaleAssistenteClient(
@@ -214,6 +214,35 @@ final assistenteOrchestratorProvider = Provider<AssistenteOrchestrator>((ref) {
     client: ref.watch(assistenteClientProvider),
   );
 });
+
+/// `true` se il ruolo Testuale ha i dati minimi per una chiamata (§10,
+/// deciso su [UX quando il Provider AI Testuale non è configurato](https://github.com/saviogiordano/MyComicBrain/issues/123)) —
+/// pilota il banner bloccante della schermata Cerca (#137). Non un
+/// `StreamProvider`: `SettingsRepository` non espone un flusso di modifiche,
+/// quindi `impostazioni_page.dart` invalida esplicitamente questo provider
+/// dopo ogni scrittura sul ruolo Testuale, soddisfacendo il requisito di
+/// reattività "senza refresh manuale" di #123 senza introdurre un
+/// osservatore delle Impostazioni a sé.
+final assistenteConfiguratoProvider = FutureProvider<bool>((ref) {
+  return ref
+      .watch(settingsRepositoryProvider)
+      .configurato(RuoloProviderAi.testuale);
+});
+
+/// Id dell'unica Conversazione dell'Assistente (§10, #128), creandola se non
+/// esiste ancora — stesso singleton applicativo di
+/// `ComicsRepository.getOrCreaConversazione`.
+final conversazioneIdProvider = FutureProvider<int>((ref) {
+  return ref.watch(comicsRepositoryProvider).getOrCreaConversazione();
+});
+
+/// I Messaggi della Conversazione, per id (#128) — la schermata Cerca (#137)
+/// ne osserva il flusso per riflettere in tempo reale sia l'invio
+/// dell'utente sia la risposta persistita da [assistenteOrchestratorProvider].
+final StreamProviderFamily<List<Messaggio>, int> messaggiProvider =
+    StreamProvider.family<List<Messaggio>, int>((ref, conversazioneId) {
+      return ref.watch(comicsRepositoryProvider).watchMessaggi(conversazioneId);
+    });
 
 final comicVineClientProvider = Provider<ComicVineClient>(
   (ref) => ComicVineHttpClient(

@@ -116,8 +116,20 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     await ref
         .read(settingsRepositoryProvider)
         .impostaProviderAi(ruolo, provider);
+    _invalidaAssistenteConfiguratoSe(ruolo);
     if (!mounted) return;
     setState(() => _providerAttivo[ruolo] = provider);
+  }
+
+  /// Il banner bloccante di Cerca (§10, #123/#137) osserva
+  /// `assistenteConfiguratoProvider`, che non ha modo di sapere da solo
+  /// quando `SettingsRepository` cambia — va invalidato esplicitamente ad
+  /// ogni scrittura sul ruolo Testuale perché si sblocchi "senza refresh
+  /// manuale" come deciso su #123.
+  void _invalidaAssistenteConfiguratoSe(RuoloProviderAi ruolo) {
+    if (ruolo == RuoloProviderAi.testuale) {
+      ref.invalidate(assistenteConfiguratoProvider);
+    }
   }
 
   Future<void> _verificaConnessioneAi(AiProvider provider) async {
@@ -234,6 +246,7 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     await ref
         .read(settingsRepositoryProvider)
         .impostaApiKeyAi(ruolo, provider, v);
+    _invalidaAssistenteConfiguratoSe(ruolo);
     if (!mounted) return;
     setState(() => _apiKeyAi[ruolo]![provider] = v);
   }
@@ -252,6 +265,7 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     );
     if (v == null) return;
     await ref.read(settingsRepositoryProvider).impostaUrlLocale(ruolo, v);
+    _invalidaAssistenteConfiguratoSe(ruolo);
     if (!mounted) return;
     setState(() => _urlLocale[ruolo] = v);
   }
