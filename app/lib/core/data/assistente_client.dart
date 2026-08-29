@@ -174,6 +174,22 @@ class AssistenteException implements Exception {
   String toString() => 'AssistenteException(${sottotipo.name}): $dettaglio';
 }
 
+/// Copy utente-facing di un [AssistenteException] per [sottotipo] (§24,
+/// deciso su #124) — unica fonte di verità, condivisa fra il Messaggio di
+/// sistema di `AssistenteOrchestrator` e il bottone "Verifica connessione"
+/// della sezione Provider AI Testuale in Impostazioni (#129).
+String copyErroreAssistente(SottotipoSistema sottotipo) => switch (sottotipo) {
+  SottotipoSistema.erroreRete =>
+    'Connessione assente. Riprova quando sei di nuovo online.',
+  SottotipoSistema.erroreProvider =>
+    'Il Provider AI Testuale non risponde correttamente. Verifica la '
+        'configurazione in Impostazioni.',
+  SottotipoSistema.infoSttFallback => throw StateError(
+    'infoSttFallback non è mai generato da AssistenteClient — riservato '
+    'al fallback STT (#120), fuori scope di questa mappatura.',
+  ),
+};
+
 /// Interfaccia comune dei client del Provider AI Testuale (§10, uno per
 /// brand come [CoverAnalysisClient] per il Visivo) — il provider effettivo
 /// è selezionato a runtime dalle Impostazioni (RuoloProviderAi.testuale).

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
@@ -86,10 +87,11 @@ class AssistenteOrchestrator {
             _eseguiTool(nome, argomenti, edizioniCitate),
       );
     } on AssistenteException catch (e) {
+      debugPrint('[Assistente] ${e.sottotipo.name}: ${e.dettaglio}');
       await _repository.aggiungiMessaggio(
         conversazioneId: conversazioneId,
         ruolo: RuoloMessaggio.sistema,
-        testo: _copyErrore(e.sottotipo),
+        testo: copyErroreAssistente(e.sottotipo),
         sottotipoSistema: e.sottotipo,
       );
       return;
@@ -219,20 +221,5 @@ class AssistenteOrchestrator {
     'numero': e.issueNumberLabel ?? e.issueNumber?.toString(),
     'editore': e.publisher,
     'anno': e.year,
-  };
-
-  /// Copy utente-facing dei Messaggi di sistema di errore (§24, deciso su
-  /// #124) — unica fonte di verità, indipendente dal client/provider che ha
-  /// sollevato [AssistenteException].
-  String _copyErrore(SottotipoSistema sottotipo) => switch (sottotipo) {
-    SottotipoSistema.erroreRete =>
-      'Connessione assente. Riprova quando sei di nuovo online.',
-    SottotipoSistema.erroreProvider =>
-      'Il Provider AI Testuale non risponde correttamente. Verifica la '
-          'configurazione in Impostazioni.',
-    SottotipoSistema.infoSttFallback => throw StateError(
-      'infoSttFallback non è mai generato da AssistenteClient — riservato '
-      'al fallback STT (#120), fuori scope di questo orchestratore.',
-    ),
   };
 }

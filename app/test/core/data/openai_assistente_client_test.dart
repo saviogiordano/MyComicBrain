@@ -128,6 +128,38 @@ void main() {
   );
 
   test(
+    'uno storico con un turno assistente usa il content type output_text '
+    '(la Responses API rifiuta input_text per role assistant, #138)',
+    () async {
+      final http_ = _FakeHttpClient([
+        (statusCode: 200, corpo: _rispostaTesto('Risposta finale.')),
+      ]);
+      final client = OpenAiAssistenteClient(
+        settingsRepository: await _settingsConApiKey(),
+        httpClient: http_,
+      );
+
+      await client.chiedi(
+        storico: [
+          (ruolo: RuoloMessaggio.utente, testo: 'Quanti Batman ho?'),
+          (ruolo: RuoloMessaggio.assistente, testo: 'Ne hai 3.'),
+          (ruolo: RuoloMessaggio.utente, testo: 'E i Superman?'),
+        ],
+        eseguiTool: (_, _) async =>
+            throw StateError('non deve essere chiamato'),
+      );
+
+      final input = http_.richiesteRicevute.single['input'] as List<dynamic>;
+      final tipi = [
+        for (final turno in input.cast<Map<String, dynamic>>())
+          (turno['content'] as List<dynamic>)
+              .cast<Map<String, dynamic>>()[0]['type'],
+      ];
+      expect(tipi, ['input_text', 'output_text', 'input_text']);
+    },
+  );
+
+  test(
     'un fallimento della chiamata HTTP solleva AssistenteException di tipo rete',
     () async {
       final client = OpenAiAssistenteClient(

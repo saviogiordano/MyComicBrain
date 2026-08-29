@@ -93,6 +93,41 @@ class _CercaState extends ConsumerState<_Cerca> {
     super.dispose();
   }
 
+  /// Svuota la chat (§10) cancellando l'intera Conversazione — mai singoli
+  /// Messaggi, stesso vincolo di `ComicsRepository.eliminaConversazione`
+  /// (#122/#128) — e invalidando [conversazioneIdProvider] così che
+  /// `getOrCreaConversazione` ne semini una nuova, vuota, al prossimo
+  /// accesso (stesso pattern di singleton applicativo).
+  Future<void> _svuotaChat() async {
+    final conferma = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surfaceRaised,
+        title: const Text('Svuotare la chat?'),
+        content: const Text(
+          'Tutti i messaggi di questa conversazione verranno eliminati. '
+          'Non è garantito poterlo annullare.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Svuota'),
+          ),
+        ],
+      ),
+    );
+    if (conferma != true || !mounted) return;
+
+    await ref
+        .read(comicsRepositoryProvider)
+        .eliminaConversazione(widget.conversazioneId);
+    if (mounted) ref.invalidate(conversazioneIdProvider);
+  }
+
   Future<void> _invia(String testo) async {
     final testoPulito = testo.trim();
     if (testoPulito.isEmpty || !widget.configurato || _inviando) return;
@@ -171,7 +206,9 @@ class _CercaState extends ConsumerState<_Cerca> {
       body: SafeArea(
         child: Column(
           children: [
-            const _Header(),
+            _Header(
+              onSvuota: messaggi.isEmpty ? null : _svuotaChat,
+            ),
             Expanded(
               child: messaggi.isEmpty && !_inviando
                   ? _StatoVuoto(
@@ -200,8 +237,12 @@ class _CercaState extends ConsumerState<_Cerca> {
   }
 }
 
+/// [onSvuota] `null` disabilita/nasconde il pulsante "Svuota chat" — nessuna
+/// Conversazione con Messaggi da cancellare (stato vuoto, §10).
 class _Header extends StatelessWidget {
-  const _Header();
+  const _Header({required this.onSvuota});
+
+  final VoidCallback? onSvuota;
 
   @override
   Widget build(BuildContext context) {
@@ -209,25 +250,37 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
         AppSpacing.sm,
-        AppSpacing.md,
+        AppSpacing.xs,
         AppSpacing.xs,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            'Cerca',
-            style: AppTypography.headline.copyWith(
-              color: AppColors.textPrimary,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cerca',
+                  style: AppTypography.headline.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Risponde solo con i dati della tua collezione.',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            'Risponde solo con i dati della tua collezione.',
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textMuted,
+          if (onSvuota != null)
+            IconButton(
+              onPressed: onSvuota,
+              tooltip: 'Svuota chat',
+              icon: Icon(Icons.delete_outline, color: AppColors.textMuted),
             ),
-          ),
         ],
       ),
     );

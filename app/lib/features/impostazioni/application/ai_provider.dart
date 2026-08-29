@@ -1,3 +1,4 @@
+import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 
@@ -56,6 +57,26 @@ Future<EsitoVerifica> verificaProviderComicVine({
   return errore == null
       ? const EsitoVerifica.successo()
       : EsitoVerifica.errore(errore);
+}
+
+/// Verifica reale della configurazione del Provider AI Testuale (§10, #129)
+/// — stessa logica di [verificaProviderAi] applicata al ruolo
+/// [RuoloProviderAi.testuale] tramite [AssistenteClient.verificaConnessione].
+/// A differenza degli altri due, il fallimento tipico è [AssistenteException]
+/// (che non porta un messaggio utente-facing proprio, §24/#124): il suo
+/// `sottotipo` è mappato al copy condiviso [copyErroreAssistente], la stessa
+/// fonte usata da `AssistenteOrchestrator` per i Messaggi di sistema.
+Future<EsitoVerifica> verificaProviderAssistente({
+  required AssistenteClient Function() assistenteClient,
+}) async {
+  try {
+    await assistenteClient().verificaConnessione();
+    return const EsitoVerifica.successo();
+  } on AssistenteException catch (e) {
+    return EsitoVerifica.errore(copyErroreAssistente(e.sottotipo));
+  } on Object catch (e) {
+    return EsitoVerifica.errore(e.toString());
+  }
 }
 
 Future<String?> _verificaUna(Future<void> Function() chiamata) async {

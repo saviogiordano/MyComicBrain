@@ -242,6 +242,71 @@ void main() {
     },
   );
 
+  testWidgets(
+    'stato vuoto: nessun pulsante "Svuota chat" da mostrare',
+    (tester) async {
+      await configuraProviderTestuale();
+      await pumpCerca(tester);
+
+      expect(find.byIcon(Icons.delete_outline), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Svuota chat: conferma cancella la Conversazione e torna allo stato '
+    'vuoto',
+    (tester) async {
+      await configuraProviderTestuale();
+      await pumpCerca(
+        tester,
+        client: _FakeAssistenteClient(
+          (storico, eseguiTool) async => 'Risposta.',
+        ),
+      );
+
+      await tester.tap(find.text('Trova i duplicati.'));
+      await tester.pumpAndSettle();
+      expect(find.text('Risposta.'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+      expect(find.text('Svuotare la chat?'), findsOneWidget);
+
+      await tester.tap(find.text('Svuota'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Risposta.'), findsNothing);
+      expect(
+        find.text('Chiedi qualcosa sulla tua collezione, a voce o scrivendo.'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.delete_outline), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Svuota chat: annullare la conferma non cancella nulla',
+    (tester) async {
+      await configuraProviderTestuale();
+      await pumpCerca(
+        tester,
+        client: _FakeAssistenteClient(
+          (storico, eseguiTool) async => 'Risposta.',
+        ),
+      );
+
+      await tester.tap(find.text('Trova i duplicati.'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Annulla'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Risposta.'), findsOneWidget);
+    },
+  );
+
   testWidgets('microfono: il transcript viene inviato come Messaggio utente', (
     tester,
   ) async {

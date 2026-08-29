@@ -13,14 +13,12 @@ import 'package:mycomicbrain/features/impostazioni/application/ai_provider.dart'
 /// I provider AI sono mostrati in due sezioni indipendenti, una per
 /// `RuoloProviderAi` (Visivo/Testuale, schema deciso su #127): ciascuna con
 /// le sue quattro card sempre espanse (§12, richiesto dall'utente dopo #111,
-/// vedi sotto). Il chip "Attivo" di una sezione seleziona quale dei quattro
-/// è il provider usato a runtime per quel ruolo (`coverAnalysisClientProvider`
-/// per il Visivo; il Testuale non ha ancora un client a runtime — l'Assistente
-/// è implementazione futura, #118). La sezione Testuale non mostra "Verifica
-/// connessione" (deciso qui, #129): a differenza del Visivo non esiste ancora
-/// un client AI per il ruolo Testuale da interrogare — arriverà con
-/// l'implementazione dell'Assistente/tool-calling (#126), stesso momento in
-/// cui questa card guadagnerà la riga.
+/// vedi sotto), entrambe con la riga "Verifica connessione" (§10, #129 —
+/// arrivata per il Testuale con l'implementazione dell'Assistente/
+/// tool-calling, #126). Il chip "Attivo" di una sezione seleziona quale dei
+/// quattro è il provider usato a runtime per quel ruolo
+/// (`coverAnalysisClientProvider` per il Visivo, `assistenteClientProvider`
+/// per il Testuale).
 ///
 /// Le card restano sempre espanse invece che dietro un selettore (§12, dopo
 /// #111: le config per provider erano già salvate separatamente in
@@ -55,10 +53,14 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
 
   String _apiKeyComics = '';
 
-  // "Verifica connessione" resta solo per il ruolo Visivo (vedi commento
-  // sulla classe): nessun client per il ruolo Testuale, quindi nessuno
-  // stato di verifica da tenere per lui.
+  // Stato di "Verifica connessione" per provider, indipendente fra i due
+  // ruoli (vedi commento sulla classe): ciascuno ha il proprio client e
+  // quindi il proprio esito.
   final Map<AiProvider, ({bool loading, EsitoVerifica? esito})> _verificaAi = {
+    for (final p in AiProvider.values) p: (loading: false, esito: null),
+  };
+  final Map<AiProvider, ({bool loading, EsitoVerifica? esito})>
+  _verificaAssistente = {
     for (final p in AiProvider.values) p: (loading: false, esito: null),
   };
 
@@ -141,6 +143,22 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     );
     if (!mounted) return;
     setState(() => _verificaAi[provider] = (loading: false, esito: esito));
+    if (!esito.ok) {
+      await _mostraErroreVerifica(provider.label, esito.messaggio);
+    }
+  }
+
+  Future<void> _verificaConnessioneAssistente(AiProvider provider) async {
+    setState(
+      () => _verificaAssistente[provider] = (loading: true, esito: null),
+    );
+    final esito = await verificaProviderAssistente(
+      assistenteClient: () => ref.read(assistenteClientPerProvider(provider)),
+    );
+    if (!mounted) return;
+    setState(
+      () => _verificaAssistente[provider] = (loading: false, esito: esito),
+    );
     if (!esito.ok) {
       await _mostraErroreVerifica(provider.label, esito.messaggio);
     }
@@ -336,12 +354,15 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     );
   }
 
-  /// Le quattro card provider AI per [ruolo] (§12). [mostraVerifica]
-  /// controlla la riga "Verifica connessione" — `false` per il Testuale, che
-  /// non ha ancora un client da interrogare (vedi commento sulla classe).
+  /// Le quattro card provider AI per [ruolo] (§12), con la riga "Verifica
+  /// connessione" pilotata da [verificaState]/[onVerifica] — stato ed
+  /// handler indipendenti fra Visivo e Testuale (vedi commento sulla
+  /// classe).
   List<Widget> _cardsProviderAi(
     RuoloProviderAi ruolo, {
-    required bool mostraVerifica,
+    required Map<AiProvider, ({bool loading, EsitoVerifica? esito})>
+    verificaState,
+    required void Function(AiProvider) onVerifica,
   }) {
     return [
       for (final provider in AiProvider.values) ...[
@@ -351,14 +372,14 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
           apiKey: _apiKeyAi[ruolo]![provider] ?? '',
           modello: _modello[ruolo]![provider] ?? provider.modelloDefault(ruolo),
           urlLocale: _urlLocale[ruolo] ?? '',
-          verifica: mostraVerifica ? _verificaAi[provider] : null,
+          verifica: verificaState[provider],
           onSelezionaAttivo: () => _selezionaProviderAttivo(ruolo, provider),
           onModificaApiKey: () => _modificaApiKeyAi(ruolo, provider),
           onModificaModello: () => _apriSheetModello(ruolo, provider),
           onModificaUrl: () => _modificaUrlLocale(ruolo),
-          onVerifica: !mostraVerifica || _verificaAi[provider]!.loading
+          onVerifica: verificaState[provider]!.loading
               ? null
-              : () => _verificaConnessioneAi(provider),
+              : () => onVerifica(provider),
         ),
         if (provider != AiProvider.values.last)
           const SizedBox(height: AppSpacing.sm),
@@ -393,7 +414,8 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                     key: const ValueKey('sezione-provider-ai-visivo'),
                     children: _cardsProviderAi(
                       RuoloProviderAi.visivo,
-                      mostraVerifica: true,
+                      verificaState: _verificaAi,
+                      onVerifica: _verificaConnessioneAi,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -403,7 +425,8 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                     key: const ValueKey('sezione-provider-ai-testuale'),
                     children: _cardsProviderAi(
                       RuoloProviderAi.testuale,
-                      mostraVerifica: false,
+                      verificaState: _verificaAssistente,
+                      onVerifica: _verificaConnessioneAssistente,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),

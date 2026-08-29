@@ -83,7 +83,16 @@ class OpenAiAssistenteClient implements AssistenteClient {
         {
           'role': turno.ruolo == RuoloMessaggio.utente ? 'user' : 'assistant',
           'content': [
-            {'type': 'input_text', 'text': turno.testo},
+            {
+              // La Responses API richiede 'output_text' per i turni
+              // 'assistant' e 'input_text' per i turni 'user' — un turno
+              // assistente rinviato con 'input_text' è rifiutato con 400
+              // invalid_value.
+              'type': turno.ruolo == RuoloMessaggio.utente
+                  ? 'input_text'
+                  : 'output_text',
+              'text': turno.testo,
+            },
           ],
         },
     ];

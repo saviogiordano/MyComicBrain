@@ -3,12 +3,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
+import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
 
 /// [CoverAnalysisClient] finto per "Verifica connessione" (#108/#111): non
@@ -51,6 +53,30 @@ class _FakeComicVineClient implements ComicVineClient {
   }
 }
 
+/// [AssistenteClient] finto per "Verifica connessione" del ruolo Testuale
+/// (#129): non implementa [chiedi] (non usato da questo schermo).
+class _FakeAssistenteClient implements AssistenteClient {
+  _FakeAssistenteClient({this.eccezione});
+
+  final AssistenteException? eccezione;
+
+  @override
+  Future<String> chiedi({
+    required List<TurnoConversazione> storico,
+    required Future<Map<String, Object?>> Function(
+      String nomeTool,
+      Map<String, Object?> argomenti,
+    )
+    eseguiTool,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> verificaConnessione() async {
+    final eccezione = this.eccezione;
+    if (eccezione != null) throw eccezione;
+  }
+}
+
 void main() {
   late SettingsRepository repo;
 
@@ -62,6 +88,8 @@ void main() {
     WidgetTester tester, {
     AiProvider? aiClientPer,
     CoverAnalysisClient? aiClient,
+    AiProvider? assistenteClientPer,
+    AssistenteClient? assistenteClient,
     ComicVineClient? comicVineClient,
   }) async {
     // Viewport ingrandita (§12, dopo #111): con le 4 card provider AI sempre
@@ -83,6 +111,10 @@ void main() {
             coverAnalysisClientPerProvider(
               aiClientPer ?? AiProvider.claude,
             ).overrideWithValue(aiClient),
+          if (assistenteClient != null)
+            assistenteClientPerProvider(
+              assistenteClientPer ?? AiProvider.claude,
+            ).overrideWithValue(assistenteClient),
           if (comicVineClient != null)
             comicVineClientProvider.overrideWithValue(comicVineClient),
         ],
@@ -145,8 +177,9 @@ void main() {
   );
 
   testWidgets(
-    'la sezione Provider AI Testuale non mostra "Verifica connessione" '
-    '(#129: nessun client testuale ancora da interrogare)',
+    'entrambe le sezioni provider AI mostrano "Verifica connessione" '
+    '(#129: il Testuale ha ora un client Assistente da interrogare, come '
+    'il Visivo)',
     (tester) async {
       await pumpImpostazioni(tester);
 
@@ -155,7 +188,7 @@ void main() {
           of: sezioneRuolo(testuale: true),
           matching: find.text('Verifica connessione'),
         ),
-        findsNothing,
+        findsNWidgets(4),
       );
       expect(
         find.descendant(
@@ -295,14 +328,15 @@ void main() {
             comicVineClient: _FakeComicVineClient(),
           );
 
-          // 4 card provider AI + ComicVine, nessuna ancora verificata.
-          expect(find.text('Non verificata'), findsNWidgets(5));
+          // 4 card Visivo + 4 card Testuale + ComicVine, nessuna ancora
+          // verificata.
+          expect(find.text('Non verificata'), findsNWidgets(9));
 
           await tester.tap(rigaProvider('Claude', 'Verifica connessione'));
           await tester.pumpAndSettle();
 
           expect(find.text('OK'), findsOneWidget);
-          expect(find.text('Non verificata'), findsNWidgets(4));
+          expect(find.text('Non verificata'), findsNWidgets(8));
         },
       );
 
@@ -350,6 +384,77 @@ void main() {
       );
 
       testWidgets(
+        'con il Provider AI Testuale raggiungibile mostra "OK" solo sulla '
+        'card verificata (#129, stessa card della sezione Testuale)',
+        (
+          tester,
+        ) async {
+          await pumpImpostazioni(
+            tester,
+            assistenteClientPer: AiProvider.claude,
+            assistenteClient: _FakeAssistenteClient(),
+          );
+
+          await tester.tap(
+            rigaProvider('Claude', 'Verifica connessione', testuale: true),
+          );
+          await tester.pumpAndSettle();
+
+          expect(
+            find.descendant(
+              of: sezioneRuolo(testuale: true),
+              matching: find.text('OK'),
+            ),
+            findsOneWidget,
+          );
+          // La card Claude del Visivo, indipendente, resta "Non verificata".
+          expect(
+            find.descendant(
+              of: sezioneRuolo(),
+              matching: find.text('Non verificata'),
+            ),
+            findsNWidgets(4),
+          );
+        },
+      );
+
+      testWidgets(
+        'con il Provider AI Testuale non raggiungibile mostra il copy '
+        'centrale di errore condiviso con AssistenteOrchestrator (§24/#124)',
+        (
+          tester,
+        ) async {
+          await pumpImpostazioni(
+            tester,
+            assistenteClientPer: AiProvider.claude,
+            assistenteClient: _FakeAssistenteClient(
+              eccezione: AssistenteException(
+                SottotipoSistema.erroreProvider,
+                'dettaglio tecnico qualsiasi, mai mostrato',
+              ),
+            ),
+          );
+
+          await tester.tap(
+            rigaProvider('Claude', 'Verifica connessione', testuale: true),
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.byType(AlertDialog), findsOneWidget);
+          expect(
+            find.textContaining(
+              'Il Provider AI Testuale non risponde correttamente',
+            ),
+            findsNWidgets(2),
+          );
+
+          await tester.tap(find.text('OK'));
+          await tester.pumpAndSettle();
+          expect(find.byType(AlertDialog), findsNothing);
+        },
+      );
+
+      testWidgets(
         'con ComicVine raggiungibile mostra "OK" solo nella sezione ComicVine',
         (
           tester,
@@ -363,8 +468,8 @@ void main() {
           await tester.pumpAndSettle();
 
           expect(find.text('OK'), findsOneWidget);
-          // Le 4 card provider AI restano "Non verificata".
-          expect(find.text('Non verificata'), findsNWidgets(4));
+          // Le 4 card Visivo + 4 card Testuale restano "Non verificata".
+          expect(find.text('Non verificata'), findsNWidgets(8));
         },
       );
 
