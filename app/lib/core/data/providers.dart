@@ -23,6 +23,7 @@ import 'package:mycomicbrain/core/data/preferences_shared_preferences_adapter.da
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
+import 'package:mycomicbrain/core/data/speech_to_text_service.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
@@ -201,6 +202,16 @@ final assistenteClientProvider = Provider<AssistenteClient>((ref) {
       AiProvider.claude;
   return ref.watch(assistenteClientPerProvider(providerAi));
 });
+
+/// Speech-to-text on-device per il microfono di Cerca (§10, deciso su #120,
+/// implementato su
+/// [Integrare lo speech-to-text on-device nell'input di Cerca](https://github.com/saviogiordano/MyComicBrain/issues/138)).
+/// Un solo `Provider` semplice, non un `Provider.family`: a differenza dei
+/// client AI non dipende dalle Impostazioni, un'unica istanza per tutta
+/// l'app basta.
+final speechToTextServiceProvider = Provider<SpeechToTextService>(
+  (ref) => PluginSpeechToTextService(),
+);
 
 /// Orchestratore dell'Assistente (§10, deciso su
 /// [Implementare l'orchestratore LLM Testuale con tool-calling](https://github.com/saviogiordano/MyComicBrain/issues/132)):

@@ -47,5 +47,19 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Richiesta da `speech_to_text` (#138) per interrogare il
+             riconoscitore vocale di sistema su Android 11+ (API 30+). -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
+
+    <!-- Richieste da `speech_to_text` (#120/#138): microfono per il dettato
+         e le tre voci BLUETOOTH* per l'uso di cuffie bluetooth connesse
+         durante l'ascolto (verbatim dal README del plugin). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
 </manifest>

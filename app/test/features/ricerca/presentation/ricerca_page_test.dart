@@ -9,6 +9,7 @@ import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
+import 'package:mycomicbrain/core/data/speech_to_text_service.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
@@ -42,6 +43,25 @@ class _FakeAssistenteClient implements AssistenteClient {
 
   @override
   Future<void> verificaConnessione() async {}
+}
+
+/// [SpeechToTextService] finto — [RisultatoAscolto] fisso al tocco del
+/// microfono, senza toccare alcun plugin nativo (§10, #138).
+class _FakeSpeechToTextService implements SpeechToTextService {
+  _FakeSpeechToTextService(this.risultato);
+
+  final RisultatoAscolto risultato;
+
+  @override
+  Future<RisultatoAscolto> ascolta({
+    required ValueChanged<String> onParziale,
+  }) async => risultato;
+
+  @override
+  Future<void> annulla() async {}
+
+  @override
+  bool get ascoltando => false;
 }
 
 /// Schermo Cerca (§10, chat dell'Assistente, variante A deciso su #125) —
@@ -83,6 +103,7 @@ void main() {
   Future<void> pumpCerca(
     WidgetTester tester, {
     AssistenteClient? client,
+    SpeechToTextService? speechToTextService,
   }) async {
     final router = GoRouter(
       initialLocation: '/ricerca',
@@ -111,6 +132,10 @@ void main() {
           settingsRepositoryProvider.overrideWithValue(settingsRepository),
           if (client != null)
             assistenteClientProvider.overrideWithValue(client),
+          if (speechToTextService != null)
+            speechToTextServiceProvider.overrideWithValue(
+              speechToTextService,
+            ),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
@@ -214,6 +239,65 @@ void main() {
       await tester.tap(find.text('Vai a Impostazioni'));
       await tester.pumpAndSettle();
       expect(find.text('Impostazioni'), findsOneWidget);
+    },
+  );
+
+  testWidgets('microfono: il transcript viene inviato come Messaggio utente', (
+    tester,
+  ) async {
+    await configuraProviderTestuale();
+    await pumpCerca(
+      tester,
+      client: _FakeAssistenteClient(
+        (storico, eseguiTool) async => 'Risposta.',
+      ),
+      speechToTextService: _FakeSpeechToTextService((
+        testo: 'Quanti fumetti Marvel ho?',
+        fallbackRete: false,
+      )),
+    );
+
+    await tester.tap(find.byIcon(Icons.mic_none));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Quanti fumetti Marvel ho?'), findsOneWidget);
+    expect(find.text('Risposta.'), findsOneWidget);
+    expect(
+      find.textContaining('riconoscimento vocale in rete'),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'microfono: fallback rete Android aggiunge il Messaggio di sistema '
+    'prima del transcript',
+    (tester) async {
+      await configuraProviderTestuale();
+      await pumpCerca(
+        tester,
+        client: _FakeAssistenteClient(
+          (storico, eseguiTool) async => 'Risposta.',
+        ),
+        speechToTextService: _FakeSpeechToTextService((
+          testo: 'Quanti fumetti Marvel ho?',
+          fallbackRete: true,
+        )),
+      );
+
+      await tester.tap(find.byIcon(Icons.mic_none));
+      await tester.pumpAndSettle();
+
+      final messaggi = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data)
+          .whereType<String>()
+          .toList();
+      final indiceFallback = messaggi.indexWhere(
+        (t) => t.contains('riconoscimento vocale in rete'),
+      );
+      final indiceTranscript = messaggi.indexOf('Quanti fumetti Marvel ho?');
+      expect(indiceFallback, greaterThanOrEqualTo(0));
+      expect(indiceTranscript, greaterThan(indiceFallback));
     },
   );
 }

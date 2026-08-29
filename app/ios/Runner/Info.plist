@@ -30,6 +30,10 @@
 	<string>Serve per scattare foto delle copertine da aggiungere al catalogo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Serve per scegliere foto di copertine già presenti in galleria.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Serve per trascrivere a testo le domande che fai a voce all'Assistente.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Serve per trascrivere a testo le domande che fai a voce all'Assistente.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
+import 'package:mycomicbrain/core/data/speech_to_text_service.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/core/domain/edizione_collezione.dart';
@@ -19,6 +20,14 @@ const _esempiRichiesta = [
 const _testoBloccato =
     "Configura il Provider AI Testuale per usare l'Assistente.";
 
+/// Copy del Messaggio di sistema per il fallback STT Android — verbatim da
+/// `docs/requisiti.md` §24 (deciso su #124, implementato su #138):
+/// informativo, non un errore, la trascrizione è comunque riuscita, solo
+/// non è rimasta sul device.
+const _testoFallbackStt =
+    'Ho usato il riconoscimento vocale in rete perché quello offline non è '
+    'disponibile sul tuo dispositivo.';
+
 /// Schermo Cerca (§10, chat dell'Assistente) — variante A del prototipo
 /// (bubble chat classica, deciso su
 /// [Design della schermata Cerca](https://github.com/saviogiordano/MyComicBrain/issues/125)):
@@ -31,9 +40,12 @@ const _testoBloccato =
 /// `AssistenteOrchestrator` (#132) ha già persistito su
 /// Conversazione/Messaggio.
 ///
-/// Il microfono è solo icona/stato (§125): l'input vocale funzionante
-/// arriva con [Integrare lo speech-to-text on-device nell'input di Cerca](https://github.com/saviogiordano/MyComicBrain/issues/138),
-/// esplicitamente fuori scope qui.
+/// Il microfono avvia una sessione [SpeechToTextService] (§10, #138): STT
+/// on-device → testo, mai audio verso il Provider AI Testuale. Un fallback
+/// Android al riconoscimento di rete (sotto API 31 o senza modello
+/// scaricato) aggiunge prima un Messaggio di sistema informativo
+/// (`SottotipoSistema.infoSttFallback`, §24/#124), poi invia il transcript
+/// come Messaggio utente.
 class RicercaPage extends ConsumerWidget {
   const RicercaPage({super.key});
 
@@ -71,6 +83,7 @@ class _CercaState extends ConsumerState<_Cerca> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   bool _inviando = false;
+  bool _ascoltando = false;
   int _ultimaLunghezzaMessaggi = 0;
 
   @override
@@ -93,6 +106,44 @@ class _CercaState extends ConsumerState<_Cerca> {
     } finally {
       if (mounted) setState(() => _inviando = false);
     }
+  }
+
+  /// Avvia/interrompe una sessione di ascolto sul microfono incorporato
+  /// (§10, #138). Un fallback di rete su Android (sotto API 31 o senza
+  /// modello scaricato, §4.2 della ricerca #120) persiste prima il
+  /// Messaggio di sistema informativo, poi invia il transcript come
+  /// Messaggio utente tramite [_invia] — stesso ordine descritto sul ticket.
+  Future<void> _toggleMicrofono() async {
+    final servizio = ref.read(speechToTextServiceProvider);
+    if (_ascoltando) {
+      await servizio.annulla();
+      if (mounted) setState(() => _ascoltando = false);
+      return;
+    }
+
+    setState(() => _ascoltando = true);
+    final risultato = await servizio.ascolta(
+      onParziale: (parziale) => _controller
+        ..text = parziale
+        ..selection = TextSelection.collapsed(offset: parziale.length),
+    );
+    if (mounted) setState(() => _ascoltando = false);
+
+    final testo = risultato.testo?.trim();
+    if (testo == null || testo.isEmpty) return;
+
+    if (risultato.fallbackRete) {
+      final conversazioneId = await ref.read(conversazioneIdProvider.future);
+      await ref
+          .read(comicsRepositoryProvider)
+          .aggiungiMessaggio(
+            conversazioneId: conversazioneId,
+            ruolo: RuoloMessaggio.sistema,
+            testo: _testoFallbackStt,
+            sottotipoSistema: SottotipoSistema.infoSttFallback,
+          );
+    }
+    await _invia(testo);
   }
 
   void _scrollAFondo() {
@@ -136,8 +187,11 @@ class _CercaState extends ConsumerState<_Cerca> {
             if (!widget.configurato) const _BannerBloccato(),
             _InputBar(
               controller: _controller,
-              abilitato: widget.configurato && !_inviando,
+              abilitato: widget.configurato && !_inviando && !_ascoltando,
+              microfonoAbilitato: widget.configurato && !_inviando,
+              ascoltando: _ascoltando,
               onInvia: _invia,
+              onMicrofono: _toggleMicrofono,
             ),
           ],
         ),
@@ -701,12 +755,18 @@ class _InputBar extends StatelessWidget {
   const _InputBar({
     required this.controller,
     required this.abilitato,
+    required this.microfonoAbilitato,
+    required this.ascoltando,
     required this.onInvia,
+    required this.onMicrofono,
   });
 
   final TextEditingController controller;
   final bool abilitato;
+  final bool microfonoAbilitato;
+  final bool ascoltando;
   final ValueChanged<String> onInvia;
+  final VoidCallback onMicrofono;
 
   @override
   Widget build(BuildContext context) {
@@ -746,7 +806,9 @@ class _InputBar extends StatelessWidget {
                 decoration: InputDecoration(
                   isCollapsed: true,
                   border: InputBorder.none,
-                  hintText: abilitato
+                  hintText: ascoltando
+                      ? 'Ascolto…'
+                      : abilitato
                       ? 'Scrivi o chiedi qualcosa…'
                       : 'Configura il Provider per continuare',
                   hintStyle: AppTypography.bodyMedium.copyWith(
@@ -756,7 +818,11 @@ class _InputBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.xs),
-            _PulsanteMicrofono(abilitato: abilitato),
+            _PulsanteMicrofono(
+              abilitato: microfonoAbilitato,
+              ascoltando: ascoltando,
+              onTap: onMicrofono,
+            ),
           ],
         ),
       ),
@@ -764,27 +830,45 @@ class _InputBar extends StatelessWidget {
   }
 }
 
-/// Solo icona/stato — nessuna azione al tocco (§125): l'input vocale
-/// funzionante è fuori scope di questo ticket, vedi doc di [RicercaPage].
+/// Il microfono incorporato nel campo di input (§125): lucchetto quando
+/// bloccato (#123), altrimenti avvia/interrompe una sessione
+/// [SpeechToTextService] (§10, #138) al tocco.
 class _PulsanteMicrofono extends StatelessWidget {
-  const _PulsanteMicrofono({required this.abilitato});
+  const _PulsanteMicrofono({
+    required this.abilitato,
+    required this.ascoltando,
+    required this.onTap,
+  });
 
   final bool abilitato;
+  final bool ascoltando;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: abilitato ? AppColors.accent : Colors.transparent,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(
-        abilitato ? Icons.mic_none : Icons.lock_outline,
-        size: 17,
-        color: abilitato ? AppColors.onAccent : AppColors.textDisabled,
+    return GestureDetector(
+      onTap: abilitato ? onTap : null,
+      child: Container(
+        width: 36,
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: !abilitato
+              ? Colors.transparent
+              : ascoltando
+              ? AppColors.amberStrong
+              : AppColors.accent,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          !abilitato
+              ? Icons.lock_outline
+              : ascoltando
+              ? Icons.mic
+              : Icons.mic_none,
+          size: 17,
+          color: abilitato ? AppColors.onAccent : AppColors.textDisabled,
+        ),
       ),
     );
   }

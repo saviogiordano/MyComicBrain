@@ -47,6 +47,10 @@ dependencies:
   path_provider: ^2.1.6
   permission_handler: ^13.0.1
   shared_preferences: ^2.5.5
+  # Fissato a 7.4.0 esatto (non un range aperto): la 7.5.0-beta alza il
+  # minimo SDK a Flutter 3.44/Dart 3.12, oltre allo stack del progetto —
+  # vedi docs/research/assistente-speech-to-text.md §7.1.
+  speech_to_text: 7.4.0
 
 dependency_overrides:
   # permission_handler_android 14.0.0's own android/build.gradle.kts is broken
