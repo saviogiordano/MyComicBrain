@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
+import 'package:mycomicbrain/core/data/assistente_client.dart';
+import 'package:mycomicbrain/core/data/assistente_orchestrator.dart';
+import 'package:mycomicbrain/core/data/claude_assistente_client.dart';
 import 'package:mycomicbrain/core/data/claude_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
@@ -10,8 +13,11 @@ import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/identificazione_pipeline.dart';
 import 'package:mycomicbrain/core/data/image_crop_service.dart';
+import 'package:mycomicbrain/core/data/locale_assistente_client.dart';
 import 'package:mycomicbrain/core/data/locale_cover_analysis_client.dart';
+import 'package:mycomicbrain/core/data/openai_assistente_client.dart';
 import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
+import 'package:mycomicbrain/core/data/openrouter_assistente_client.dart';
 import 'package:mycomicbrain/core/data/openrouter_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/preferences_shared_preferences_adapter.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
@@ -141,6 +147,72 @@ final coverAnalysisClientProvider = Provider<CoverAnalysisClient>((ref) {
           .providerAi(RuoloProviderAi.visivo) ??
       AiProvider.claude;
   return ref.watch(coverAnalysisClientPerProvider(providerAi));
+});
+
+final claudeAssistenteClientProvider = Provider<ClaudeAssistenteClient>(
+  (ref) => ClaudeAssistenteClient(
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  ),
+);
+
+final openAiAssistenteClientProvider = Provider<OpenAiAssistenteClient>(
+  (ref) => OpenAiAssistenteClient(
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  ),
+);
+
+final openRouterAssistenteClientProvider =
+    Provider<OpenRouterAssistenteClient>(
+      (ref) => OpenRouterAssistenteClient(
+        settingsRepository: ref.watch(settingsRepositoryProvider),
+      ),
+    );
+
+final localeAssistenteClientProvider = Provider<LocaleAssistenteClient>(
+  (ref) => LocaleAssistenteClient(
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  ),
+);
+
+/// Il client dell'Assistente per uno specifico [AiProvider] (ruolo
+/// [RuoloProviderAi.testuale]), indipendentemente da quale sia l'attivo —
+/// stesso motivo di [coverAnalysisClientPerProvider] per il ruolo Visivo.
+final ProviderFamily<AssistenteClient, AiProvider> assistenteClientPerProvider =
+    Provider.family<AssistenteClient, AiProvider>((ref, provider) {
+      return switch (provider) {
+        AiProvider.openai => ref.watch(openAiAssistenteClientProvider),
+        AiProvider.claude => ref.watch(claudeAssistenteClientProvider),
+        AiProvider.openRouter => ref.watch(
+          openRouterAssistenteClientProvider,
+        ),
+        AiProvider.locale => ref.watch(localeAssistenteClientProvider),
+      };
+    });
+
+/// Il client del Provider AI Testuale configurato per l'Assistente (§10),
+/// letto a runtime dalle Impostazioni — stesso pattern di
+/// [coverAnalysisClientProvider] per il ruolo Visivo. Default a Claude
+/// quando l'utente non ha ancora scelto un provider Testuale.
+final assistenteClientProvider = Provider<AssistenteClient>((ref) {
+  final providerAi =
+      ref
+          .watch(settingsRepositoryProvider)
+          .providerAi(RuoloProviderAi.testuale) ??
+      AiProvider.claude;
+  return ref.watch(assistenteClientPerProvider(providerAi));
+});
+
+/// Orchestratore dell'Assistente (§10, deciso su
+/// [Implementare l'orchestratore LLM Testuale con tool-calling](https://github.com/saviogiordano/MyComicBrain/issues/132)):
+/// invia i messaggi dell'utente al Provider AI Testuale configurato,
+/// esegue le tool call sulle query di `ComicsRepository` e persiste
+/// Conversazione/Messaggio.
+final assistenteOrchestratorProvider = Provider<AssistenteOrchestrator>((ref) {
+  return AssistenteOrchestrator(
+    repository: ref.watch(comicsRepositoryProvider),
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+    client: ref.watch(assistenteClientProvider),
+  );
 });
 
 final comicVineClientProvider = Provider<ComicVineClient>(

@@ -110,6 +110,25 @@ class SettingsRepository {
     return _preferences.setString(_chiaveUrlLocale(ruolo), url);
   }
 
+  /// `true` se [ruolo] ha i dati minimi per tentare una chiamata AI (§12,
+  /// deciso su
+  /// [UX quando il Provider AI Testuale non è configurato](https://github.com/saviogiordano/MyComicBrain/issues/123)):
+  /// un provider selezionato, e il suo campo obbligatorio non vuoto — API
+  /// key per i brand cloud, URL per Locale. Non verifica la raggiungibilità
+  /// reale (chiave non valida, endpoint irraggiungibile): quella resta
+  /// terreno di [Gestione errori dell'Assistente](https://github.com/saviogiordano/MyComicBrain/issues/124),
+  /// scoperta solo al momento della chiamata.
+  Future<bool> configurato(RuoloProviderAi ruolo) async {
+    final provider = providerAi(ruolo);
+    if (provider == null) return false;
+    if (provider.richiedeUrl) {
+      final url = urlLocale(ruolo);
+      return url != null && url.isNotEmpty;
+    }
+    final apiKey = await apiKeyAi(ruolo, provider);
+    return apiKey != null && apiKey.isNotEmpty;
+  }
+
   /// Semina entrambi i ruoli (Visivo/Testuale) dalla configurazione singola
   /// preesistente al primo avvio dopo lo split (ADR-0001, deciso su #127):
   /// se l'utente aveva già configurato un provider, entrambe le selezioni
