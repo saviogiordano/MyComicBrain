@@ -17,14 +17,17 @@ final esportazioneServiceProvider = Provider<EsportazioneService>(
 );
 
 /// Formato dell'export della collezione (§16, deciso su
-/// [Mappa — Importazione ed esportazione](https://github.com/saviogiordano/MyComicBrain/issues/139)):
-/// CSV/JSON nell'MVP, Excel/PDF in ticket separati.
-enum FormatoEsportazione { csv, json }
+/// [#139](https://github.com/saviogiordano/MyComicBrain/issues/139)/
+/// [#143](https://github.com/saviogiordano/MyComicBrain/issues/143)):
+/// CSV/JSON/Excel, stesso schema/granularità; PDF/catalogo in ticket
+/// separato.
+enum FormatoEsportazione { csv, json, excel }
 
 extension _EstensioneFormato on FormatoEsportazione {
   String get estensione => switch (this) {
     FormatoEsportazione.csv => 'csv',
     FormatoEsportazione.json => 'json',
+    FormatoEsportazione.excel => 'xlsx',
   };
 }
 
@@ -45,18 +48,27 @@ class EsportazioneService {
 
   Future<void> esporta(FormatoEsportazione formato) async {
     final righe = await _repository.tutteLeCopiePerEsportazione();
-    final contenuto = switch (formato) {
-      FormatoEsportazione.csv => generaCsvEsportazione(righe),
-      FormatoEsportazione.json => generaJsonEsportazione(righe),
-    };
 
     final directory = await getTemporaryDirectory();
     final nomeFile =
         'mycomicbrain_collezione_'
         '${DateTime.now().millisecondsSinceEpoch}.${formato.estensione}';
-    final file = await File(
-      p.join(directory.path, nomeFile),
-    ).writeAsString(contenuto);
+    final percorso = p.join(directory.path, nomeFile);
+    final File file;
+    switch (formato) {
+      case FormatoEsportazione.csv:
+        file = await File(
+          percorso,
+        ).writeAsString(generaCsvEsportazione(righe));
+      case FormatoEsportazione.json:
+        file = await File(
+          percorso,
+        ).writeAsString(generaJsonEsportazione(righe));
+      case FormatoEsportazione.excel:
+        file = await File(
+          percorso,
+        ).writeAsBytes(generaExcelEsportazione(righe));
+    }
 
     await SharePlus.instance.share(
       ShareParams(files: [XFile(file.path)], fileNameOverrides: [nomeFile]),

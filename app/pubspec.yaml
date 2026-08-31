@@ -35,6 +35,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   drift: 2.34.0
   drift_flutter: ^0.3.1
+  excel: ^4.0.6
   file_picker: ^12.1.2
   flutter:
     sdk: flutter
@@ -42,7 +43,12 @@ dependencies:
   flutter_secure_storage: ^11.0.0
   go_router: ^17.5.0
   http: ^1.6.0
-  image: ^4.5.4
+  # Fissato a ^4.3.0 (non ^4.5.4): versioni più recenti richiedono
+  # `archive` ^4.x, incompatibile con `excel` ^4.0.6 (richiede `archive`
+  # ^3.6.1, deciso su #143 — nessuna versione di `excel` supporta ancora
+  # `archive` 4.x). Le API usate da `cover_compressor.dart` (decodeImage,
+  # copyResize, encodeJpg) sono invariate dalla 4.3.0.
+  image: ^4.3.0
   image_cropper: ^12.2.1
   image_picker: ^1.2.3
   path: ^1.9.1

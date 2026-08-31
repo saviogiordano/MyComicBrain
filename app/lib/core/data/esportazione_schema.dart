@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:csv/csv.dart' as csv_pkg;
+import 'package:excel/excel.dart' as excel_pkg;
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/esportazione.dart';
@@ -119,4 +121,32 @@ String generaJsonEsportazione(List<RigaEsportazioneCopia> righe) {
     ],
   };
   return const JsonEncoder.withIndent('  ').convert(documento);
+}
+
+/// Genera l'export Excel (§16, deciso su
+/// [#143](https://github.com/saviogiordano/MyComicBrain/issues/143)): stesso
+/// schema/etichette/granularità di [generaCsvEsportazione], un foglio unico
+/// con intestazione più una riga per [RigaEsportazioneCopia]. Tutte le celle
+/// sono testo (coerente col CSV, niente formattazione numerica/data
+/// specifica) — evita ambiguità di parsing fra locali diversi di Excel.
+Uint8List generaExcelEsportazione(List<RigaEsportazioneCopia> righe) {
+  final libro = excel_pkg.Excel.createExcel();
+  final nomeFoglioPredefinito = libro.getDefaultSheet()!;
+  final foglio = libro['Collezione'];
+  libro
+    ..setDefaultSheet('Collezione')
+    ..delete(nomeFoglioPredefinito);
+
+  foglio.appendRow([
+    for (final colonna in colonneEsportazione)
+      excel_pkg.TextCellValue(colonna.etichetta),
+  ]);
+  for (final riga in righe) {
+    foglio.appendRow([
+      for (final colonna in colonneEsportazione)
+        excel_pkg.TextCellValue(colonna.valore(riga)),
+    ]);
+  }
+
+  return Uint8List.fromList(libro.encode()!);
 }

@@ -528,17 +528,23 @@ void main() {
   );
 
   group('Importa/Esporta dati (§16, deciso su #139/#140)', () {
-    testWidgets('mostra le righe "Esporta in CSV" e "Esporta in JSON"', (
-      tester,
-    ) async {
-      await pumpImpostazioni(tester);
-      // `SectionHeader` mostra l'etichetta in maiuscolo.
-      await tester.scrollUntilVisible(find.text('IMPORTA/ESPORTA DATI'), 200);
+    testWidgets(
+      'mostra le righe "Esporta in CSV", "Esporta in JSON" e '
+      '"Esporta in Excel"',
+      (tester) async {
+        await pumpImpostazioni(tester);
+        // `SectionHeader` mostra l'etichetta in maiuscolo.
+        await tester.scrollUntilVisible(
+          find.text('IMPORTA/ESPORTA DATI'),
+          200,
+        );
 
-      expect(find.text('IMPORTA/ESPORTA DATI'), findsOneWidget);
-      expect(find.text('Esporta in CSV'), findsOneWidget);
-      expect(find.text('Esporta in JSON'), findsOneWidget);
-    });
+        expect(find.text('IMPORTA/ESPORTA DATI'), findsOneWidget);
+        expect(find.text('Esporta in CSV'), findsOneWidget);
+        expect(find.text('Esporta in JSON'), findsOneWidget);
+        expect(find.text('Esporta in Excel'), findsOneWidget);
+      },
+    );
 
     testWidgets(
       'un export fallito mostra il popup di errore con lo stesso stile '

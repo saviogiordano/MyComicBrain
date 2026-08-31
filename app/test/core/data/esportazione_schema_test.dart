@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:excel/excel.dart' as excel_pkg;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/esportazione_schema.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
@@ -122,6 +123,38 @@ void main() {
       });
       expect(riga['Opera'], 'Dylan Dog');
       expect(riga['Autori'], 'Tiziano Sclavi (sceneggiatore)');
+    });
+  });
+
+  group('generaExcelEsportazione', () {
+    test('intestazione con le etichette italiane, una riga per Copia', () {
+      final bytes = generaExcelEsportazione([rigaCompleta(), rigaMinima()]);
+      final libro = excel_pkg.Excel.decodeBytes(bytes);
+
+      expect(libro.sheets.keys, ['Collezione']);
+      final righe = libro.sheets['Collezione']!.rows;
+      expect(righe, hasLength(3)); // intestazione + 2 righe
+
+      String? testo(excel_pkg.Data? cella) => cella?.value?.toString();
+      final intestazione = righe.first.map(testo).toList();
+      expect(intestazione, [
+        for (final c in colonneEsportazione) c.etichetta,
+      ]);
+
+      final indiceOpera = intestazione.indexOf('Opera');
+      final indiceStato = intestazione.indexOf('Stato');
+      final indiceCondizione = intestazione.indexOf('Condizione');
+      expect(testo(righe[1][indiceOpera]), 'Dylan Dog');
+      // "Letto" perché readingStatus è impostato su una Copia posseduta.
+      expect(testo(righe[1][indiceStato]), 'Letto');
+      expect(testo(righe[1][indiceCondizione]), 'Very Fine');
+      expect(testo(righe[2][indiceOpera]), 'Volume unico');
+      // Stato di una Copia persa: la voce "Mancante" (§8.3, `voceStatoDi`).
+      expect(testo(righe[2][indiceStato]), 'Mancante');
+    });
+
+    test('campi vuoti per una riga minima, nessuna eccezione', () {
+      expect(() => generaExcelEsportazione([rigaMinima()]), returnsNormally);
     });
   });
 }

@@ -611,6 +611,14 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                         ),
                         const _Divisore(),
                         _Riga(
+                          titolo: 'Esporta in Excel',
+                          valore: _esportazioneInCorso ? 'In corso…' : '',
+                          onTap: _esportazioneInCorso
+                              ? null
+                              : () => _esporta(FormatoEsportazione.excel),
+                        ),
+                        const _Divisore(),
+                        _Riga(
                           titolo: 'Importa collezione',
                           valore: _importazioneInCorso ? 'In corso…' : '',
                           onTap: _importazioneInCorso ? null : _importa,
