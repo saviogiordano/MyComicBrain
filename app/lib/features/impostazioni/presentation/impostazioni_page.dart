@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/impostazioni/application/ai_provider.dart';
 import 'package:mycomicbrain/features/impostazioni/application/esportazione_service.dart';
+import 'package:mycomicbrain/features/impostazioni/application/importazione_service.dart';
 
 /// Schermo Impostazioni (§12, deciso su #104): elenco di righe stile
 /// impostazioni di sistema — il valore corrente in trailing, ogni riga apre
@@ -74,6 +76,10 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   // alla volta, condiviso fra CSV e JSON — non ha senso avviarne due in
   // parallelo dalla stessa schermata.
   bool _esportazioneInCorso = false;
+
+  // Stato di "Import in corso" (§16, deciso su #142), stesso pattern di
+  // [_esportazioneInCorso].
+  bool _importazioneInCorso = false;
 
   @override
   void initState() {
@@ -201,6 +207,71 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     } finally {
       if (mounted) setState(() => _esportazioneInCorso = false);
     }
+  }
+
+  /// Importa collezione da CSV/JSON (§16, "Importa/Esporta dati", deciso su
+  /// #139/#142): selezione file tramite `file_picker`
+  /// (`ImportazioneService`), import additivo semplice — righe malformate
+  /// vengono saltate, non bloccano le altre. Al termine mostra un riepilogo
+  /// (N importate, M saltate con motivo, [_mostraRiepilogoImportazione]);
+  /// se l'utente annulla la selezione del file non succede nulla. Errori di
+  /// file/parsing riusano lo stesso popup esteso di "Verifica connessione"
+  /// ([_mostraErroreVerifica]).
+  Future<void> _importa() async {
+    if (_importazioneInCorso) return;
+    setState(() => _importazioneInCorso = true);
+    try {
+      final risultato = await ref.read(importazioneServiceProvider).importa();
+      if (!mounted || risultato == null) return;
+      await _mostraRiepilogoImportazione(risultato);
+    } on Object catch (e) {
+      if (!mounted) return;
+      await _mostraErroreVerifica('Import', 'Import non riuscito: $e');
+    } finally {
+      if (mounted) setState(() => _importazioneInCorso = false);
+    }
+  }
+
+  /// Riepilogo finale dell'import (§16, deciso su #142): conteggio righe
+  /// importate/saltate, con il motivo di ciascuno scarto per farlo
+  /// individuare nel file originale.
+  Future<void> _mostraRiepilogoImportazione(
+    RisultatoAnalisiImportazione risultato,
+  ) {
+    final scartate = risultato.scartate;
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surfaceRaised,
+        title: const Text('Import completato'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${risultato.valide.length} importate, '
+                  '${scartate.length} saltate.',
+                ),
+                if (scartate.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final riga in scartate)
+                    Text('Riga ${riga.numeroRiga}: ${riga.motivo}'),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Mostra il motivo del fallimento per esteso in un popup (§12, richiesto
@@ -537,6 +608,12 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                           onTap: _esportazioneInCorso
                               ? null
                               : () => _esporta(FormatoEsportazione.json),
+                        ),
+                        const _Divisore(),
+                        _Riga(
+                          titolo: 'Importa collezione',
+                          valore: _importazioneInCorso ? 'In corso…' : '',
+                          onTap: _importazioneInCorso ? null : _importa,
                         ),
                       ],
                     ),

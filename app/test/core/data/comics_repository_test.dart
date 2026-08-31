@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
@@ -1854,54 +1855,60 @@ void main() {
       expect(await repo.tutteLeCopiePerEsportazione(), isEmpty);
     });
 
-    test('una riga per Copia, con Edizione/Opera/Serie/Autori risolti', () async {
-      final serieId = await repo.aggiungiSerie(name: 'Dylan Dog');
-      final operaId = await repo.aggiungiOpera(title: 'Dylan Dog #1');
-      final edizioneId = await repo.aggiungiEdizione(
-        operaId: operaId,
-        serieId: serieId,
-        publisher: 'Sergio Bonelli Editore',
-        issueNumber: 1,
-        issueNumberLabel: '1',
-        year: 1986,
-      );
-      final creatorId = await repo.aggiungiCreator('Tiziano Sclavi');
-      await repo.collegaCreatorAEdizione(
-        edizioneId: edizioneId,
-        creatorId: creatorId,
-        ruolo: RuoloCreator.sceneggiatore,
-      );
-      await repo.aggiungiCopia(
-        edizioneId: edizioneId,
-        status: StatoCopia.posseduta,
-        condition: CondizioneCopia.veryFine,
-        purchasePrice: 5,
-        notes: 'Prima copia',
-      );
-      await repo.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.venduta);
+    test(
+      'una riga per Copia, con Edizione/Opera/Serie/Autori risolti',
+      () async {
+        final serieId = await repo.aggiungiSerie(name: 'Dylan Dog');
+        final operaId = await repo.aggiungiOpera(title: 'Dylan Dog #1');
+        final edizioneId = await repo.aggiungiEdizione(
+          operaId: operaId,
+          serieId: serieId,
+          publisher: 'Sergio Bonelli Editore',
+          issueNumber: 1,
+          issueNumberLabel: '1',
+          year: 1986,
+        );
+        final creatorId = await repo.aggiungiCreator('Tiziano Sclavi');
+        await repo.collegaCreatorAEdizione(
+          edizioneId: edizioneId,
+          creatorId: creatorId,
+          ruolo: RuoloCreator.sceneggiatore,
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+          condition: CondizioneCopia.veryFine,
+          purchasePrice: 5,
+          notes: 'Prima copia',
+        );
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.venduta,
+        );
 
-      final righe = await repo.tutteLeCopiePerEsportazione();
+        final righe = await repo.tutteLeCopiePerEsportazione();
 
-      // Due Copie della stessa Edizione: due righe, incluse le vendute
-      // (l'export è un'istantanea completa dei dati dell'utente, §19 —
-      // non filtra per status come `watchIndiceCollezione`).
-      expect(righe, hasLength(2));
-      final prima = righe.firstWhere((r) => r.status == StatoCopia.posseduta);
-      expect(prima.operaTitolo, 'Dylan Dog #1');
-      expect(prima.serieName, 'Dylan Dog');
-      expect(prima.publisher, 'Sergio Bonelli Editore');
-      expect(prima.issueNumberLabel, '1');
-      expect(prima.year, 1986);
-      expect(prima.condition, CondizioneCopia.veryFine);
-      expect(prima.purchasePrice, 5);
-      expect(prima.notes, 'Prima copia');
-      expect(prima.autori, hasLength(1));
-      expect(prima.autori.single.name, 'Tiziano Sclavi');
-      expect(prima.autori.single.ruolo, RuoloCreator.sceneggiatore);
+        // Due Copie della stessa Edizione: due righe, incluse le vendute
+        // (l'export è un'istantanea completa dei dati dell'utente, §19 —
+        // non filtra per status come `watchIndiceCollezione`).
+        expect(righe, hasLength(2));
+        final prima = righe.firstWhere((r) => r.status == StatoCopia.posseduta);
+        expect(prima.operaTitolo, 'Dylan Dog #1');
+        expect(prima.serieName, 'Dylan Dog');
+        expect(prima.publisher, 'Sergio Bonelli Editore');
+        expect(prima.issueNumberLabel, '1');
+        expect(prima.year, 1986);
+        expect(prima.condition, CondizioneCopia.veryFine);
+        expect(prima.purchasePrice, 5);
+        expect(prima.notes, 'Prima copia');
+        expect(prima.autori, hasLength(1));
+        expect(prima.autori.single.name, 'Tiziano Sclavi');
+        expect(prima.autori.single.ruolo, RuoloCreator.sceneggiatore);
 
-      final seconda = righe.firstWhere((r) => r.status == StatoCopia.venduta);
-      expect(seconda.operaTitolo, 'Dylan Dog #1');
-    });
+        final seconda = righe.firstWhere((r) => r.status == StatoCopia.venduta);
+        expect(seconda.operaTitolo, 'Dylan Dog #1');
+      },
+    );
 
     test("un'Edizione senza Serie ha serieName null", () async {
       final operaId = await repo.aggiungiOpera(title: 'Volume unico');
@@ -1915,5 +1922,86 @@ void main() {
 
       expect(riga.serieName, isNull);
     });
+  });
+
+  group('importaRighe (§16, deciso su #142)', () {
+    test(
+      'scrive Opera/Edizione/Copia/Autori a partire dalla riga parsata',
+      () async {
+        await repo.importaRighe([
+          const RigaImportazioneParsata(
+            operaTitolo: 'Dylan Dog #1',
+            status: StatoCopia.posseduta,
+            readingStatus: StatoLettura.letto,
+            serieName: 'Dylan Dog',
+            publisher: 'Sergio Bonelli Editore',
+            issueNumberLabel: '1',
+            issueNumber: 1,
+            year: 1986,
+            condition: CondizioneCopia.veryFine,
+            purchasePrice: 5,
+            notes: 'Prima copia',
+            autori: [
+              (name: 'Tiziano Sclavi', ruolo: RuoloCreator.sceneggiatore),
+            ],
+          ),
+        ]);
+
+        final righe = await repo.tutteLeCopiePerEsportazione();
+        expect(righe, hasLength(1));
+        final riga = righe.single;
+        expect(riga.operaTitolo, 'Dylan Dog #1');
+        expect(riga.serieName, 'Dylan Dog');
+        expect(riga.publisher, 'Sergio Bonelli Editore');
+        expect(riga.issueNumberLabel, '1');
+        expect(riga.year, 1986);
+        expect(riga.status, StatoCopia.posseduta);
+        expect(riga.readingStatus, StatoLettura.letto);
+        expect(riga.condition, CondizioneCopia.veryFine);
+        expect(riga.purchasePrice, 5);
+        expect(riga.notes, 'Prima copia');
+        expect(riga.autori, hasLength(1));
+        expect(riga.autori.single.name, 'Tiziano Sclavi');
+        expect(riga.autori.single.ruolo, RuoloCreator.sceneggiatore);
+      },
+    );
+
+    test(
+      'ogni riga crea sempre nuove Opera/Edizione/Copia, nessun merge — '
+      'anche per lo stesso titolo importato due volte',
+      () async {
+        const riga = RigaImportazioneParsata(
+          operaTitolo: 'Dylan Dog #1',
+          status: StatoCopia.posseduta,
+        );
+        await repo.importaRighe([riga, riga]);
+
+        final righe = await repo.tutteLeCopiePerEsportazione();
+        expect(righe, hasLength(2));
+        expect(righe.map((r) => r.edizioneId).toSet(), hasLength(2));
+      },
+    );
+
+    test(
+      'la Serie con lo stesso nome viene riusata (invariante esistente di '
+      "aggiungiSerie, non una scelta specifica dell'import)",
+      () async {
+        await repo.importaRighe([
+          const RigaImportazioneParsata(
+            operaTitolo: 'Dylan Dog #1',
+            status: StatoCopia.posseduta,
+            serieName: 'Dylan Dog',
+          ),
+          const RigaImportazioneParsata(
+            operaTitolo: 'Dylan Dog #2',
+            status: StatoCopia.posseduta,
+            serieName: 'Dylan Dog',
+          ),
+        ]);
+
+        final serie = await db.select(db.serieTable).get();
+        expect(serie, hasLength(1));
+      },
+    );
   });
 }

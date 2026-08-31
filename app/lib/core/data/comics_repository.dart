@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
@@ -2288,14 +2289,12 @@ ORDER BY o.title, e.issue_number
     final risultato = <int, List<CreatorConRuolo>>{};
     for (final riga in righe) {
       final comicCreator = riga.readTable(_db.comicCreator);
-      risultato
-          .putIfAbsent(comicCreator.edizioneId, () => [])
-          .add((
-            comicCreatorId: comicCreator.id,
-            creatorId: riga.readTable(_db.creator).id,
-            name: riga.readTable(_db.creator).name,
-            ruolo: comicCreator.ruolo,
-          ));
+      risultato.putIfAbsent(comicCreator.edizioneId, () => []).add((
+        comicCreatorId: comicCreator.id,
+        creatorId: riga.readTable(_db.creator).id,
+        name: riga.readTable(_db.creator).name,
+        ruolo: comicCreator.ruolo,
+      ));
     }
     return risultato;
   }
@@ -2339,5 +2338,78 @@ ORDER BY o.title, e.issue_number
       notes: copia.notes,
       createdAt: copia.createdAt,
     );
+  }
+
+  /// Scrive le righe già validate da `analizzaCsvImportazione`/
+  /// `analizzaJsonImportazione` (§16, deciso su
+  /// [#142](https://github.com/saviogiordano/MyComicBrain/issues/142)):
+  /// import additivo semplice, ogni riga crea sempre una nuova Opera,
+  /// Edizione e Copia — nessuna euristica di merge/duplicate-detection con
+  /// la collezione esistente. Autori sempre nuovi Creator ([aggiungiCreator],
+  /// stesso non-dedup di #64); la Serie riusa invece l'invariante esistente
+  /// di [aggiungiSerie] (dedup per nome) — quella non è una scelta
+  /// dell'import ma la stessa regola che vale già per ogni altra scrittura
+  /// di Serie nell'app (evita righe Serie duplicate che spaccherebbero i KPI
+  /// "serie"/"serie complete"). Un'unica transazione per l'intero import:
+  /// più rows sono già validate a monte, quindi un errore qui è un guasto
+  /// del DB, non un dato scorretto — meglio annullare tutto che lasciare
+  /// Opere/Edizioni orfane senza Copia.
+  Future<void> importaRighe(List<RigaImportazioneParsata> righe) {
+    return _db.transaction(() async {
+      for (final riga in righe) {
+        final operaId = await aggiungiOpera(
+          title: riga.operaTitolo,
+          createdAt: riga.createdAt,
+        );
+
+        int? serieId;
+        if (riga.serieName != null) {
+          serieId = await aggiungiSerie(name: riga.serieName!);
+        }
+
+        final edizioneId = await aggiungiEdizione(
+          operaId: operaId,
+          serieId: serieId,
+          publisher: riga.publisher,
+          issueNumber: riga.issueNumber,
+          issueNumberLabel: riga.issueNumberLabel,
+          releaseDate: riga.releaseDate,
+          coverPrice: riga.coverPrice,
+          pageCount: riga.pageCount,
+          language: riga.language,
+          color: riga.color,
+          ean: riga.ean,
+          volume: riga.volume,
+          description: riga.description,
+          printingType: riga.printingType,
+          classificazione: riga.classificazione,
+          year: riga.year,
+          format: riga.format,
+          createdAt: riga.createdAt,
+        );
+
+        for (final autore in riga.autori) {
+          final creatorId = await aggiungiCreator(autore.name);
+          await collegaCreatorAEdizione(
+            edizioneId: edizioneId,
+            creatorId: creatorId,
+            ruolo: autore.ruolo,
+          );
+        }
+
+        await aggiungiCopia(
+          edizioneId: edizioneId,
+          status: riga.status,
+          readingStatus: riga.readingStatus,
+          condition: riga.condition,
+          purchasePrice: riga.purchasePrice,
+          purchaseDate: riga.purchaseDate,
+          seller: riga.seller,
+          location: riga.location,
+          notes: riga.notes,
+          createdAt: riga.createdAt,
+        );
+      }
+    });
   }
 }
