@@ -209,8 +209,8 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     }
   }
 
-  /// Importa collezione da CSV/JSON (§16, "Importa/Esporta dati", deciso su
-  /// #139/#142): selezione file tramite `file_picker`
+  /// Importa collezione da CSV/JSON/Excel (§16, "Importa/Esporta dati",
+  /// deciso su #139/#142/#144): selezione file tramite `file_picker`
   /// (`ImportazioneService`), import additivo semplice — righe malformate
   /// vengono saltate, non bloccano le altre. Al termine mostra un riepilogo
   /// (N importate, M saltate con motivo, [_mostraRiepilogoImportazione]);

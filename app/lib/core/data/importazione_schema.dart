@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:csv/csv.dart' as csv_pkg;
+import 'package:excel/excel.dart' as excel_pkg;
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
@@ -163,6 +165,53 @@ RisultatoAnalisiImportazione analizzaJsonImportazione(String contenuto) {
     };
     if (valori.values.every((v) => v.trim().isEmpty)) continue;
 
+    _smistaRiga(
+      valori,
+      numeroRiga: numeroRiga,
+      valide: valide,
+      scartate: scartate,
+    );
+  }
+
+  return RisultatoAnalisiImportazione(valide: valide, scartate: scartate);
+}
+
+/// Analizza un Excel generato da [generaExcelEsportazione] (o compatibile,
+/// stesse etichette in intestazione sul primo foglio) — §16, deciso su
+/// [#144](https://github.com/saviogiordano/MyComicBrain/issues/144). Stessa
+/// logica di [analizzaCsvImportazione]: legge il primo foglio del workbook
+/// (a differenza di CSV/JSON non c'è un nome di foglio garantito se il file
+/// è stato rinominato/modificato, ma l'export produce sempre un unico
+/// foglio) invece di cercare per nome "Collezione".
+RisultatoAnalisiImportazione analizzaExcelImportazione(Uint8List bytes) {
+  final libro = excel_pkg.Excel.decodeBytes(bytes);
+  if (libro.tables.isEmpty) {
+    return const RisultatoAnalisiImportazione(valide: [], scartate: []);
+  }
+
+  final righe = libro.tables.values.first.rows;
+  if (righe.isEmpty) {
+    return const RisultatoAnalisiImportazione(valide: [], scartate: []);
+  }
+
+  final intestazione = [
+    for (final cella in righe.first) cella?.value?.toString() ?? '',
+  ];
+  final valide = <RigaImportazioneParsata>[];
+  final scartate = <RigaImportazioneScartata>[];
+
+  var numeroRiga = 0;
+  for (final riga in righe.skip(1)) {
+    numeroRiga++;
+    final valoriRiga = [
+      for (final cella in riga) cella?.value?.toString() ?? '',
+    ];
+    if (valoriRiga.every((v) => v.trim().isEmpty)) continue;
+
+    final valori = <String, String>{
+      for (final (i, etichetta) in intestazione.indexed)
+        etichetta: i < valoriRiga.length ? valoriRiga[i] : '',
+    };
     _smistaRiga(
       valori,
       numeroRiga: numeroRiga,

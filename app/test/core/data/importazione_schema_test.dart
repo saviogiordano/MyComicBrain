@@ -177,4 +177,39 @@ void main() {
       );
     });
   });
+
+  group('Excel', () {
+    test('una riga completa riparte identica sui campi chiave', () {
+      final bytes = generaExcelEsportazione([rigaCompleta()]);
+      final risultato = analizzaExcelImportazione(bytes);
+
+      expect(risultato.scartate, isEmpty);
+      expect(risultato.valide, hasLength(1));
+      final riga = risultato.valide.single;
+      expect(riga.operaTitolo, 'Dylan Dog');
+      expect(riga.serieName, 'Dylan Dog');
+      expect(riga.format, FormatoEdizione.spillato);
+      expect(riga.status, StatoCopia.posseduta);
+      expect(riga.readingStatus, StatoLettura.letto);
+      expect(riga.autori, hasLength(1));
+      expect(riga.autori.single.name, 'Tiziano Sclavi');
+    });
+
+    test('Opera mancante viene scartata con motivo, come per il CSV', () {
+      final bytes = generaExcelEsportazione([
+        RigaEsportazioneCopia(
+          copiaId: 1,
+          edizioneId: 1,
+          operaTitolo: '',
+          status: StatoCopia.posseduta,
+          createdAt: DateTime(2024),
+        ),
+      ]);
+      final risultato = analizzaExcelImportazione(bytes);
+
+      expect(risultato.valide, isEmpty);
+      expect(risultato.scartate, hasLength(1));
+      expect(risultato.scartate.single.motivo, contains('Opera'));
+    });
+  });
 }

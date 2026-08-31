@@ -16,9 +16,10 @@ final importazioneServiceProvider = Provider<ImportazioneService>(
   (ref) => ImportazioneService(ref.watch(comicsRepositoryProvider)),
 );
 
-/// Importa CSV/JSON nello stesso schema dell'export (§16, deciso su
-/// #139/#142, sezione "Importa/Esporta dati" di Impostazioni): selezione
-/// del file tramite `file_picker`, formato riconosciuto dall'estensione (a
+/// Importa CSV/JSON/Excel nello stesso schema dell'export (§16, deciso su
+/// #139/#142/[#144](https://github.com/saviogiordano/MyComicBrain/issues/144),
+/// sezione "Importa/Esporta dati" di Impostazioni): selezione del file
+/// tramite `file_picker`, formato riconosciuto dall'estensione (a
 /// differenza dell'export non serve chiederlo — è già scritto nel file), poi
 /// scrittura additiva via [ComicsRepository.importaRighe]. Le righe scartate
 /// durante l'analisi non bloccano le altre: tornano nel
@@ -32,15 +33,20 @@ class ImportazioneService {
   Future<RisultatoAnalisiImportazione?> importa() async {
     final file = await FilePicker.pickFile(
       type: FileType.custom,
-      allowedExtensions: ['csv', 'json'],
+      allowedExtensions: ['csv', 'json', 'xlsx'],
     );
     final percorso = file?.path;
     if (percorso == null) return null;
 
-    final contenuto = await File(percorso).readAsString();
-    final analisi = p.extension(percorso).toLowerCase() == '.json'
-        ? analizzaJsonImportazione(contenuto)
-        : analizzaCsvImportazione(contenuto);
+    final estensione = p.extension(percorso).toLowerCase();
+    final RisultatoAnalisiImportazione analisi;
+    if (estensione == '.xlsx') {
+      analisi = analizzaExcelImportazione(await File(percorso).readAsBytes());
+    } else if (estensione == '.json') {
+      analisi = analizzaJsonImportazione(await File(percorso).readAsString());
+    } else {
+      analisi = analizzaCsvImportazione(await File(percorso).readAsString());
+    }
 
     if (analisi.valide.isNotEmpty) {
       await _repository.importaRighe(analisi.valide);
