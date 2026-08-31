@@ -7,6 +7,7 @@ import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
+import 'package:mycomicbrain/core/domain/catalogo_stampabile.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
@@ -2337,6 +2338,71 @@ ORDER BY o.title, e.issue_number
       location: copia.location,
       notes: copia.notes,
       createdAt: copia.createdAt,
+    );
+  }
+
+  /// Tutte le Copie della collezione per il PDF/catalogo stampabile (§16,
+  /// layout deciso su
+  /// [#141](https://github.com/saviogiordano/MyComicBrain/issues/141)):
+  /// stessa base non filtrata di [tutteLeCopiePerEsportazione] (istantanea
+  /// completa, anche Copie vendute/perse), ma proiettata sui campi della
+  /// variante C scelta — cover risolta inclusa, a differenza dell'export
+  /// dati che non la porta con sé.
+  Future<List<RigaCatalogoStampabile>>
+  tutteLeCopiePerCatalogoStampabile() async {
+    final query = _db.select(_db.copie).join([
+      innerJoin(
+        _db.edizioni,
+        _db.edizioni.id.equalsExp(_db.copie.edizioneId),
+      ),
+      innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+      leftOuterJoin(
+        _db.serieTable,
+        _db.serieTable.id.equalsExp(_db.edizioni.serieId),
+      ),
+    ])..orderBy([OrderingTerm.asc(_db.copie.id)]);
+
+    final righe = await query.get();
+    if (righe.isEmpty) return const <RigaCatalogoStampabile>[];
+
+    final edizioneIds = {
+      for (final riga in righe) riga.readTable(_db.edizioni).id,
+    }.toList();
+    final autoriPerEdizione = await _autoriConRuoloPerEdizione(edizioneIds);
+
+    return [
+      for (final riga in righe)
+        await _rigaCatalogoStampabileDaJoin(
+          riga,
+          autori:
+              autoriPerEdizione[riga.readTable(_db.edizioni).id] ?? const [],
+        ),
+    ];
+  }
+
+  Future<RigaCatalogoStampabile> _rigaCatalogoStampabileDaJoin(
+    TypedResult riga, {
+    required List<CreatorConRuolo> autori,
+  }) async {
+    final copia = riga.readTable(_db.copie);
+    final edizione = riga.readTable(_db.edizioni);
+    final opera = riga.readTable(_db.opere);
+    final serie = riga.readTableOrNull(_db.serieTable);
+    return RigaCatalogoStampabile(
+      copiaId: copia.id,
+      operaTitolo: opera.title,
+      serieName: serie?.name,
+      issueNumberLabel: edizione.issueNumberLabel,
+      issueNumber: edizione.issueNumber,
+      publisher: edizione.publisher,
+      year: edizione.year,
+      format: edizione.format,
+      autori: autori,
+      condition: copia.condition,
+      purchasePrice: copia.purchasePrice,
+      location: copia.location,
+      notes: copia.notes,
+      coverImage: await risolviCoverImage(edizione.coverImage),
     );
   }
 

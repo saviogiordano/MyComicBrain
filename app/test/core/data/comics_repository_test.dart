@@ -1924,6 +1924,95 @@ void main() {
     });
   });
 
+  group(
+    'tutteLeCopiePerCatalogoStampabile (§16, layout deciso su #141)',
+    () {
+      test('nessuna copia: lista vuota', () async {
+        expect(await repo.tutteLeCopiePerCatalogoStampabile(), isEmpty);
+      });
+
+      test(
+        'una riga per Copia, con i campi della variante C e la cover risolta',
+        () async {
+          final serieId = await repo.aggiungiSerie(name: 'Dylan Dog');
+          final operaId = await repo.aggiungiOpera(title: 'Dylan Dog');
+          final edizioneId = await repo.aggiungiEdizione(
+            operaId: operaId,
+            serieId: serieId,
+            publisher: 'Sergio Bonelli Editore',
+            issueNumber: 1,
+            issueNumberLabel: '1',
+            year: 1986,
+            format: FormatoEdizione.spillato,
+            coverImage: 'https://example.com/cover.jpg',
+          );
+          final creatorId = await repo.aggiungiCreator('Tiziano Sclavi');
+          await repo.collegaCreatorAEdizione(
+            edizioneId: edizioneId,
+            creatorId: creatorId,
+            ruolo: RuoloCreator.sceneggiatore,
+          );
+          await repo.aggiungiCopia(
+            edizioneId: edizioneId,
+            status: StatoCopia.posseduta,
+            condition: CondizioneCopia.veryFine,
+            purchasePrice: 5,
+            location: 'Scaffale A1',
+            notes: 'Prima edizione',
+          );
+
+          final riga = (await repo.tutteLeCopiePerCatalogoStampabile()).single;
+
+          expect(riga.operaTitolo, 'Dylan Dog');
+          expect(riga.serieName, 'Dylan Dog');
+          expect(riga.publisher, 'Sergio Bonelli Editore');
+          expect(riga.issueNumberLabel, '1');
+          expect(riga.issueNumber, 1);
+          expect(riga.year, 1986);
+          expect(riga.format, FormatoEdizione.spillato);
+          expect(riga.autori, hasLength(1));
+          expect(riga.autori.single.name, 'Tiziano Sclavi');
+          expect(riga.condition, CondizioneCopia.veryFine);
+          expect(riga.purchasePrice, 5);
+          expect(riga.location, 'Scaffale A1');
+          expect(riga.notes, 'Prima edizione');
+          expect(riga.coverImage, 'https://example.com/cover.jpg');
+        },
+      );
+
+      test('Edizione senza cover: coverImage è null', () async {
+        final operaId = await repo.aggiungiOpera(title: 'Volume unico');
+        final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+        );
+
+        final riga = (await repo.tutteLeCopiePerCatalogoStampabile()).single;
+
+        expect(riga.serieName, isNull);
+        expect(riga.coverImage, isNull);
+      });
+
+      test(
+        'include anche le Copie vendute/perse — istantanea completa come '
+        'tutteLeCopiePerEsportazione',
+        () async {
+          final operaId = await repo.aggiungiOpera(title: 'Dylan Dog #1');
+          final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+          await repo.aggiungiCopia(
+            edizioneId: edizioneId,
+            status: StatoCopia.venduta,
+          );
+
+          final righe = await repo.tutteLeCopiePerCatalogoStampabile();
+
+          expect(righe, hasLength(1));
+        },
+      );
+    },
+  );
+
   group('importaRighe (§16, deciso su #142)', () {
     test(
       'scrive Opera/Edizione/Copia/Autori a partire dalla riga parsata',

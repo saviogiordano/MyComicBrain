@@ -527,10 +527,10 @@ void main() {
     },
   );
 
-  group('Importa/Esporta dati (§16, deciso su #139/#140)', () {
+  group('Importa/Esporta dati (§16, deciso su #139/#140/#141/#145)', () {
     testWidgets(
-      'mostra le righe "Esporta in CSV", "Esporta in JSON" e '
-      '"Esporta in Excel"',
+      'mostra le righe "Esporta in CSV", "Esporta in JSON", '
+      '"Esporta in Excel" e "Esporta in PDF (catalogo stampabile)"',
       (tester) async {
         await pumpImpostazioni(tester);
         // `SectionHeader` mostra l'etichetta in maiuscolo.
@@ -543,6 +543,10 @@ void main() {
         expect(find.text('Esporta in CSV'), findsOneWidget);
         expect(find.text('Esporta in JSON'), findsOneWidget);
         expect(find.text('Esporta in Excel'), findsOneWidget);
+        expect(
+          find.text('Esporta in PDF (catalogo stampabile)'),
+          findsOneWidget,
+        );
       },
     );
 
