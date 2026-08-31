@@ -288,7 +288,14 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(child: _cover(e.coverImage)),
+          Center(
+            child: GestureDetector(
+              onTap: e.coverImage == null
+                  ? null
+                  : () => _mostraCoverIngrandita(e.coverImage!),
+              child: _cover(e.coverImage),
+            ),
+          ),
           const SizedBox(height: AppSpacing.md),
           Text(
             e.titolo,
@@ -398,6 +405,50 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => segnaposto,
               ),
+      ),
+    );
+  }
+
+  /// Popup con l'ingrandimento della cover (tap sulla cover nella scheda):
+  /// stessa immagine (locale o remota) mostrata a piena grandezza su sfondo
+  /// scuro, con zoom a pizzico. Si chiude toccando la X o fuori dall'immagine.
+  Future<void> _mostraCoverIngrandita(String coverImage) {
+    final isRemote =
+        coverImage.startsWith('http://') || coverImage.startsWith('https://');
+    final segnaposto = Icon(
+      Icons.menu_book_outlined,
+      color: AppColors.textMuted,
+      size: 48,
+    );
+    return showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(AppSpacing.md),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              maxScale: 4,
+              child: isRemote
+                  ? Image.network(
+                      coverImage,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => segnaposto,
+                    )
+                  : Image.file(
+                      File(coverImage),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => segnaposto,
+                    ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
       ),
     );
   }
