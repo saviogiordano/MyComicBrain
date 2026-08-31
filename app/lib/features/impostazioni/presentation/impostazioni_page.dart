@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/impostazioni/application/ai_provider.dart';
+import 'package:mycomicbrain/features/impostazioni/application/esportazione_service.dart';
 
 /// Schermo Impostazioni (§12, deciso su #104): elenco di righe stile
 /// impostazioni di sistema — il valore corrente in trailing, ogni riga apre
@@ -68,6 +69,11 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     loading: false,
     esito: null,
   );
+
+  // Stato di "Esportazione in corso" (§16, deciso su #140): un solo export
+  // alla volta, condiviso fra CSV e JSON — non ha senso avviarne due in
+  // parallelo dalla stessa schermata.
+  bool _esportazioneInCorso = false;
 
   @override
   void initState() {
@@ -173,6 +179,27 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     setState(() => _verificaComicVine = (loading: false, esito: esito));
     if (!esito.ok) {
       await _mostraErroreVerifica('Provider fumetti', esito.messaggio);
+    }
+  }
+
+  /// Esporta l'intera collezione (§16, "Importa/Esporta dati", deciso su
+  /// #139/#140) nel [formato] scelto e la consegna tramite lo share sheet
+  /// di sistema (`EsportazioneService`) — un solo export alla volta
+  /// ([_esportazioneInCorso]), errori riusano lo stesso popup esteso di
+  /// "Verifica connessione" ([_mostraErroreVerifica]).
+  Future<void> _esporta(FormatoEsportazione formato) async {
+    if (_esportazioneInCorso) return;
+    setState(() => _esportazioneInCorso = true);
+    try {
+      await ref.read(esportazioneServiceProvider).esporta(formato);
+    } on Object catch (e) {
+      if (!mounted) return;
+      await _mostraErroreVerifica(
+        'Esportazione',
+        'Esportazione non riuscita: $e',
+      );
+    } finally {
+      if (mounted) setState(() => _esportazioneInCorso = false);
     }
   }
 
@@ -485,6 +512,31 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                               ? null
                               : _verificaConnessioneComicVine,
                           mostraChevron: false,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const SectionHeader(label: 'Importa/Esporta dati'),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        _Riga(
+                          titolo: 'Esporta in CSV',
+                          valore: _esportazioneInCorso ? 'In corso…' : '',
+                          onTap: _esportazioneInCorso
+                              ? null
+                              : () => _esporta(FormatoEsportazione.csv),
+                        ),
+                        const _Divisore(),
+                        _Riga(
+                          titolo: 'Esporta in JSON',
+                          valore: _esportazioneInCorso ? 'In corso…' : '',
+                          onTap: _esportazioneInCorso
+                              ? null
+                              : () => _esporta(FormatoEsportazione.json),
                         ),
                       ],
                     ),

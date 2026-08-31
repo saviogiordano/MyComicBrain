@@ -30,6 +30,7 @@ environment:
 dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
+  csv: ^8.0.0
   cunning_document_scanner: ^3.0.1
   cupertino_icons: ^1.0.8
   drift: 2.34.0
@@ -46,6 +47,7 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.6
   permission_handler: ^13.0.1
+  share_plus: ^13.3.0
   shared_preferences: ^2.5.5
   # Fissato a 7.4.0 esatto (non un range aperto): la 7.5.0-beta alza il
   # minimo SDK a Flutter 3.44/Dart 3.12, oltre allo stack del progetto —

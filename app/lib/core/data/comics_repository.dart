@@ -13,6 +13,7 @@ import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
 import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
 import 'package:mycomicbrain/core/domain/edizione_collezione.dart';
 import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
+import 'package:mycomicbrain/core/domain/esportazione.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
 import 'package:mycomicbrain/core/domain/genere.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
@@ -2226,5 +2227,117 @@ ORDER BY o.title, e.issue_number
         _db.conversazioneTable,
       )..where((c) => c.id.equals(conversazioneId))).go();
     });
+  }
+
+  // --- Export/import (§16, deciso su #139/#140). ---
+
+  /// Tutte le Copie della collezione con Edizione/Opera/Serie/Autori
+  /// collegati, una riga per Copia — base condivisa per l'export CSV/JSON
+  /// (§16, deciso su #140). A differenza di [watchIndiceCollezione] non
+  /// filtra per `status` (l'export è un'istantanea completa dei dati
+  /// dell'utente, §19 Privacy: anche le Copie vendute/perse restano
+  /// esportabili) e non risolve la cover (niente immagini, decisione mappa
+  /// #139).
+  Future<List<RigaEsportazioneCopia>> tutteLeCopiePerEsportazione() async {
+    final query = _db.select(_db.copie).join([
+      innerJoin(
+        _db.edizioni,
+        _db.edizioni.id.equalsExp(_db.copie.edizioneId),
+      ),
+      innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+      leftOuterJoin(
+        _db.serieTable,
+        _db.serieTable.id.equalsExp(_db.edizioni.serieId),
+      ),
+    ])..orderBy([OrderingTerm.asc(_db.copie.id)]);
+
+    final righe = await query.get();
+    if (righe.isEmpty) return const <RigaEsportazioneCopia>[];
+
+    final edizioneIds = {
+      for (final riga in righe) riga.readTable(_db.edizioni).id,
+    }.toList();
+    final autoriPerEdizione = await _autoriConRuoloPerEdizione(edizioneIds);
+
+    return [
+      for (final riga in righe)
+        _rigaEsportazioneDaJoin(
+          riga,
+          autori:
+              autoriPerEdizione[riga.readTable(_db.edizioni).id] ?? const [],
+        ),
+    ];
+  }
+
+  /// Bulk equivalente di [autoriDiEdizione] per più Edizioni insieme (con
+  /// ruolo, a differenza di [_autoriPerEdizione] che risolve solo i nomi),
+  /// usato da [tutteLeCopiePerEsportazione].
+  Future<Map<int, List<CreatorConRuolo>>> _autoriConRuoloPerEdizione(
+    List<int> edizioneIds,
+  ) async {
+    if (edizioneIds.isEmpty) return const {};
+
+    final query = _db.select(_db.comicCreator).join([
+      innerJoin(
+        _db.creator,
+        _db.creator.id.equalsExp(_db.comicCreator.creatorId),
+      ),
+    ])..where(_db.comicCreator.edizioneId.isIn(edizioneIds));
+
+    final righe = await query.get();
+    final risultato = <int, List<CreatorConRuolo>>{};
+    for (final riga in righe) {
+      final comicCreator = riga.readTable(_db.comicCreator);
+      risultato
+          .putIfAbsent(comicCreator.edizioneId, () => [])
+          .add((
+            comicCreatorId: comicCreator.id,
+            creatorId: riga.readTable(_db.creator).id,
+            name: riga.readTable(_db.creator).name,
+            ruolo: comicCreator.ruolo,
+          ));
+    }
+    return risultato;
+  }
+
+  RigaEsportazioneCopia _rigaEsportazioneDaJoin(
+    TypedResult riga, {
+    required List<CreatorConRuolo> autori,
+  }) {
+    final copia = riga.readTable(_db.copie);
+    final edizione = riga.readTable(_db.edizioni);
+    final opera = riga.readTable(_db.opere);
+    final serie = riga.readTableOrNull(_db.serieTable);
+    return RigaEsportazioneCopia(
+      copiaId: copia.id,
+      edizioneId: edizione.id,
+      operaTitolo: opera.title,
+      serieName: serie?.name,
+      publisher: edizione.publisher,
+      issueNumber: edizione.issueNumber,
+      issueNumberLabel: edizione.issueNumberLabel,
+      releaseDate: edizione.releaseDate,
+      year: edizione.year,
+      coverPrice: edizione.coverPrice,
+      pageCount: edizione.pageCount,
+      language: edizione.language,
+      color: edizione.color,
+      ean: edizione.ean,
+      volume: edizione.volume,
+      description: edizione.description,
+      printingType: edizione.printingType,
+      classificazione: edizione.classificazione,
+      format: edizione.format,
+      autori: autori,
+      status: copia.status,
+      readingStatus: copia.readingStatus,
+      condition: copia.condition,
+      purchasePrice: copia.purchasePrice,
+      purchaseDate: copia.purchaseDate,
+      seller: copia.seller,
+      location: copia.location,
+      notes: copia.notes,
+      createdAt: copia.createdAt,
+    );
   }
 }

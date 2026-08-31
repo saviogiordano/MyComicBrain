@@ -1,17 +1,35 @@
-import 'dart:typed_data';
-
+import 'package:drift/drift.dart' hide isNotNull, isNull;
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
+import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
+import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
+import 'package:mycomicbrain/features/impostazioni/application/esportazione_service.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
+
+/// [EsportazioneService] finto che fallisce sempre (§16, deciso su #140):
+/// verifica il percorso di errore di "Importa/Esporta dati" senza dipendere
+/// dai plugin di piattaforma `path_provider`/`share_plus`, non mockati nei
+/// widget test. Il `ComicsRepository` passato al costruttore non è mai
+/// letto — [esporta] è sovrascritto per non chiamarlo.
+class _EsportazioneServiceCheFallisce extends EsportazioneService {
+  _EsportazioneServiceCheFallisce(ComicsRepository repository)
+    : super(repository);
+
+  @override
+  Future<void> esporta(FormatoEsportazione formato) {
+    throw Exception('errore finto');
+  }
+}
 
 /// [CoverAnalysisClient] finto per "Verifica connessione" (#108/#111): non
 /// implementa [estraiCopertina] (non usato da questo schermo).
@@ -91,6 +109,7 @@ void main() {
     AiProvider? assistenteClientPer,
     AssistenteClient? assistenteClient,
     ComicVineClient? comicVineClient,
+    EsportazioneService? esportazioneService,
   }) async {
     // Viewport ingrandita (§12, dopo #111): con le 4 card provider AI sempre
     // espanse il contenuto eccede gli 800x600 di default e lo `SliverList`
@@ -117,6 +136,8 @@ void main() {
             ).overrideWithValue(assistenteClient),
           if (comicVineClient != null)
             comicVineClientProvider.overrideWithValue(comicVineClient),
+          if (esportazioneService != null)
+            esportazioneServiceProvider.overrideWithValue(esportazioneService),
         ],
         child: MaterialApp(
           theme: AppTheme.dark,
@@ -505,4 +526,57 @@ void main() {
       );
     },
   );
+
+  group('Importa/Esporta dati (§16, deciso su #139/#140)', () {
+    testWidgets('mostra le righe "Esporta in CSV" e "Esporta in JSON"', (
+      tester,
+    ) async {
+      await pumpImpostazioni(tester);
+      // `SectionHeader` mostra l'etichetta in maiuscolo.
+      await tester.scrollUntilVisible(find.text('IMPORTA/ESPORTA DATI'), 200);
+
+      expect(find.text('IMPORTA/ESPORTA DATI'), findsOneWidget);
+      expect(find.text('Esporta in CSV'), findsOneWidget);
+      expect(find.text('Esporta in JSON'), findsOneWidget);
+    });
+
+    testWidgets(
+      'un export fallito mostra il popup di errore con lo stesso stile '
+      'di "Verifica connessione"',
+      (tester) async {
+        final db = AppDatabase(
+          DatabaseConnection(
+            NativeDatabase.memory(),
+            closeStreamsSynchronously: true,
+          ),
+        );
+        addTearDown(db.close);
+
+        await pumpImpostazioni(
+          tester,
+          esportazioneService: _EsportazioneServiceCheFallisce(
+            ComicsRepository(db),
+          ),
+        );
+        await tester.scrollUntilVisible(find.text('Esporta in CSV'), 200);
+
+        await tester.tap(find.text('Esporta in CSV'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(find.text('Esportazione'), findsOneWidget);
+        expect(
+          find.textContaining('Esportazione non riuscita'),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(AlertDialog), findsNothing);
+        // Torna tappabile: nessuno stato "In corso…" residuo.
+        expect(find.text('Esporta in CSV'), findsOneWidget);
+      },
+    );
+  });
 }
