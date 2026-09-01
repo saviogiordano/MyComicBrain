@@ -192,7 +192,7 @@ Confidenza: 96%
 [ Inserisci manualmente ]
 ```
 
-L'AI non deve modificare automaticamente la collezione senza controllo dell'utente: ogni candidato richiede conferma esplicita, e l'utente deve poter modificare qualsiasi campo prima del salvataggio, scegliere un'alternativa tra i candidati proposti o inserire i dati manualmente (vedi anche le soglie di confidenza in §22).
+L'AI non deve modificare automaticamente la collezione senza controllo dell'utente: ogni candidato richiede conferma esplicita, e l'utente deve poter modificare qualsiasi campo prima del salvataggio, scegliere un'alternativa tra i candidati proposti o inserire i dati manualmente (vedi anche le soglie di confidenza in §23).
 
 ## 6.4 Acquisizione dei metadati
 
@@ -443,9 +443,9 @@ Esempi:
 
 > "Trova i duplicati."
 
-Essendo un'interfaccia conversazionale mediata da un modello linguistico, l'Assistente richiede in generale una connessione attiva (o un Provider AI Testuale Locale raggiungibile in rete — vedi §12): a differenza della ricerca a campi della versione precedente di questo documento, non è garantito un funzionamento offline (vedi §18 Offline mode).
+Essendo un'interfaccia conversazionale mediata da un modello linguistico, l'Assistente richiede in generale una connessione attiva (o un Provider AI Testuale Locale raggiungibile in rete — vedi §12): a differenza della ricerca a campi della versione precedente di questo documento, non è garantito un funzionamento offline (vedi §19 Offline mode).
 
-La conversazione è multi-turno (l'Assistente mantiene il contesto degli scambi precedenti) ed è persistita: un'unica conversazione continua, che sopravvive alla chiusura dell'app e non ha scadenza automatica — nessun concetto di "nuova conversazione" o cronologia di più conversazioni distinte. L'utente può cancellarla esplicitamente in qualsiasi momento (azione dedicata, indipendente dall'eliminazione dell'account — vedi §19 Privacy); la cancellazione svuota l'intera conversazione, mai singoli messaggi. Deciso su [Memoria conversazionale e persistenza della cronologia chat dell'Assistente](https://github.com/saviogiordano/MyComicBrain/issues/122).
+La conversazione è multi-turno (l'Assistente mantiene il contesto degli scambi precedenti) ed è persistita: un'unica conversazione continua, che sopravvive alla chiusura dell'app e non ha scadenza automatica — nessun concetto di "nuova conversazione" o cronologia di più conversazioni distinte. L'utente può cancellarla esplicitamente in qualsiasi momento (azione dedicata, indipendente dall'eliminazione dell'account — vedi §20 Privacy); la cancellazione svuota l'intera conversazione, mai singoli messaggi. Deciso su [Memoria conversazionale e persistenza della cronologia chat dell'Assistente](https://github.com/saviogiordano/MyComicBrain/issues/122).
 
 ---
 
@@ -525,7 +525,7 @@ Provider fumetti: [ ComicVine ▾ ]
 API key: ••••••••••••
 ```
 
-Le chiavi API sono dati sensibili e devono essere conservate in modo sicuro sul device (vedi §26 Sicurezza).
+Le chiavi API sono dati sensibili e devono essere conservate in modo sicuro sul device (vedi §27 Sicurezza).
 
 ---
 
@@ -609,7 +609,58 @@ L'app deve supportare:
 
 ---
 
-# 17. Sincronizzazione
+# 17. Gestione multiutente
+
+L'app deve supportare più utenti, sia come profili indipendenti sullo stesso dispositivo sia come collaboratori su una collezione condivisa.
+
+## 17.1 Profili multipli sullo stesso dispositivo
+
+Più utenti possono usare la stessa installazione dell'app, ciascuno con un proprio account e una propria collezione, completamente separati e privati l'uno dall'altro salvo condivisione esplicita (§17.2).
+
+Requisiti:
+
+- switch rapido tra profili, senza dover disinstallare/reinstallare l'app;
+- ogni profilo ha le proprie impostazioni (§12: provider AI, chiavi API, provider database fumetti);
+- nessuna visibilità incrociata dei dati (collezione, conversazione con l'Assistente, impostazioni) tra profili diversi sullo stesso dispositivo;
+- il logout di un profilo non deve cancellare i dati locali/offline degli altri profili presenti sul dispositivo.
+
+## 17.2 Collezioni condivise
+
+Il proprietario di una collezione può invitare altri account a collaborare sulla stessa collezione (es. coppia di collezionisti, famiglia).
+
+Ruoli disponibili:
+
+- **Proprietario**: gestione completa della collezione, incluso invitare/rimuovere collaboratori ed eliminare la collezione;
+- **Editor**: può aggiungere, modificare ed eliminare fumetti e copie (§8), ma non gestisce i collaboratori;
+- **Visualizzatore**: accesso in sola lettura alla collezione.
+
+Requisiti:
+
+- invito tramite email o codice/link condivisibile;
+- l'invitato può accettare o rifiutare l'invito;
+- un collaboratore può lasciare una collezione condivisa in autonomia, in qualsiasi momento;
+- le modifiche di un collaboratore devono essere visibili agli altri dopo la sincronizzazione (§18);
+- ogni modifica alla collezione deve essere tracciata con autore e timestamp, coerentemente con l'audit delle modifiche richiesto in §27 Sicurezza.
+
+Esempio:
+
+```text
+Collezione di Marco
+
+Marco       — Proprietario
+Giulia      — Editor
+Luca        — Visualizzatore
+```
+
+## 17.3 Isolamento e permessi
+
+- ogni operazione sulla collezione deve verificare che l'utente che la richiede abbia il ruolo necessario;
+- il modello dati (§22) deve poter associare una collezione a più utenti con ruoli distinti, non solo a un singolo proprietario;
+- l'eliminazione dell'account di un collaboratore (§20 Privacy) rimuove i suoi permessi sulla collezione condivisa, ma non elimina la collezione né i dati inseriti dagli altri collaboratori.
+
+---
+
+# 18. Sincronizzazione
 
 La collezione deve essere sincronizzata tra:
 
@@ -626,7 +677,7 @@ Il sistema deve supportare:
 
 ---
 
-# 18. Offline mode
+# 19. Offline mode
 
 Le funzioni fondamentali devono essere utilizzabili offline:
 
@@ -643,7 +694,7 @@ Le operazioni effettuate offline devono essere sincronizzate successivamente.
 
 ---
 
-# 19. Privacy
+# 20. Privacy
 
 L'utente deve avere il controllo sulle proprie fotografie e sui propri dati.
 
@@ -663,7 +714,7 @@ Per utenti europei sarebbe inoltre opportuno prevedere una configurazione dell'i
 
 ---
 
-# 20. Architettura tecnica
+# 21. Architettura tecnica
 
 Una possibile architettura:
 
@@ -695,7 +746,7 @@ Una possibile architettura:
 
 ---
 
-# 21. Modello dati principale
+# 22. Modello dati principale
 
 ## Comic
 
@@ -806,7 +857,7 @@ matched_fields
 
 ---
 
-# 22. Requisiti AI
+# 23. Requisiti AI
 
 Il sistema AI deve:
 
@@ -840,7 +891,7 @@ Le soglie dovranno essere calibrate con dati reali durante il beta testing.
 
 ---
 
-# 23. Learning loop
+# 24. Learning loop
 
 Il sistema deve poter imparare dalle correzioni dell'utente.
 
@@ -865,7 +916,7 @@ Importante: il sistema deve distinguere tra apprendimento globale del modello e 
 
 ---
 
-# 24. Gestione degli errori
+# 25. Gestione degli errori
 
 L'app deve gestire:
 
@@ -919,7 +970,7 @@ Deciso su [Gestione errori dell'Assistente (provider irraggiungibile, query non 
 
 ---
 
-# 25. Performance
+# 26. Performance
 
 Obiettivi MVP:
 
@@ -941,7 +992,7 @@ Scan 4 → waiting
 
 ---
 
-# 26. Sicurezza
+# 27. Sicurezza
 
 Il backend deve prevedere:
 
@@ -958,7 +1009,7 @@ Il backend deve prevedere:
 
 ---
 
-# 27. MVP
+# 28. MVP
 
 Per la prima versione eviterei di implementare tutto.
 
@@ -1009,7 +1060,7 @@ Per la prima versione eviterei di implementare tutto.
 
 ---
 
-# 28. Funzioni per la versione 2
+# 29. Funzioni per la versione 2
 
 Dopo aver validato il flusso principale:
 
@@ -1029,7 +1080,7 @@ Dopo aver validato il flusso principale:
 
 ---
 
-# 29. Funzioni avanzate future
+# 30. Funzioni avanzate future
 
 ## Riconoscimento della variant
 
@@ -1062,7 +1113,7 @@ Il database deve quindi trattare **edizione** e **storia/opera** come concetti d
 
 ---
 
-# 30. Requisito fondamentale: separare opera, edizione e copia
+# 31. Requisito fondamentale: separare opera, edizione e copia
 
 Questa è una scelta architetturale molto importante.
 
@@ -1085,7 +1136,7 @@ In questo modo l'app non considera erroneamente due versioni diverse dello stess
 
 ---
 
-# 31. Criteri di successo del prodotto
+# 32. Criteri di successo del prodotto
 
 Il progetto può essere considerato riuscito se un utente riesce a:
 
@@ -1125,7 +1176,7 @@ Altri KPI:
 
 ---
 
-# 32. Priorità delle funzionalità
+# 33. Priorità delle funzionalità
 
 | Funzionalità | Priorità |
 |---|---|
@@ -1152,7 +1203,7 @@ Altri KPI:
 
 ---
 
-# 33. Principio UX principale
+# 34. Principio UX principale
 
 L'app non dovrebbe sembrare un database da compilare.
 
