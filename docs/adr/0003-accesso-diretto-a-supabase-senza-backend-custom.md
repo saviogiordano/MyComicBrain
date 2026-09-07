@@ -1,0 +1,15 @@
+# Accesso diretto a Supabase senza backend API custom
+
+Il requisito 17 (gestione multiutente) e §21 (architettura tecnica, mai costruita) lasciavano aperto se introdurre un backend API custom fra l'app Flutter e il database, come suggerito dal diagramma placeholder di §21 (API Backend / Auth Service / Catalog DB separati). Contesto decisivo: sviluppatore singolo senza capacità operativa aggiuntiva (già pesato nella scelta di Supabase su [#148](https://github.com/saviogiordano/MyComicBrain/issues/148)), e l'app oggi non ha alcun segreto condiviso da proteggere — ogni chiave API di terze parti (provider AI, ComicVine) è fornita dall'utente e conservata in secure storage per profilo (§12), chiamata direttamente dal client.
+
+Decisione: **nessun backend API separatamente hostato**. L'app Flutter parla direttamente a Supabase via SDK ufficiale, con autorizzazione enforced da Row Level Security (pattern BaaS standard, vedi ricerca RLS su [#153](https://github.com/saviogiordano/MyComicBrain/issues/153)). Le funzioni Postgres `SECURITY DEFINER` e le Supabase Edge Functions **non contano come "backend custom"** ai fini di questa decisione: vivono dentro il progetto Supabase stesso (nessun hosting/ops aggiuntivo) e sono lo strumento previsto per la logica che RLS da sola non può esprimere — es. il flusso di invito a una collezione condivisa (§17.2, già assunto da [#153](https://github.com/saviogiordano/MyComicBrain/issues/153)) e l'audit trail di §27 (trigger Postgres verso una tabella di log). Il rate limiting custom oltre quello infrastrutturale di Supabase è esplicitamente rimandato: nessun bisogno noto oggi per un'app a sviluppatore singolo.
+
+## Considered Options
+
+- **Backend API custom fra app e Supabase** (il diagramma placeholder di §21) — scartata: nessun requisito di §27 la richiede (auth/sessioni/isolamento/cifratura in transito sono nativi di Supabase, l'autorizzazione per collezione è RLS, i backup sono gestiti), e introdurrebbe un servizio da hostare/mantenere che vanifica il motivo per cui Supabase è stato scelto su [#148](https://github.com/saviogiordano/MyComicBrain/issues/148) (RLS come modello di autorizzazione senza dover mantenere un server proprio).
+
+## Consequences
+
+- §21 (`docs/requisiti.md`) va aggiornato per riflettere l'architettura reale (app → Supabase via SDK, RLS, RPC/Edge Function dove serve) al posto del diagramma placeholder con backend/auth service separati.
+- Ogni ticket futuro di questa mappa (schema RLS, migrazione dati, ecc.) va progettato assumendo nessun livello server intermedio: la logica che non si esprime in RLS pura vive in funzioni Postgres o Edge Function dentro Supabase, non in un servizio esterno.
+- Se in futuro emergesse un requisito che richiede davvero un server indipendente da Supabase (es. un job schedulato pesante non esprimibile come Edge Function, o l'integrazione di un servizio terzo con un segreto condiviso da proteggere lato server), la scelta va rivista: questa decisione assume che lo scenario attuale (BYOK per le AI, nessun segreto condiviso) resti valido.

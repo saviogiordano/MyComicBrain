@@ -716,17 +716,18 @@ Per utenti europei sarebbe inoltre opportuno prevedere una configurazione dell'i
 
 # 21. Architettura tecnica
 
-Una possibile architettura:
+Nessun backend API custom: l'app Flutter parla direttamente a Supabase (Postgres + Auth) via SDK, con autorizzazione enforced da Row Level Security. Le funzioni Postgres `SECURITY DEFINER` e le Supabase Edge Function coprono la logica che RLS da sola non esprime (es. inviti a una collezione condivisa, audit trail) — restano dentro il progetto Supabase, senza un servizio ospitato a parte. Decisione e motivazione: [ADR-0003](docs/adr/0003-accesso-diretto-a-supabase-senza-backend-custom.md).
 
 ```text
                 MOBILE / WEB APP
                        │
                        ▼
-                  API BACKEND
+              SUPABASE (Postgres + Auth)
+              RLS · RPC/Edge Function
                        │
-          ┌────────────┼────────────┐
-          ▼            ▼            ▼
-     Catalog DB     AI Service   Auth Service
+                       ▼
+              (chiamate dirette dal client,
+               con le proprie chiavi API)
                        │
               ┌────────┼─────────┐
               ▼        ▼         ▼
