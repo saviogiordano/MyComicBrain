@@ -7,6 +7,7 @@ import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/edizione_collezione.dart';
 import 'package:mycomicbrain/features/collezione/application/collezione_providers.dart';
 import 'package:mycomicbrain/features/collezione/application/filtri_collezione_logic.dart';
+import 'package:mycomicbrain/features/serie/presentation/serie_page.dart';
 
 /// Schermo Collezione (§9, deciso su #90, prototipo visivo validato su #96):
 /// griglia a copertine di tutte le Edizioni possedute, filtrabile sui 12
@@ -44,32 +45,149 @@ class _CollezionePageState extends ConsumerState<CollezionePage> {
 
   @override
   Widget build(BuildContext context) {
+    final vista = ref.watch(vistaCollezioneProvider);
+
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const _Titolo(),
+                    _VistaToggle(vista: vista),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: vista == VistaCollezione.serie
+                    ? const SerieListaBody()
+                    : const _ContenutoSingoli(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// La vista "fumetti singoli" della Collezione (§9) — griglia a copertine
+/// con filtri/ordinamento, invariata rispetto a prima dell'introduzione del
+/// toggle Fumetti/Serie: solo il titolo si è spostato nel widget padre,
+/// condiviso con la vista Serie.
+class _ContenutoSingoli extends ConsumerWidget {
+  const _ContenutoSingoli();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final indiceAsync = ref.watch(indiceCollezioneProvider);
     final filtri = ref.watch(filtriCollezioneProvider);
     final soloAggiuntiMeseCorrente = ref.watch(soloAggiuntiMeseCorrenteProvider);
 
-    return Scaffold(
-      body: SafeArea(
-        child: indiceAsync.when(
-          data: (tutte) => _Collezione(
-            totale: tutte.length,
-            filtri: filtri,
-            soloAggiuntiMeseCorrente: soloAggiuntiMeseCorrente,
-            onRimuoviAggiuntiMeseCorrente: () => ref
-                .read(soloAggiuntiMeseCorrenteProvider.notifier)
-                .imposta(valore: false),
+    return indiceAsync.when(
+      data: (tutte) => _Collezione(
+        totale: tutte.length,
+        filtri: filtri,
+        soloAggiuntiMeseCorrente: soloAggiuntiMeseCorrente,
+        onRimuoviAggiuntiMeseCorrente: () => ref
+            .read(soloAggiuntiMeseCorrenteProvider.notifier)
+            .imposta(valore: false),
+      ),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stackTrace) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Text(
+            'Non è stato possibile caricare la collezione.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textTertiary,
+            ),
           ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stackTrace) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Text(
-                'Non è stato possibile caricare la collezione.',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textTertiary,
-                ),
-              ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Il pill-toggle Fumetti/Serie (§9): default "Fumetti" ad ogni apertura
+/// dello schermo, come [FiltriCollezioneState] — non è uno dei 12 assi né
+/// va ricordato fra le sessioni.
+class _VistaToggle extends ConsumerWidget {
+  const _VistaToggle({required this.vista});
+
+  final VistaCollezione vista;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(vistaCollezioneProvider.notifier);
+
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: AppColors.overlayCard,
+        borderRadius: AppRadii.pillRadius,
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _VistaSegment(
+            label: 'Fumetti',
+            selected: vista == VistaCollezione.singoli,
+            onTap: () => notifier.imposta(VistaCollezione.singoli),
+          ),
+          _VistaSegment(
+            label: 'Serie',
+            selected: vista == VistaCollezione.serie,
+            onTap: () => notifier.imposta(VistaCollezione.serie),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VistaSegment extends StatelessWidget {
+  const _VistaSegment({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadii.pillRadius,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xxs + 2,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.accent : Colors.transparent,
+            borderRadius: AppRadii.pillRadius,
+          ),
+          child: Text(
+            label,
+            style: AppTypography.labelMedium.copyWith(
+              color: selected ? AppColors.onAccent : AppColors.textMuted,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
         ),
@@ -95,17 +213,8 @@ class _Collezione extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (totale == 0) {
       return const Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.lg,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _Titolo(),
-            Expanded(child: _EmptyCatalogo()),
-          ],
-        ),
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: _EmptyCatalogo(),
       );
     }
 
@@ -114,51 +223,44 @@ class _Collezione extends ConsumerWidget {
         ref.watch(edizioniFinestraCollezioneProvider).valueOrNull ?? const [];
     final haFiltriAttivi = filtri.haFiltriAttivi || soloAggiuntiMeseCorrente;
 
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: _Titolo(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ContaLinea(
+          totale: totale,
+          visibili: visibili.length,
+          filtrato: haFiltriAttivi,
+        ),
+        if (haFiltriAttivi)
+          _ChipRow(
+            filtri: filtri,
+            soloAggiuntiMeseCorrente: soloAggiuntiMeseCorrente,
+            onRimuoviAggiuntiMeseCorrente: onRimuoviAggiuntiMeseCorrente,
           ),
-          _ContaLinea(
-            totale: totale,
-            visibili: visibili.length,
-            filtrato: haFiltriAttivi,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.xs,
+            AppSpacing.md,
+            AppSpacing.xxs,
           ),
-          if (haFiltriAttivi)
-            _ChipRow(
-              filtri: filtri,
-              soloAggiuntiMeseCorrente: soloAggiuntiMeseCorrente,
-              onRimuoviAggiuntiMeseCorrente: onRimuoviAggiuntiMeseCorrente,
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.xs,
-              AppSpacing.md,
-              AppSpacing.xxs,
-            ),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: _FiltriButton(numeroAssiAttivi: filtri.numeroAssiAttivi),
-            ),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _FiltriButton(numeroAssiAttivi: filtri.numeroAssiAttivi),
           ),
-          Expanded(
-            child: visibili.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                    child: _EmptyRisultati(),
-                  )
-                : _Griglia(
-                    edizioni: finestra,
-                    haAltriRisultati: finestra.length < visibili.length,
-                  ),
-          ),
-        ],
-      ),
+        ),
+        Expanded(
+          child: visibili.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  child: _EmptyRisultati(),
+                )
+              : _Griglia(
+                  edizioni: finestra,
+                  haAltriRisultati: finestra.length < visibili.length,
+                ),
+        ),
+      ],
     );
   }
 }

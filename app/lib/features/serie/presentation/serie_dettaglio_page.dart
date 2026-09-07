@@ -7,6 +7,7 @@ import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
 import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
+import 'package:mycomicbrain/features/serie/application/serie_providers.dart';
 import 'package:mycomicbrain/features/serie/presentation/modifica_serie_sheet.dart';
 
 /// Dettaglio `/serie/:id` (§11, deciso su #97): header con cover,
@@ -95,14 +96,15 @@ class SerieDettaglioPage extends ConsumerWidget {
   }
 }
 
-class _Corpo extends StatelessWidget {
+class _Corpo extends ConsumerWidget {
   const _Corpo({required this.serie, required this.onNumero});
 
   final SerieDettaglio serie;
   final void Function(int numero) onNumero;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vistaNumeri = ref.watch(vistaNumeriSerieProvider);
     final pct = serie.numeriTotali == null
         ? null
         : serie.numeriPosseduti.length / serie.numeriTotali!;
@@ -218,9 +220,9 @@ class _Corpo extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         if (serie.numeriTotali == null)
-          _SenzaTotale(serie: serie, onNumero: onNumero)
+          _SenzaTotale(serie: serie, onNumero: onNumero, vista: vistaNumeri)
         else
-          _ConTotale(serie: serie, onNumero: onNumero),
+          _ConTotale(serie: serie, onNumero: onNumero, vista: vistaNumeri),
       ],
     );
   }
@@ -264,26 +266,47 @@ class _StatTile extends StatelessWidget {
 /// Il caso che motiva #99: senza numero totale non esiste una griglia
 /// possibile — solo l'elenco dei numeri posseduti e un invito a impostarlo.
 class _SenzaTotale extends StatelessWidget {
-  const _SenzaTotale({required this.serie, required this.onNumero});
+  const _SenzaTotale({
+    required this.serie,
+    required this.onNumero,
+    required this.vista,
+  });
 
   final SerieDettaglio serie;
   final void Function(int numero) onNumero;
+  final VistaNumeriSerie vista;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(label: 'numeri posseduti'),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.xs,
-          runSpacing: AppSpacing.xs,
-          children: [
-            for (final n in serie.numeriPosseduti)
-              AppChip(label: '#$n', selected: true, onTap: () => onNumero(n)),
-          ],
+        const SectionHeader(
+          label: 'numeri posseduti',
+          trailing: _VistaNumeriToggle(),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        if (vista == VistaNumeriSerie.numero)
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final n in serie.numeriPosseduti)
+                AppChip(
+                  label: '#$n',
+                  selected: true,
+                  onTap: () => onNumero(n),
+                ),
+            ],
+          )
+        else
+          _CoverGrid(
+            serieId: serie.serieId,
+            nomeSerie: serie.nome,
+            numeri: serie.numeriPosseduti,
+            posseduti: serie.numeriPosseduti.toSet(),
+            onNumero: onNumero,
+          ),
         const SizedBox(height: AppSpacing.md),
         Container(
           padding: const EdgeInsets.all(AppSpacing.sm + 2),
@@ -326,10 +349,15 @@ class _SenzaTotale extends StatelessWidget {
 }
 
 class _ConTotale extends StatelessWidget {
-  const _ConTotale({required this.serie, required this.onNumero});
+  const _ConTotale({
+    required this.serie,
+    required this.onNumero,
+    required this.vista,
+  });
 
   final SerieDettaglio serie;
   final void Function(int numero) onNumero;
+  final VistaNumeriSerie vista;
 
   @override
   Widget build(BuildContext context) {
@@ -347,26 +375,37 @@ class _ConTotale extends StatelessWidget {
                 _Legenda(color: AppColors.accent, label: 'posseduto'),
                 SizedBox(width: AppSpacing.sm),
                 _Legenda(color: AppColors.amber, label: 'mancante'),
+                SizedBox(width: AppSpacing.sm),
+                _VistaNumeriToggle(),
               ],
             ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        GridView.count(
-          crossAxisCount: 7,
-          mainAxisSpacing: AppSpacing.xxs,
-          crossAxisSpacing: AppSpacing.xxs,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            for (var n = 1; n <= serie.numeriTotali!; n++)
-              _NumeroCell(
-                numero: n,
-                posseduto: posseduti.contains(n),
-                onTap: posseduti.contains(n) ? () => onNumero(n) : null,
-              ),
-          ],
-        ),
+        if (vista == VistaNumeriSerie.numero)
+          GridView.count(
+            crossAxisCount: 7,
+            mainAxisSpacing: AppSpacing.xxs,
+            crossAxisSpacing: AppSpacing.xxs,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              for (var n = 1; n <= serie.numeriTotali!; n++)
+                _NumeroCell(
+                  numero: n,
+                  posseduto: posseduti.contains(n),
+                  onTap: posseduti.contains(n) ? () => onNumero(n) : null,
+                ),
+            ],
+          )
+        else
+          _CoverGrid(
+            serieId: serie.serieId,
+            nomeSerie: serie.nome,
+            numeri: [for (var n = 1; n <= serie.numeriTotali!; n++) n],
+            posseduti: posseduti,
+            onNumero: onNumero,
+          ),
         const SizedBox(height: AppSpacing.md),
         if (serie.completa)
           Container(
@@ -494,6 +533,182 @@ class _NumeroCell extends StatelessWidget {
               fontSize: 11,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Il pill-toggle "solo numero" (default) / "cover con numero sotto" dei
+/// numeri posseduti nel dettaglio Serie.
+class _VistaNumeriToggle extends ConsumerWidget {
+  const _VistaNumeriToggle();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vista = ref.watch(vistaNumeriSerieProvider);
+    final notifier = ref.read(vistaNumeriSerieProvider.notifier);
+
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: AppColors.overlayCard,
+        borderRadius: AppRadii.pillRadius,
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _VistaNumeriSegment(
+            icon: Icons.tag,
+            selected: vista == VistaNumeriSerie.numero,
+            onTap: () => notifier.imposta(VistaNumeriSerie.numero),
+          ),
+          _VistaNumeriSegment(
+            icon: Icons.grid_view_rounded,
+            selected: vista == VistaNumeriSerie.cover,
+            onTap: () => notifier.imposta(VistaNumeriSerie.cover),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VistaNumeriSegment extends StatelessWidget {
+  const _VistaNumeriSegment({
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadii.pillRadius,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.xxs + 2),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.accent : Colors.transparent,
+            borderRadius: AppRadii.pillRadius,
+          ),
+          child: Icon(
+            icon,
+            size: 15,
+            color: selected ? AppColors.onAccent : AppColors.textMuted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// La vista "cover con numero sotto" dei numeri posseduti (§11) — risolve
+/// la copertina di ciascun numero dalle Edizioni possedute della serie
+/// ([edizioniPosseduteDiSerieProvider]); i numeri senza Edizione (mancanti
+/// in [_ConTotale]) ricadono sul segnaposto procedurale di
+/// [ComicCoverImage], come nel resto dell'app.
+class _CoverGrid extends ConsumerWidget {
+  const _CoverGrid({
+    required this.serieId,
+    required this.nomeSerie,
+    required this.numeri,
+    required this.posseduti,
+    required this.onNumero,
+  });
+
+  final int serieId;
+  final String nomeSerie;
+  final List<int> numeri;
+  final Set<int> posseduti;
+  final void Function(int numero) onNumero;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final edizioni =
+        ref.watch(edizioniPosseduteDiSerieProvider(serieId)).valueOrNull ??
+        const [];
+    final coverPerNumero = <int, EdizioneCatalogo>{};
+    for (final e in edizioni) {
+      final numero = e.issueNumber;
+      if (numero != null) coverPerNumero.putIfAbsent(numero, () => e);
+    }
+
+    return GridView.count(
+      crossAxisCount: 4,
+      mainAxisSpacing: AppSpacing.sm,
+      crossAxisSpacing: AppSpacing.xs,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 0.62,
+      children: [
+        for (final n in numeri)
+          _NumeroCoverCell(
+            numero: n,
+            posseduto: posseduti.contains(n),
+            coverImage: coverPerNumero[n]?.coverImage,
+            titolo: coverPerNumero[n]?.title ?? nomeSerie,
+            onTap: posseduti.contains(n) ? () => onNumero(n) : null,
+          ),
+      ],
+    );
+  }
+}
+
+class _NumeroCoverCell extends StatelessWidget {
+  const _NumeroCoverCell({
+    required this.numero,
+    required this.posseduto,
+    required this.coverImage,
+    required this.titolo,
+    required this.onTap,
+  });
+
+  final int numero;
+  final bool posseduto;
+  final String? coverImage;
+  final String titolo;
+
+  /// Null per i numeri mancanti — nessuna Edizione a cui navigare.
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadii.xsRadius,
+        child: Column(
+          children: [
+            Expanded(
+              child: Opacity(
+                opacity: posseduto ? 1 : 0.4,
+                child: ComicCoverImage(
+                  coverImage: coverImage,
+                  titolo: titolo,
+                  numero: numero,
+                  etichetta: '#$numero',
+                  compatto: true,
+                ),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '$numero',
+              style: AppTypography.monoLabel.copyWith(
+                color: posseduto ? AppColors.accentLight : AppColors.amber,
+                fontSize: 11,
+              ),
+            ),
+          ],
         ),
       ),
     );

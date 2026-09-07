@@ -16,29 +16,39 @@ class SeriePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final listaAsync = ref.watch(serieListaProvider);
-
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
       appBar: AppBar(
         backgroundColor: AppColors.surfaceDeepest,
         title: const Text('Serie'),
       ),
-      body: SafeArea(
-        child: listaAsync.when(
-          data: (lista) =>
-              lista.isEmpty ? const _SerieVuota() : _SerieElenco(lista: lista),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stackTrace) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Text(
-                'Non è stato possibile caricare le serie.',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textTertiary,
-                ),
-              ),
+      body: const SafeArea(child: SerieListaBody()),
+    );
+  }
+}
+
+/// Il corpo dell'elenco Serie, senza `Scaffold`/`AppBar` — riusato tale e
+/// quale dallo schermo Collezione per la sua vista "serie" (deciso su
+/// #145bis: stessa lista, due punti di ingresso).
+class SerieListaBody extends ConsumerWidget {
+  const SerieListaBody({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final listaAsync = ref.watch(serieListaProvider);
+
+    return listaAsync.when(
+      data: (lista) =>
+          lista.isEmpty ? const _SerieVuota() : _SerieElenco(lista: lista),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stackTrace) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Text(
+            'Non è stato possibile caricare le serie.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textTertiary,
             ),
           ),
         ),

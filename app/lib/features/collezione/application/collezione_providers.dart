@@ -215,3 +215,20 @@ edizioniFinestraCollezioneProvider =
         ];
       });
     });
+
+/// Le due viste dello schermo Collezione: fumetti singoli (default) o serie
+/// — lo stesso elenco raggiungibile da "Serie" in Dashboard, riusato tale e
+/// quale (`SerieListaBody`).
+enum VistaCollezione { singoli, serie }
+
+class VistaCollezioneNotifier extends Notifier<VistaCollezione> {
+  @override
+  VistaCollezione build() => VistaCollezione.singoli;
+
+  void imposta(VistaCollezione valore) => state = valore;
+}
+
+final vistaCollezioneProvider =
+    NotifierProvider<VistaCollezioneNotifier, VistaCollezione>(
+      VistaCollezioneNotifier.new,
+    );
