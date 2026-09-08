@@ -103,3 +103,17 @@ _Avoid_: Cronologia, chat (ok in prosa per descrivere l'interfaccia o il comport
 
 **Messaggio**:
 Un singolo scambio all'interno della Conversazione: domanda dell'utente, risposta dell'Assistente, oppure un messaggio di sistema (errore del Provider AI Testuale, query non interpretabile, segnalazione del fallback dello speech-to-text in rete) — questi ultimi portano un tipo/flag distintivo solo per lo stile in UI, ma sono Messaggi a tutti gli effetti: persistiti nella Conversazione come gli altri, non un concetto separato. Non cancellabile singolarmente: la cancellazione è sempre dell'intera Conversazione, mai di un Messaggio isolato — vedi Conversazione. Deciso su [Gestione errori dell'Assistente (provider irraggiungibile, query non interpretabile)](https://github.com/saviogiordano/MyComicBrain/issues/124).
+
+**Profilo**:
+Un account Supabase Auth distinto (§17.1) — l'unità di autenticazione e di switch rapido fra più utenti sullo stesso dispositivo. Ha una riga persistente (nome visualizzato) che sopravvive alla cancellazione dell'account: viene anonimizzata (nome sostituito da un placeholder) invece che cancellata, perché l'autore di una modifica in una Collezione condivisa (§17.2/§27) deve restare sempre risolvibile anche dopo che un collaboratore ha eliminato il proprio account. Deciso su [#151](https://github.com/saviogiordano/MyComicBrain/issues/151) (mapping su Supabase Auth) e [Decisione — schema Postgres + RLS per ruoli su collezioni condivise](https://github.com/saviogiordano/MyComicBrain/issues/154) (persistenza per l'audit).
+_Avoid_: Account (ok in prosa generica su Supabase Auth, ma nel dominio dell'app il termine è Profilo — coerente con §17.1), Utente (troppo generico)
+
+**Collezione**:
+L'unità di condivisione multiutente su Supabase (§17.2/§17.3): un insieme di Opere/Edizioni/Copie con un Proprietario e zero o più collaboratori, ciascuno con un Ruolo distinto. Ogni Profilo possiede esattamente una Collezione, creata automaticamente alla registrazione — nessun flusso oggi per possederne più di una. Deciso su [#154](https://github.com/saviogiordano/MyComicBrain/issues/154).
+
+**Ruolo**:
+La posizione di un Profilo rispetto a una Collezione (§17.2): **Proprietario** (gestione completa, incluso invitare/rimuovere collaboratori ed eliminare la Collezione — sempre esattamente uno per Collezione, mai co-proprietà), **Editor** (aggiunge/modifica/elimina Opere, Edizioni e Copie, non gestisce i collaboratori) o **Visualizzatore** (accesso in sola lettura). Deciso su [#154](https://github.com/saviogiordano/MyComicBrain/issues/154).
+_Avoid_: Permesso (usare Ruolo per la posizione in una Collezione; "permesso" resta ok in prosa per descrivere cosa un Ruolo consente)
+
+**Invito**:
+Una proposta di collaborazione su una Collezione (§17.2), inviata via email o come codice/link condivisibile, in stato in sospeso/accettato/rifiutato/revocato/scaduto. Distinto dall'appartenenza vera e propria (che nasce solo all'accettazione): un Invito non ancora accettato non dà alcun accesso alla Collezione. Deciso su [#154](https://github.com/saviogiordano/MyComicBrain/issues/154).

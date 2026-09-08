@@ -818,9 +818,10 @@ notes
 
 ## Collection
 
+Un utente possiede esattamente una Collection, creata automaticamente alla registrazione; l'appartenenza multiutente con ruoli (§17.2/§17.3) passa da una tabella di giunzione `collection_members` (`collection_id`, `user_id`, `role`), non da una colonna `user_id` singola su `Collection`. Schema Postgres + RLS completo, inviti e audit trail: [ADR-0004](docs/adr/0004-schema-postgres-rls-collezioni-condivise.md).
+
 ```text
 id
-user_id
 name
 ```
 
