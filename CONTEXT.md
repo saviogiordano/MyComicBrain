@@ -111,6 +111,10 @@ _Avoid_: Account (ok in prosa generica su Supabase Auth, ma nel dominio dell'app
 **Collezione**:
 L'unità di condivisione multiutente su Supabase (§17.2/§17.3): un insieme di Opere/Edizioni/Copie con un Proprietario e zero o più collaboratori, ciascuno con un Ruolo distinto. Ogni Profilo possiede esattamente una Collezione, creata automaticamente alla registrazione — nessun flusso oggi per possederne più di una. Deciso su [#154](https://github.com/saviogiordano/MyComicBrain/issues/154).
 
+**Modalità locale**:
+Lo stato d'uso dell'app *prima* di qualunque autenticazione su un device — scansione, catalogazione, tutto, appoggiato solo su drift/sqlite locale. Non è uno dei Profili di §17.1 (non richiede un account), è ciò che c'è prima che ne esista uno. Alla prima autenticazione su quel device (creazione di un account o login su uno già esistente), i suoi dati migrano/si uniscono alla Collezione di destinazione e la Modalità locale su quel device si esaurisce — l'uso successivo richiede sempre un Profilo autenticato. Deciso su [#155](https://github.com/saviogiordano/MyComicBrain/issues/155), dettagli in [ADR-0005](docs/adr/0005-migrazione-dati-drift-supabase.md).
+_Avoid_: Offline mode (quello di §19 è un requisito futuro per profili *già* autenticati, fuori scope della decisione qui — voce distinta, non ancora progettata), modalità ospite/guest (nessun concetto di sessione temporanea: la Modalità locale non scade e non richiede mai un account per continuare a funzionare)
+
 **Ruolo**:
 La posizione di un Profilo rispetto a una Collezione (§17.2): **Proprietario** (gestione completa, incluso invitare/rimuovere collaboratori ed eliminare la Collezione — sempre esattamente uno per Collezione, mai co-proprietà), **Editor** (aggiunge/modifica/elimina Opere, Edizioni e Copie, non gestisce i collaboratori) o **Visualizzatore** (accesso in sola lettura). Deciso su [#154](https://github.com/saviogiordano/MyComicBrain/issues/154).
 _Avoid_: Permesso (usare Ruolo per la posizione in una Collezione; "permesso" resta ok in prosa per descrivere cosa un Ruolo consente)

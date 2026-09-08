@@ -658,6 +658,19 @@ Luca        — Visualizzatore
 - il modello dati (§22) deve poter associare una collezione a più utenti con ruoli distinti, non solo a un singolo proprietario;
 - l'eliminazione dell'account di un collaboratore (§20 Privacy) rimuove i suoi permessi sulla collezione condivisa, ma non elimina la collezione né i dati inseriti dagli altri collaboratori.
 
+## 17.4 Modalità locale e migrazione dei dati
+
+L'app resta completamente usabile senza account (Modalità locale, vedi `CONTEXT.md`): scansione e catalogazione funzionano su drift/sqlite locale, senza mai richiedere l'autenticazione. Decisione e motivazione complete in [ADR-0005](docs/adr/0005-migrazione-dati-drift-supabase.md) (ticket [#155](https://github.com/saviogiordano/MyComicBrain/issues/155)).
+
+Requisiti:
+
+- qualunque autenticazione su un device (creazione di un account nuovo o login su uno esistente) con dati ancora in Modalità locale mostra un prompt esplicito di importazione (default "sì", rifiutabile — scarta i dati locali di quel device);
+- se l'account è nuovo, i dati locali migrano nella Collezione appena creata; se l'account esiste già (login da un altro device), i dati locali si uniscono (merge) alla Collezione remota esistente, senza deduplica automatica;
+- solo il primo account creato su un device eredita i suoi dati locali: un secondo Profilo (§17.1) creato sullo stesso device parte con una Collezione vuota;
+- migrano il catalogo confermato (Opere/Edizioni/Copie/Serie/Creator/Personaggi/Tag) e le Scansioni/Analisi Copertina/Identificazione/Candidati non ancora risolti in una Copia, comprese le immagini (caricate su Supabase Storage); la Conversazione con l'Assistente non migra;
+- a migrazione riuscita, i dati locali vengono svuotati: da quel momento l'app opera online-only per quel Profilo (nessuna cache locale di lettura, in attesa di §18/§19);
+- un errore di migrazione blocca l'accesso pieno all'account finché l'utente non completa un nuovo tentativo (mai un fallimento silenzioso in background).
+
 ---
 
 # 18. Sincronizzazione
@@ -691,6 +704,8 @@ La ricerca (§10, l'Assistente conversazionale) **non** rientra in questo elenco
 Le funzioni AI e il recupero dei metadati possono richiedere connessione.
 
 Le operazioni effettuate offline devono essere sincronizzate successivamente.
+
+Questo requisito riguarda i Profili già autenticati e resta da progettare (fuori scope della mappa [#149](https://github.com/saviogiordano/MyComicBrain/issues/149)) — distinto dalla Modalità locale di §17.4, che copre solo l'uso *prima* di qualunque autenticazione e non lascia una cache locale dopo la migrazione.
 
 ---
 
