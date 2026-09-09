@@ -61,6 +61,16 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
   String? _coverImageRelativo;
   String? _coverImageAssoluto;
 
+  /// `true` non appena [_coverImageRelativo] riflette lo stato reale
+  /// (fetch async di `coverImageGrezzoDi` in [_prefill] arrivato, o nuova
+  /// cover scelta in [_scegliCover]). Senza questo flag, [_salva] non può
+  /// distinguere "non ancora caricato" da "caricato e legittimamente
+  /// null" (Edizione senza cover) — e salvare prima che il fetch arrivi
+  /// scriverebbe `coverImage: null` in `aggiornaEdizione`, cancellando la
+  /// cover esistente (bug osservato: numero corretto dalla Scheda, cover
+  /// sparita dopo il salvataggio).
+  bool _coverImageRelativoCaricato = false;
+
   @override
   void initState() {
     super.initState();
@@ -119,13 +129,19 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
           .coverImageGrezzoDi(widget.edizioneId)
           .then((raw) {
             if (!mounted) return;
-            setState(() => _coverImageRelativo = raw);
+            setState(() {
+              _coverImageRelativo = raw;
+              _coverImageRelativoCaricato = true;
+            });
           }),
     );
   }
 
   Future<void> _scegliCover() async {
-    final scelta = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final sorgente = await _scegliSorgenteCover();
+    if (sorgente == null) return;
+
+    final scelta = await ImagePicker().pickImage(source: sorgente);
     if (scelta == null) return;
 
     final repository = ref.read(comicsRepositoryProvider);
@@ -135,7 +151,48 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     setState(() {
       _coverImageRelativo = relativo;
       _coverImageAssoluto = assoluto;
+      _coverImageRelativoCaricato = true;
     });
+  }
+
+  Future<ImageSource?> _scegliSorgenteCover() {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.surfaceRaised,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library_outlined,
+                color: AppColors.textPrimary,
+              ),
+              title: Text(
+                'Scegli dalla galleria',
+                style: AppTypography.bodyLarge.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_camera_outlined,
+                color: AppColors.textPrimary,
+              ),
+              title: Text(
+                'Scatta una foto',
+                style: AppTypography.bodyLarge.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _aggiungiAutore() async {
@@ -223,13 +280,21 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     final volume = _volume.text.trim();
     final description = _description.text.trim();
 
+    // Se il fetch async di coverImageGrezzoDi avviato in _prefill non è
+    // ancora arrivato, aspettalo qui invece di salvare col valore ancora
+    // null: altrimenti aggiornaEdizione cancellerebbe la cover esistente
+    // (coverImage: null è scrittura esplicita, non "lascia invariato").
+    final coverImage = _coverImageRelativoCaricato
+        ? _coverImageRelativo
+        : await repository.coverImageGrezzoDi(widget.edizioneId);
+
     await repository.aggiornaEdizione(
       id: widget.edizioneId,
       serieId: serieId,
       publisher: editore.isEmpty ? null : editore,
       issueNumber: numero.isEmpty ? null : int.tryParse(numero),
       issueNumberLabel: numero.isEmpty ? null : numero,
-      coverImage: _coverImageRelativo,
+      coverImage: coverImage,
       releaseDate: releaseDate.isEmpty ? null : releaseDate,
       year: year.isEmpty ? null : int.tryParse(year),
       coverPrice: coverPrice.isEmpty ? null : coverPrice,

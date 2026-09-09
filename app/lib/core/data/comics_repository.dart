@@ -1555,6 +1555,50 @@ ORDER BY p.n
     return riga.coverImage;
   }
 
+  /// Ripristina `Edizioni.coverImage` per le righe rimaste a `null` per la
+  /// race fra il salvataggio della modifica bibliografica e il fetch
+  /// asincrono di [coverImageGrezzoDi] (bug osservato: modificare solo il
+  /// numero da `ModificaSchedaPage` poteva cancellare la cover esistente).
+  /// Recupera la cover dalla Scansione originale — mai cancellata una volta
+  /// confermata in catalogo, vedi `ScansioneStorage.elimina` — tramite la
+  /// prima Copia collegata che ne referenzia una (`Copie.scansioneId`).
+  /// Azione di manutenzione una tantum (voce in Impostazioni): non tocca le
+  /// Edizioni senza cover per altri motivi (mai scansionate, o già senza
+  /// Copia/Scansione collegata). Ritorna il numero di Edizioni ripristinate.
+  Future<int> ripristinaCoverMancantiDaScansione() async {
+    final query = _db.select(_db.edizioni).join([
+      innerJoin(_db.copie, _db.copie.edizioneId.equalsExp(_db.edizioni.id)),
+      innerJoin(
+        _db.scansioni,
+        _db.scansioni.id.equalsExp(_db.copie.scansioneId),
+      ),
+    ])..where(_db.edizioni.coverImage.isNull());
+
+    final righe = await query.get();
+    final base = await _copertinaDownloader.baseDirectory();
+
+    final daRipristinare = <int, String>{};
+    for (final riga in righe) {
+      final edizioneId = riga.readTable(_db.edizioni).id;
+      if (daRipristinare.containsKey(edizioneId)) continue;
+      final immagine = riga.readTable(_db.scansioni).image;
+      daRipristinare[edizioneId] = percorso_locale.relativizza(
+        immagine,
+        base,
+      );
+    }
+
+    for (final entry in daRipristinare.entries) {
+      await (_db.update(
+        _db.edizioni,
+      )..where((e) => e.id.equals(entry.key))).write(
+        EdizioniCompanion(coverImage: Value(entry.value)),
+      );
+    }
+
+    return daRipristinare.length;
+  }
+
   /// Salva una cover scelta dalla galleria (`image_picker`) per la modifica
   /// bibliografica della Scheda (§8.1, deciso su #67) e la relativizza nello
   /// stesso formato del resto del catalogo — vedi [_coverImagePerCandidato].

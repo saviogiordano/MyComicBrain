@@ -81,6 +81,11 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   // [_esportazioneInCorso].
   bool _importazioneInCorso = false;
 
+  // Stato di "Ripristina cover mancanti" (voce di manutenzione una tantum
+  // per il bug descritto su [ComicsRepository.ripristinaCoverMancantiDaScansione]),
+  // stesso pattern di [_esportazioneInCorso].
+  bool _ripristinoCoverInCorso = false;
+
   @override
   void initState() {
     super.initState();
@@ -272,6 +277,59 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
         ],
       ),
     );
+  }
+
+  /// Ripristina le cover cancellate dal bug di `ModificaSchedaPage` (voce di
+  /// manutenzione una tantum — vedi
+  /// [ComicsRepository.ripristinaCoverMancantiDaScansione]): chiede conferma,
+  /// poi mostra quante Edizioni sono state ripristinate.
+  Future<void> _ripristinaCoverMancanti() async {
+    if (_ripristinoCoverInCorso) return;
+    final confermato = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surfaceRaised,
+        title: const Text('Ripristina cover mancanti'),
+        content: const Text(
+          'Recupera la cover dalla scansione originale per i fumetti che '
+          'l\'hanno persa dopo una modifica. Non tocca i fumetti che non '
+          'hanno mai avuto una cover.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Ripristina'),
+          ),
+        ],
+      ),
+    );
+    if (confermato != true) return;
+
+    setState(() => _ripristinoCoverInCorso = true);
+    try {
+      final ripristinate = await ref
+          .read(comicsRepositoryProvider)
+          .ripristinaCoverMancantiDaScansione();
+      if (!mounted) return;
+      await _mostraErroreVerifica(
+        'Ripristina cover mancanti',
+        ripristinate == 0
+            ? 'Nessuna cover da ripristinare.'
+            : '$ripristinate ${ripristinate == 1 ? "cover ripristinata" : "cover ripristinate"}.',
+      );
+    } on Object catch (e) {
+      if (!mounted) return;
+      await _mostraErroreVerifica(
+        'Ripristina cover mancanti',
+        'Ripristino non riuscito: $e',
+      );
+    } finally {
+      if (mounted) setState(() => _ripristinoCoverInCorso = false);
+    }
   }
 
   /// Mostra il motivo del fallimento per esteso in un popup (§12, richiesto
@@ -630,6 +688,23 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                           titolo: 'Importa collezione',
                           valore: _importazioneInCorso ? 'In corso…' : '',
                           onTap: _importazioneInCorso ? null : _importa,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const SectionHeader(label: 'Manutenzione'),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        _Riga(
+                          titolo: 'Ripristina cover mancanti',
+                          valore: _ripristinoCoverInCorso ? 'In corso…' : '',
+                          onTap: _ripristinoCoverInCorso
+                              ? null
+                              : _ripristinaCoverMancanti,
                         ),
                       ],
                     ),
