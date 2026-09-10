@@ -172,7 +172,7 @@ class _InserisciManualmentePageState
       operaId: operaId,
       serieId: serieId,
       publisher: editore.isEmpty ? null : editore,
-      issueNumber: numero.isEmpty ? null : int.tryParse(numero),
+      issueNumber: numeroIntero(numero),
       issueNumberLabel: numero.isEmpty ? null : numero,
       coverImage: _coverImageRelativo,
       releaseDate: releaseDate.isEmpty ? null : releaseDate,

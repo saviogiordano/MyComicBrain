@@ -621,6 +621,46 @@ void main() {
   );
 
   test(
+    'confermaCandidato esterno con numero decimale ("679.1") salva '
+    "l'Edizione con issueNumber sulla parte intera — bug osservato: "
+    '`int.tryParse` falliva sul decimale lasciando `issueNumber` `null`, '
+    'e la Copia spariva dalla griglia numerica di Serie (#99) pur essendo '
+    'stata salvata correttamente',
+    () async {
+      final scansioneId = await scansioneConAnalisi();
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 78,
+        title: 'Amazing Spider-Man',
+        seriesName: 'The Amazing Spider-Man',
+        issueNumberLabel: '679.1',
+        publisher: 'Marvel',
+        coverImageUrl: 'https://comicvine.example/679.1.jpg',
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(edizione.issueNumberLabel, '679.1');
+      expect(edizione.issueNumber, 679);
+    },
+  );
+
+  test(
     "confermaCandidato esterno: download cover fallito ricade sull'URL remoto",
     () async {
       final repoDownloadFallito = ComicsRepository(

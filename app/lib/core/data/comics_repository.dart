@@ -863,9 +863,7 @@ class ComicsRepository {
       operaId: operaId,
       serieId: serieId,
       publisher: _nonVuoto(analisi.publisher) ?? candidato.publisher,
-      issueNumber: issueNumberLabel != null
-          ? int.tryParse(issueNumberLabel.trim())
-          : null,
+      issueNumber: numeroIntero(issueNumberLabel),
       issueNumberLabel: issueNumberLabel,
       coverImage: await _coverImagePerCandidato(candidato),
       releaseDate: _nonVuoto(analisi.releaseDate),

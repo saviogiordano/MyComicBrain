@@ -292,7 +292,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
       id: widget.edizioneId,
       serieId: serieId,
       publisher: editore.isEmpty ? null : editore,
-      issueNumber: numero.isEmpty ? null : int.tryParse(numero),
+      issueNumber: numeroIntero(numero),
       issueNumberLabel: numero.isEmpty ? null : numero,
       coverImage: coverImage,
       releaseDate: releaseDate.isEmpty ? null : releaseDate,
