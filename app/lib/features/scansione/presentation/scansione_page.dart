@@ -169,8 +169,11 @@ class _ScansionePageState extends ConsumerState<ScansionePage> {
       body: SafeArea(
         child: Column(
           children: [
-            _Filmstrip(captures: _captures, onFine: _fine),
-            const Spacer(),
+            if (_captures.isEmpty) ...[
+              _FilmstripVuoto(onFine: _fine),
+              const Spacer(),
+            ] else
+              Expanded(child: _Filmstrip(captures: _captures, onFine: _fine)),
             messaggio,
             const SizedBox(height: AppSpacing.md),
             _BottomBar(
@@ -246,10 +249,12 @@ class _PermessoNegatoMessage extends StatelessWidget {
   }
 }
 
-class _Filmstrip extends StatelessWidget {
-  const _Filmstrip({required this.captures, required this.onFine});
+/// Riga compatta mostrata finché il batch è vuoto: stesso posto del
+/// `_Filmstrip` a griglia, ma senza occupare spazio verticale (nessuna
+/// scansione da elencare).
+class _FilmstripVuoto extends StatelessWidget {
+  const _FilmstripVuoto({required this.onFine});
 
-  final List<XFile> captures;
   final VoidCallback onFine;
 
   @override
@@ -259,42 +264,89 @@ class _Filmstrip extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: captures.isEmpty
-                ? Text('Nessuna scansione ancora', style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted))
-                : SizedBox(
-                    height: 40,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: captures.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 6),
-                      itemBuilder: (context, i) => ClipRRect(
-                        borderRadius: AppRadii.xsRadius,
-                        child: Container(
-                          width: 40,
-                          decoration: BoxDecoration(
-                            borderRadius: AppRadii.xsRadius,
-                            border: Border.all(color: AppColors.borderStrong),
-                          ),
-                          child: Image.file(File(captures[i].path), fit: BoxFit.cover),
-                        ),
-                      ),
-                    ),
-                  ),
+            child: Text('Nessuna scansione ancora', style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted)),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Material(
-            color: AppColors.accent,
-            borderRadius: AppRadii.pillRadius,
-            child: InkWell(
-              onTap: onFine,
-              borderRadius: AppRadii.pillRadius,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-                child: Text('Fine', style: AppTypography.labelLarge.copyWith(color: AppColors.onAccent)),
+          _FineButton(onTap: onFine),
+        ],
+      ),
+    );
+  }
+}
+
+/// Griglia verticale del batch in corso: sostituisce la vecchia striscia
+/// orizzontale (illeggibile oltre poche cover, richiedeva scroll laterale
+/// per vedere quelle già scansionate — segnalato da utente) con una griglia
+/// che scorre in verticale e mostra più cover insieme.
+class _Filmstrip extends StatelessWidget {
+  const _Filmstrip({required this.captures, required this.onFine});
+
+  final List<XFile> captures;
+  final VoidCallback onFine;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.sm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${captures.length} scansioni',
+                  style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _FineButton(onTap: onFine),
+            ],
+          ),
+        ),
+        Expanded(
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 84,
+              mainAxisSpacing: AppSpacing.xs,
+              crossAxisSpacing: AppSpacing.xs,
+              childAspectRatio: 0.7,
+            ),
+            itemCount: captures.length,
+            itemBuilder: (context, i) => ClipRRect(
+              borderRadius: AppRadii.xsRadius,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: AppRadii.xsRadius,
+                  border: Border.all(color: AppColors.borderStrong),
+                ),
+                child: Image.file(File(captures[i].path), fit: BoxFit.cover),
               ),
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+class _FineButton extends StatelessWidget {
+  const _FineButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.accent,
+      borderRadius: AppRadii.pillRadius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadii.pillRadius,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+          child: Text('Fine', style: AppTypography.labelLarge.copyWith(color: AppColors.onAccent)),
+        ),
       ),
     );
   }
