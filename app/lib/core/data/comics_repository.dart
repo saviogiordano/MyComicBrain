@@ -771,23 +771,54 @@ class ComicsRepository {
   /// (Edizione già catalogata), aggiunge solo una nuova Copia a
   /// quell'Edizione; se `esterno` (ComicVine, nessuna Edizione propria
   /// ancora), crea Opera/Serie/Edizione da zero a partire dai campi grezzi
-  /// del candidato prima di aggiungere la Copia. Ritorna l'id della Copia
-  /// creata.
+  /// del candidato prima di aggiungere la Copia. La Copia creata parte con
+  /// condizione di default `fine` e prezzo di acquisto pre-compilato dal
+  /// prezzo di copertina letto dall'AI su questa Scansione, quando
+  /// disponibile (punto di partenza modificabile dalla Scheda, non un dato
+  /// definitivo — bug osservato: la Copia veniva creata senza condizione né
+  /// prezzo). Ritorna l'id della Copia creata.
   Future<int> confermaCandidato({
     required Candidato candidato,
     required int scansioneId,
   }) async {
     await marcaCandidatoScelto(id: candidato.id);
 
+    final analisi = await (_db.select(
+      _db.analisiCopertinaTable,
+    )..where((a) => a.scansioneId.equals(scansioneId))).getSingleOrNull();
+
     final edizioneId = candidato.source == FonteCandidato.interno
         ? candidato.edizioneId!
-        : await _creaEdizioneDaCandidato(candidato, scansioneId);
+        // Un candidato `esterno` presuppone un'Analisi Copertina completata
+        // (l'Identificazione parte solo dopo, vedi commento su
+        // `analisiCopertinaPerScansione`).
+        : await _creaEdizioneDaCandidato(candidato, scansioneId, analisi!);
 
     return aggiungiCopia(
       edizioneId: edizioneId,
       status: StatoCopia.posseduta,
+      condition: CondizioneCopia.fine,
+      purchasePrice: _prezzoDaAnalisi(analisi?.price),
       scansioneId: scansioneId,
     );
+  }
+
+  /// Converte il prezzo di copertina letto dall'AI (testo libero, es.
+  /// "€ 5,30" — resta testo su `Edizione.coverPrice`, deciso su #63) in un
+  /// importo numerico da usare come prezzo di acquisto di default sulla
+  /// Copia appena creata da [confermaCandidato]. Prende il primo numero
+  /// trovato nel testo e normalizza la virgola italiana come separatore
+  /// decimale; `null` se il testo non contiene un numero.
+  double? _prezzoDaAnalisi(String? raw) {
+    final testo = raw?.trim();
+    if (testo == null || testo.isEmpty) return null;
+    final match = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(testo);
+    if (match == null) return null;
+    var numero = match.group(0)!;
+    if (numero.contains(',')) {
+      numero = numero.replaceAll('.', '').replaceAll(',', '.');
+    }
+    return double.tryParse(numero);
   }
 
   /// Crea Opera/Serie/Edizione per un Candidato `esterno` (ComicVine). I
@@ -806,9 +837,8 @@ class ComicsRepository {
   Future<int> _creaEdizioneDaCandidato(
     Candidato candidato,
     int scansioneId,
+    AnalisiCopertinaTableData analisi,
   ) async {
-    final analisi = await analisiCopertinaPerScansione(scansioneId);
-
     final title =
         _nonVuoto(analisi.title) ??
         candidato.title ??

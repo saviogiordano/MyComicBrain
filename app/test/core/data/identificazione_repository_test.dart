@@ -490,6 +490,8 @@ void main() {
       expect(copia.edizioneId, edizioneId);
       expect(copia.status, StatoCopia.posseduta);
       expect(copia.scansioneId, scansioneId);
+      expect(copia.condition, CondizioneCopia.fine);
+      expect(copia.purchasePrice, isNull);
       final edizioni = await db.select(db.edizioni).get();
       expect(
         edizioni,
@@ -500,6 +502,43 @@ void main() {
         db.candidatiTable,
       )..where((c) => c.id.equals(candidatoId))).getSingle();
       expect(rigaCandidato.scelto, isTrue);
+    },
+  );
+
+  test(
+    'confermaCandidato aggiunge la Copia con condizione di default "Fine" e '
+    'prezzo di acquisto pre-compilato dal prezzo di copertina letto '
+    "dall'AI (bug osservato: la Copia veniva creata senza condizione né "
+    'prezzo)',
+    () async {
+      final scansioneId = await scansioneConAnalisi(price: '€ 5,30');
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumberLabel: '42',
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.interno,
+        punteggio: 96,
+        edizioneId: edizioneId,
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(copia.condition, CondizioneCopia.fine);
+      expect(copia.purchasePrice, 5.30);
     },
   );
 
