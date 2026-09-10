@@ -133,7 +133,9 @@ class _ModificaCopiaSheetState extends ConsumerState<_ModificaCopiaSheet> {
               _prezzo,
               'Prezzo di acquisto',
               'es. 5.30',
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
