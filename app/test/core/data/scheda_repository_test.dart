@@ -5,6 +5,7 @@ import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
+import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 
 void main() {
   late AppDatabase db;
@@ -102,6 +103,47 @@ void main() {
         dettaglio.autori.map((a) => a.creatorId),
         unorderedEquals([autore1, autore2]),
       );
+    },
+  );
+
+  test(
+    'watchEdizione senza Valore stimato calcolato: CopiaDettaglio ha i campi §35 tutti null',
+    () async {
+      final edizioneId = await edizione();
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+
+      final dettaglio = await repo.watchEdizione(edizioneId).first;
+
+      final copia = dettaglio!.copie.single;
+      expect(copia.statoValoreStimato, isNull);
+      expect(copia.valoreStimato, isNull);
+      expect(copia.valoreStimatoErrorMessage, isNull);
+      expect(copia.valoreStimatoAggiornatoAl, isNull);
+    },
+  );
+
+  test(
+    'watchEdizione risolve il Valore stimato completato di ciascuna Copia (§35)',
+    () async {
+      final edizioneId = await edizione();
+      final copiaId = await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+      final valoreStimatoId = await repo.avviaOrRiavviaValoreStimato(
+        copiaId: copiaId,
+      );
+      await repo.completaValoreStimato(id: valoreStimatoId, value: 15.5);
+
+      final dettaglio = await repo.watchEdizione(edizioneId).first;
+
+      final copia = dettaglio!.copie.single;
+      expect(copia.statoValoreStimato, StatoValoreStimato.completata);
+      expect(copia.valoreStimato, 15.5);
+      expect(copia.valoreStimatoAggiornatoAl, isNotNull);
     },
   );
 

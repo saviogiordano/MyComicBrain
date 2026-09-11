@@ -10,6 +10,7 @@ import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
 import 'package:mycomicbrain/core/domain/genere.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
+import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 import 'package:path_provider/path_provider.dart';
 
 part 'database.g.dart';
@@ -491,6 +492,42 @@ class MessaggioTable extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
+/// `ValoreStimato`: il Valore stimato di una Copia (§35, deciso su
+/// [Mappa — Valore stimato del fumetto tramite API di pricing](https://github.com/saviogiordano/MyComicBrain/issues/157)),
+/// 1:1 con `Copie` via `copiaId` — dato calcolato esternamente, tenuto
+/// distinto dai campi personali di `Copie` come `AnalisiCopertinaTable` è
+/// distinta da `Scansioni`. A differenza di quel gemello (one-shot per
+/// Scansione), qui la stessa riga viene ricalcolata più volte sulla stessa
+/// Copia (creazione, ogni cambio Condizione, refresh manuale, §35.3): niente
+/// `avvia*` che inserisce sempre una riga nuova, un `uniqueKeys` su
+/// `copiaId` garantisce il 1:1. Un fallimento transitorio
+/// (`status = fallita`) non cancella un `value`/`completedAt` precedenti
+/// (deciso su #161) — un valore già noto resta più utile di nessun valore,
+/// anche se non più freschissimo.
+class ValoreStimatoTable extends Table {
+  @override
+  String get tableName => 'valore_stimato';
+
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get copiaId => integer().references(Copie, #id)();
+  TextColumn get status => textEnum<StatoValoreStimato>()();
+
+  /// Sempre in EUR (§35) — la conversione dalla valuta nativa della fonte
+  /// avviene nel client (`PriceChartingClient`), non qui.
+  RealColumn get value => real().nullable()();
+  TextColumn get errorMessage => text().nullable()();
+
+  /// Il timestamp "Aggiornato il..." mostrato in Scheda (§35.3) — anche per
+  /// `nonDisponibile`, per poter mostrare da quando è noto quello stato.
+  DateTimeColumn get completedAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {copiaId},
+  ];
+}
+
 @DriftDatabase(
   tables: [
     Opere,
@@ -510,6 +547,7 @@ class MessaggioTable extends Table {
     EdizioneGenere,
     ConversazioneTable,
     MessaggioTable,
+    ValoreStimatoTable,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -518,11 +556,14 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from12To13: (m, schema) async {
+        await m.createTable(schema.valoreStimato);
+      },
       from11To12: (m, schema) async {
         await m.createTable(schema.conversazione);
         await m.createTable(schema.messaggio);

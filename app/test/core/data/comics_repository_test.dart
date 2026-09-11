@@ -73,6 +73,8 @@ void main() {
       expect(kpis.numeriMancanti, 0);
       expect(kpis.spesoFinora, 0.0);
       expect(kpis.aggiuntiMeseCorrente, 0);
+      expect(kpis.valoreStimatoTotale, 0.0);
+      expect(kpis.copieConValoreStimato, 0);
     });
 
     test('nessuna serie incompleta', () async {
@@ -889,6 +891,78 @@ void main() {
 
         final kpis = await repo.watchDashboardKpis().first;
         expect(kpis.spesoFinora, closeTo(12.5, 0.0001));
+      },
+    );
+  });
+
+  group('Valore stimato della collezione (§35.5)', () {
+    Future<int> copiaConCondizione(StatoCopia status) async {
+      final operaId = await repo.aggiungiOpera(title: 'Opera');
+      final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+      return repo.aggiungiCopia(edizioneId: edizioneId, status: status);
+    }
+
+    test(
+      'somma solo i valori completati su copie possedute/prestate, con nota di copertura',
+      () async {
+        final copiaPosseduta = await copiaConCondizione(StatoCopia.posseduta);
+        final idPosseduta = await repo.avviaOrRiavviaValoreStimato(
+          copiaId: copiaPosseduta,
+        );
+        await repo.completaValoreStimato(id: idPosseduta, value: 20);
+
+        final copiaPrestata = await copiaConCondizione(StatoCopia.prestata);
+        final idPrestata = await repo.avviaOrRiavviaValoreStimato(
+          copiaId: copiaPrestata,
+        );
+        await repo.completaValoreStimato(id: idPrestata, value: 10);
+
+        // Non ancora calcolato: esclusa dalla somma e dal conteggio.
+        await copiaConCondizione(StatoCopia.posseduta);
+
+        final kpis = await repo.watchDashboardKpis().first;
+        expect(kpis.valoreStimatoTotale, closeTo(30, 0.0001));
+        expect(kpis.copieConValoreStimato, 2);
+        expect(kpis.totaleCopie, 3);
+      },
+    );
+
+    test(
+      'esclude le copie vendute/perse anche se hanno un valore completato',
+      () async {
+        final copiaVenduta = await copiaConCondizione(StatoCopia.venduta);
+        final id = await repo.avviaOrRiavviaValoreStimato(
+          copiaId: copiaVenduta,
+        );
+        await repo.completaValoreStimato(id: id, value: 999);
+
+        final kpis = await repo.watchDashboardKpis().first;
+        expect(kpis.valoreStimatoTotale, 0.0);
+        expect(kpis.copieConValoreStimato, 0);
+      },
+    );
+
+    test(
+      'esclude le copie non disponibili, in errore o in corso dalla somma',
+      () async {
+        final nonDisponibile = await copiaConCondizione(StatoCopia.posseduta);
+        final idNonDisponibile = await repo.avviaOrRiavviaValoreStimato(
+          copiaId: nonDisponibile,
+        );
+        await repo.segnaValoreStimatoNonDisponibile(id: idNonDisponibile);
+
+        final fallita = await copiaConCondizione(StatoCopia.posseduta);
+        final idFallita = await repo.avviaOrRiavviaValoreStimato(
+          copiaId: fallita,
+        );
+        await repo.fallisciValoreStimato(id: idFallita, errorMessage: 'x');
+
+        await copiaConCondizione(StatoCopia.posseduta); // inCorso
+
+        final kpis = await repo.watchDashboardKpis().first;
+        expect(kpis.valoreStimatoTotale, 0.0);
+        expect(kpis.copieConValoreStimato, 0);
+        expect(kpis.totaleCopie, 3);
       },
     );
   });

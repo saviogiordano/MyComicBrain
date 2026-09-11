@@ -22,6 +22,7 @@ import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:mycomicbrain/core/domain/ricerca_assistente.dart';
 import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/serie_lista.dart';
+import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 
 /// Espone il dominio del catalogo (opera/edizione/copia, §36) all'UI senza
 /// farle vedere Drift: prende e restituisce tipi di dominio, mai i tipi
@@ -986,6 +987,140 @@ class ComicsRepository {
     });
   }
 
+  // --- Valore stimato (§35, deciso su #157/#161). ---
+
+  /// I dati identificativi di una Copia necessari a interrogare il
+  /// provider di valutazione (titolo/serie/numero/editore dell'Edizione,
+  /// Condizione della Copia) — letti da [ValoreStimatoPipeline] prima di
+  /// chiamare il client, stesso ruolo di [catalogoPerMatching] per il
+  /// motore di matching.
+  Future<
+    ({
+      String title,
+      String? seriesName,
+      String? issueNumberLabel,
+      String? publisher,
+      CondizioneCopia? condition,
+    })
+  >
+  copiaConEdizionePerId(int copiaId) async {
+    final query = _db.select(_db.copie).join([
+      innerJoin(_db.edizioni, _db.edizioni.id.equalsExp(_db.copie.edizioneId)),
+      innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
+      leftOuterJoin(
+        _db.serieTable,
+        _db.serieTable.id.equalsExp(_db.edizioni.serieId),
+      ),
+    ])..where(_db.copie.id.equals(copiaId));
+    final row = await query.getSingle();
+    return (
+      title: row.readTable(_db.opere).title,
+      seriesName: row.readTableOrNull(_db.serieTable)?.name,
+      issueNumberLabel: row.readTable(_db.edizioni).issueNumberLabel,
+      publisher: row.readTable(_db.edizioni).publisher,
+      condition: row.readTable(_db.copie).condition,
+    );
+  }
+
+  /// Crea la riga `ValoreStimato` di una Copia al primo calcolo, oppure la
+  /// riporta a `inCorso` per un ricalcolo successivo (creazione, cambio
+  /// Condizione, refresh manuale — §35.3): a differenza di
+  /// [avviaAnalisiCopertina] (sempre un insert, relazione 1:1 con una
+  /// Scansione mai riusata), qui la stessa Copia innesca ripetutamente lo
+  /// stesso calcolo, quindi la riga esistente va riusata, non duplicata
+  /// (`uniqueKeys` su `copiaId` in `ValoreStimatoTable` lo impedirebbe
+  /// comunque). `value`/`completedAt` di un calcolo precedente non vengono
+  /// toccati qui: restano finché [completaValoreStimato] o
+  /// [segnaValoreStimatoNonDisponibile] non li aggiornano.
+  Future<int> avviaOrRiavviaValoreStimato({
+    required int copiaId,
+    DateTime? createdAt,
+  }) async {
+    final esistente = await (_db.select(
+      _db.valoreStimatoTable,
+    )..where((v) => v.copiaId.equals(copiaId))).getSingleOrNull();
+    if (esistente == null) {
+      return _db
+          .into(_db.valoreStimatoTable)
+          .insert(
+            ValoreStimatoTableCompanion.insert(
+              copiaId: copiaId,
+              status: StatoValoreStimato.inCorso,
+              createdAt: createdAt ?? DateTime.now(),
+            ),
+          );
+    }
+    await (_db.update(
+      _db.valoreStimatoTable,
+    )..where((v) => v.id.equals(esistente.id))).write(
+      const ValoreStimatoTableCompanion(
+        status: Value(StatoValoreStimato.inCorso),
+        errorMessage: Value(null),
+      ),
+    );
+    return esistente.id;
+  }
+
+  /// Registra un Valore stimato calcolato con successo, sempre in EUR
+  /// (§35) — la conversione dalla valuta della fonte avviene nel client.
+  Future<void> completaValoreStimato({
+    required int id,
+    required double value,
+    DateTime? completedAt,
+  }) {
+    return (_db.update(
+      _db.valoreStimatoTable,
+    )..where((v) => v.id.equals(id))).write(
+      ValoreStimatoTableCompanion(
+        status: const Value(StatoValoreStimato.completata),
+        value: Value(value),
+        completedAt: Value(completedAt ?? DateTime.now()),
+      ),
+    );
+  }
+
+  /// Segna una Copia come "non disponibile" (§35.2/§35.4): provider non
+  /// configurato o Edizione/variant non coperta dalla fonte — placeholder
+  /// permanente, non un errore da ritentare automaticamente. `value` viene
+  /// azzerato: un'assenza di dati non deve mostrare un valore residuo di
+  /// un calcolo precedente come se fosse ancora valido.
+  Future<void> segnaValoreStimatoNonDisponibile({
+    required int id,
+    DateTime? completedAt,
+  }) {
+    return (_db.update(
+      _db.valoreStimatoTable,
+    )..where((v) => v.id.equals(id))).write(
+      ValoreStimatoTableCompanion(
+        status: const Value(StatoValoreStimato.nonDisponibile),
+        value: const Value(null),
+        errorMessage: const Value(null),
+        completedAt: Value(completedAt ?? DateTime.now()),
+      ),
+    );
+  }
+
+  /// Registra un errore transitorio (rete, timeout, rate-limit — §35.4):
+  /// a differenza di [segnaValoreStimatoNonDisponibile], `value` e
+  /// `completedAt` di un calcolo precedente riuscito **non** vengono
+  /// toccati (`Value.absent()` implicito, i campi assenti dalla
+  /// Companion) — un valore già noto resta più utile di nessun valore,
+  /// anche se non più freschissimo, mentre lo stato `fallita` segnala
+  /// comunque che l'ultimo tentativo non è riuscito.
+  Future<void> fallisciValoreStimato({
+    required int id,
+    required String errorMessage,
+  }) {
+    return (_db.update(
+      _db.valoreStimatoTable,
+    )..where((v) => v.id.equals(id))).write(
+      ValoreStimatoTableCompanion(
+        status: const Value(StatoValoreStimato.fallita),
+        errorMessage: Value(errorMessage),
+      ),
+    );
+  }
+
   // --- KPI della Dashboard (§4.1, regole fissate su #2). ---
 
   /// I numeri riassuntivi della Dashboard. Un'unica query: tutti i KPI di
@@ -1040,13 +1175,19 @@ SELECT
      WHERE NOT EXISTS (SELECT 1 FROM mancanti m WHERE m.serie_id = sv.id)) AS serie_complete,
   COALESCE((SELECT SUM(purchase_price) FROM copie WHERE status IN ('posseduta', 'prestata')), 0.0) AS speso_finora,
   (SELECT COUNT(*) FROM copie
-     WHERE status IN ('posseduta', 'prestata') AND created_at >= ?1 AND created_at < ?2) AS aggiunti_mese
+     WHERE status IN ('posseduta', 'prestata') AND created_at >= ?1 AND created_at < ?2) AS aggiunti_mese,
+  COALESCE((SELECT SUM(vs.value) FROM copie c
+     JOIN valore_stimato vs ON vs.copia_id = c.id
+     WHERE c.status IN ('posseduta', 'prestata') AND vs.status = 'completata'), 0.0) AS valore_stimato_totale,
+  (SELECT COUNT(*) FROM copie c
+     JOIN valore_stimato vs ON vs.copia_id = c.id
+     WHERE c.status IN ('posseduta', 'prestata') AND vs.status = 'completata') AS copie_con_valore
 ''',
           variables: [
             Variable.withDateTime(inizioMese),
             Variable.withDateTime(inizioMeseProssimo),
           ],
-          readsFrom: {_db.serieTable, _db.edizioni, _db.copie},
+          readsFrom: {_db.serieTable, _db.edizioni, _db.copie, _db.valoreStimatoTable},
         )
         .watch()
         .map((rows) {
@@ -1059,6 +1200,8 @@ SELECT
             numeriMancanti: r.read<int>('numeri_mancanti'),
             spesoFinora: r.read<double>('speso_finora'),
             aggiuntiMeseCorrente: r.read<int>('aggiunti_mese'),
+            valoreStimatoTotale: r.read<double>('valore_stimato_totale'),
+            copieConValoreStimato: r.read<int>('copie_con_valore'),
           );
         });
   }
@@ -1494,6 +1637,10 @@ ORDER BY p.n
         _db.copie.edizioneId.equalsExp(_db.edizioni.id),
       ),
       leftOuterJoin(
+        _db.valoreStimatoTable,
+        _db.valoreStimatoTable.copiaId.equalsExp(_db.copie.id),
+      ),
+      leftOuterJoin(
         _db.comicCreator,
         _db.comicCreator.edizioneId.equalsExp(_db.edizioni.id),
       ),
@@ -1515,6 +1662,7 @@ ORDER BY p.n
       for (final row in rows) {
         final copia = row.readTableOrNull(_db.copie);
         if (copia != null) {
+          final valoreStimato = row.readTableOrNull(_db.valoreStimatoTable);
           copieById[copia.id] = CopiaDettaglio(
             id: copia.id,
             status: copia.status,
@@ -1525,6 +1673,10 @@ ORDER BY p.n
             seller: copia.seller,
             location: copia.location,
             notes: copia.notes,
+            statoValoreStimato: valoreStimato?.status,
+            valoreStimato: valoreStimato?.value,
+            valoreStimatoErrorMessage: valoreStimato?.errorMessage,
+            valoreStimatoAggiornatoAl: valoreStimato?.completedAt,
           );
         }
         final comicCreator = row.readTableOrNull(_db.comicCreator);

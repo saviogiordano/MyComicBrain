@@ -1,5 +1,6 @@
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
+import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 
 /// Una Copia con tutti i campi §8.2, per il rendering della Scheda (§8,
 /// deciso su #69) — proiezione di sola lettura di una riga `Copie`.
@@ -14,6 +15,10 @@ class CopiaDettaglio {
     this.seller,
     this.location,
     this.notes,
+    this.statoValoreStimato,
+    this.valoreStimato,
+    this.valoreStimatoErrorMessage,
+    this.valoreStimatoAggiornatoAl,
   });
 
   final int id;
@@ -25,6 +30,18 @@ class CopiaDettaglio {
   final String? seller;
   final String? location;
   final String? notes;
+
+  /// Stato del Valore stimato (§35) — `null` = nessuna riga
+  /// `ValoreStimatoTable` ancora creata, trattato dalla UI come `inCorso`
+  /// (stessa convenzione di `StatoAnalisiCopertina`, deciso su #161).
+  final StatoValoreStimato? statoValoreStimato;
+
+  /// In EUR, popolato solo quando [statoValoreStimato] è `completata`.
+  final double? valoreStimato;
+  final String? valoreStimatoErrorMessage;
+
+  /// Il timestamp "Aggiornato il..." di §35.3.
+  final DateTime? valoreStimatoAggiornatoAl;
 
   /// "Dati personali già inseriti" su questa Copia (§8.4, deciso su #68):
   /// qualsiasi campo §8.2 non-default — non include `status`/`readingStatus`

@@ -10,6 +10,8 @@ class DashboardKpis {
     required this.numeriMancanti,
     required this.spesoFinora,
     required this.aggiuntiMeseCorrente,
+    required this.valoreStimatoTotale,
+    required this.copieConValoreStimato,
   });
 
   /// Copie con `status = posseduta`.
@@ -32,6 +34,17 @@ class DashboardKpis {
 
   /// Copie possedute con `created_at` nel mese solare corrente.
   final int aggiuntiMeseCorrente;
+
+  /// Somma dei Valori stimati completati su Copie `posseduta`/`prestata`
+  /// (§35.5, deciso su #161) — sempre in EUR. Copie senza un valore
+  /// disponibile (non calcolato, non disponibile, errore) sono escluse dalla
+  /// somma, non contate come zero.
+  final double valoreStimatoTotale;
+
+  /// Quante Copie `posseduta`/`prestata` hanno contribuito a
+  /// [valoreStimatoTotale] — il numeratore della nota di copertura parziale
+  /// ("calcolato su X di Y copie"); [totaleCopie] è il denominatore.
+  final int copieConValoreStimato;
 }
 
 /// Una serie con "numeri totali" noto e almeno un numero mancante,
