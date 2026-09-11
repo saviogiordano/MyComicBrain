@@ -80,7 +80,7 @@ La home deve mostrare:
 - serie incomplete;
 - ultimi fumetti scansionati;
 - statistiche della collezione;
-- valore stimato, se disponibile;
+- valore stimato, se disponibile (§35);
 - stato delle scansioni in sospeso.
 
 Esempio:
@@ -567,7 +567,7 @@ Dashboard statistiche:
 - distribuzione per lingua;
 - numero di duplicati;
 - valore di acquisto totale;
-- valore stimato, se disponibile.
+- valore stimato, se disponibile (§35) — non ancora implementato in questa schermata: §35 copre solo l'aggregato in Dashboard, Statistiche resta un placeholder.
 
 ---
 
@@ -1091,8 +1091,8 @@ Dopo aver validato il flusso principale:
 - notifiche;
 - wishlist;
 - ricerca di fumetti mancanti;
-- integrazione con marketplace;
-- valutazione economica;
+- integrazione con marketplace — resta idea distinta, non specificata da §35;
+- valutazione economica — specificata in §35, non più una semplice idea di v2;
 - stima della condizione tramite AI.
 
 ---
@@ -1214,7 +1214,7 @@ Altri KPI:
 | Statistiche | P1 |
 | Impostazioni | P1 |
 | Scansione batch | P2 |
-| Stima valore | P2 |
+| Stima valore (§35) | P2 |
 | Valutazione condition tramite AI | P3 |
 | Marketplace | P3 |
 
@@ -1241,5 +1241,67 @@ Il percorso ideale è:
 > ✓
 
 > **"Aggiunto alla tua collezione."**
+
+---
+
+# 35. Valore stimato
+
+Consolida in un'unica sezione le menzioni sparse di "valore stimato"/"valutazione economica" già presenti in §4.1, §14, §29 e §33 (deciso su [Mappa — Valore stimato del fumetto tramite API di pricing](https://github.com/saviogiordano/MyComicBrain/issues/157)).
+
+Il Valore stimato è il valore di mercato indicativo di una **Copia** (non dell'Edizione: due Copie della stessa Edizione hanno ciascuna il proprio Valore stimato), calcolato tramite un servizio esterno di pricing interrogato per titolo + numero + editore dell'Edizione, modulato dalla Condizione della Copia (§8.6) quando impostata dall'utente. Se la Condizione non è impostata, si assume **Very Fine** come riferimento — un valore singolo, non un range. Il valore è sempre convertito e mostrato in **EUR**, indipendentemente dalla valuta nativa della fonte. Distinto dal "prezzo di acquisto" (§8.2), che è un dato personale sul costo effettivamente sostenuto, non una stima di mercato — vedi anche `CONTEXT.md`.
+
+## 35.1 Provider di valutazione
+
+Nuovo ruolo "Provider valutazione" in Impostazioni (§12), con lo stesso pattern grafico semplice già usato per "Provider fumetti" (non il pattern a dropdown multi-brand di Provider AI Visivo/Testuale, perché oggi esiste un solo provider praticabile): un campo Provider (oggi solo **PriceCharting**, l'unico servizio con un'API self-serve reale — vedi ADR-0006) e un campo API key.
+
+Se il provider non è configurato, non è uno stato bloccante: ovunque comparirebbe il Valore stimato si mostra un placeholder/invito a configurarlo in Impostazioni, senza impedire l'uso del resto dell'app.
+
+## 35.2 Condizione e copertura
+
+Mapping fisso e non configurabile, per nome, fra la Condizione (§8.6) e la scala di grading numerica CGC/Overstreet usata dalla fonte:
+
+| Condizione | Grado di riferimento |
+|---|---|
+| Mint | 9.9–10 |
+| Near Mint | 9.2–9.8 |
+| Very Fine (anche default se Condizione non impostata) | 7.5–9.0 |
+| Fine | 5.5–7.0 |
+| Very Good | 3.5–5.0 |
+| Good | 2.0–3.0 |
+| Fair | 1.0–1.5 |
+| Poor | 0.5 |
+
+Se l'Edizione (o la variant specifica) non è coperta dalla fonte, il Valore stimato di quella Copia è "non disponibile" — stesso principio non bloccante del provider non configurato. Nessun fallback automatico a un'altra edizione/variant della stessa Opera: mostrerebbe un prezzo non pertinente come se fosse accurato.
+
+## 35.3 Innesco del calcolo
+
+Il Valore stimato è un campo **persistito** per Copia, non ricalcolato dal vivo a ogni visualizzazione. Si (ri)calcola:
+
+- automaticamente alla **creazione** della Copia;
+- automaticamente a ogni salvataggio che **modifica la Condizione** di una Copia esistente (la Condizione modula direttamente il valore: non ricalcolare sarebbe attivamente sbagliato, non solo datato);
+- su **azione manuale** "Aggiorna valore stimato" nella Scheda (§8.4), che serve sia da refresh volontario che da retry esplicito sugli errori transitori (§35.4).
+
+Nessun refresh periodico in background: nessun altro flusso dell'app usa polling/cron, e un job periodico su tutta la collezione moltiplicherebbe le chiamate a un'API a pagamento senza un bisogno espresso. Per lo stesso motivo, l'importazione massiva (§16) non innesca il calcolo riga per riga — le Copie importate restano valutabili singolarmente con l'azione manuale.
+
+La chiamata al provider è **asincrona**: mentre attende la risposta, la Scheda mostra uno stato "Calcolo in corso" senza bloccare l'utente, stesso pattern già in uso per le altre chiamate esterne (Analisi Copertina, Identificazione, §6). Il valore mostrato è accompagnato da un timestamp discreto ("Aggiornato il...") — non essendoci refresh periodico, l'utente deve poter giudicare se vale la pena premere il refresh manuale. Nessuna logica di scadenza/invalidazione automatica.
+
+## 35.4 Stati ed errori
+
+Coerentemente con la Gestione degli errori generale (§25), tre stati sono visivamente distinti nella Scheda:
+
+- **Non disponibile**: provider non configurato (§35.1) o Edizione/variant non coperta (§35.2). Placeholder permanente, non bloccante, nessuna azione di retry dedicata — si ritenta solo al prossimo trigger naturale (§35.3), nessuna cache negativa permanente.
+- **Errore transitorio**: chiamata al provider fallita (rete, timeout, errore HTTP) o quota/rate-limit superata. Comunica che il dato potrebbe esistere ma non è stato ottenuto ora; l'azione manuale "Aggiorna valore stimato" funge da retry esplicito — nessun retry automatico, stesso principio già in uso per l'Assistente (§10/§25).
+- **Completato**: valore disponibile, con il timestamp di cui sopra.
+
+## 35.5 Aggregazione in Dashboard
+
+"Valore stimato della collezione": somma dei Valori stimati delle Copie con `status` posseduta o prestata (stesso criterio di Copia posseduta usato ovunque nell'app — venduta/persa escluse), limitata alle Copie con un valore disponibile. Mostrata in Dashboard (§4.1) come elemento dedicato, distinto dalla griglia KPI fissa a 6 celle, con una nota esplicita di copertura parziale quando non tutte le Copie hanno un valore (es. "Valore stimato: €4.230 — calcolato su 112 di 130 copie").
+
+L'aggregato equivalente in Statistiche (§14) resta fuori scope finché quella schermata, oggi un placeholder, non viene costruita come sforzo separato.
+
+## Fuori scope
+
+- Integrazione con marketplace (acquisto/vendita) — resta idea distinta (§29), non specificata qui.
+- Storico/andamento del valore nel tempo (grafico trend) — richiede persistenza di snapshot periodici, sforzo separato non richiesto dalla richiesta originale.
 
 Questa semplicità deve essere il principale criterio di progettazione del prodotto.

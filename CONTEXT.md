@@ -22,6 +22,13 @@ Una copia con `status = posseduta`. Solo le copie posseduta contano nei KPI di v
 **Edizione posseduta**:
 Un'edizione che ha almeno una copia posseduta. Il possesso è sempre relativo allo stato attuale, in cascata: copia posseduta → edizione posseduta → conta per serie e numerazione. Vendere l'unica copia di un'edizione la rende non posseduta, e il suo numero torna "mancante" nella serie. Stessa regola per l'Organizzazione della collezione (§9, deciso su [Mappa — Organizzazione della collezione](https://github.com/saviogiordano/MyComicBrain/issues/79)): la vista Collezione elenca Edizioni, e per gli assi che vivono sulla Copia (stato di lettura, condizione, posizione) un'Edizione soddisfa il filtro se almeno una delle sue copie possedute lo soddisfa.
 
+**Valore stimato**:
+Il valore di mercato indicativo di una Copia, calcolato tramite un servizio esterno di pricing (API), a partire dai dati identificativi della sua Edizione (titolo, numero, editore) e modulato dalla Condizione della Copia (§8.6) quando l'utente l'ha impostata; se non impostata, si assume una condizione di default (Very Fine) come riferimento. Convertito e mostrato sempre in EUR. Distinto dal "prezzo di acquisto" (§8.2), che è un dato personale inserito dall'utente sul costo effettivamente sostenuto, non una stima di mercato. Vedi anche Valore stimato della collezione.
+_Avoid_: Valutazione condition (quella di §8.6 è la stima della condizione fisica tramite AI, un concetto diverso), prezzo (ambiguo fra prezzo di acquisto e valore stimato — usare sempre il termine completo)
+
+**Valore stimato della collezione**:
+La somma dei Valori stimati di tutte le Copie possedute (stesso criterio di Copia posseduta: `prestata` conta, `venduta`/`persa` no) — non delle Edizioni, quindi due Copie della stessa Edizione contano entrambe. Alimenta i KPI di Dashboard (§4.1) e Statistiche (§14).
+
 **Duplicato**:
 Un'edizione con due o più copie posseduta contemporaneamente. Non riguarda edizioni diverse della stessa opera (quello è riconoscimento, non duplicazione) — vedi Opera/Edizione.
 _Avoid_: Copia doppia (ambiguo su cosa si stia contando — l'edizione o le copie in eccesso)
