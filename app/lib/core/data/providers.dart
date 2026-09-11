@@ -20,6 +20,7 @@ import 'package:mycomicbrain/core/data/openai_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/openrouter_assistente_client.dart';
 import 'package:mycomicbrain/core/data/openrouter_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/preferences_shared_preferences_adapter.dart';
+import 'package:mycomicbrain/core/data/price_charting_client.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
@@ -257,6 +258,15 @@ final StreamProviderFamily<List<Messaggio>, int> messaggiProvider =
 
 final comicVineClientProvider = Provider<ComicVineClient>(
   (ref) => ComicVineHttpClient(
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  ),
+);
+
+/// Il client PriceCharting (§35, ADR-0006) — un'unica istanza per l'intera
+/// app, condizione per il throttling per-istanza del rate-limit in
+/// `PriceChartingHttpClient._rispettaRateLimit`.
+final priceChartingClientProvider = Provider<PriceChartingClient>(
+  (ref) => PriceChartingHttpClient(
     settingsRepository: ref.watch(settingsRepositoryProvider),
   ),
 );

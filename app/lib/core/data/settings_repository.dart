@@ -31,6 +31,8 @@ class SettingsRepository {
 
   static const _chiaveApiKeyComics = 'settings.comics.apiKey';
 
+  static const _chiaveApiKeyValutazione = 'settings.valutazione.apiKey';
+
   // --- Chiavi pre-split (#127): un solo scalare/mappa condiviso da tutte le
   // chiamate AI, senza distinzione di ruolo. Lette solo da
   // `migraSeNecessario` per seminare le chiavi per-ruolo sotto — mai più
@@ -183,6 +185,18 @@ class SettingsRepository {
   /// `null` o stringa vuota cancella la chiave salvata.
   Future<void> impostaApiKeyComics(String? apiKey) {
     return _secureStorage.write(_chiaveApiKeyComics, apiKey);
+  }
+
+  // --- API key del provider di valutazione (§35.1, scalare singolo: un
+  // solo provider implementato, PriceCharting, ADR-0006 — stesso pattern di
+  // "Provider fumetti" sopra, sensibile) ---
+
+  Future<String?> get apiKeyValutazione =>
+      _secureStorage.read(_chiaveApiKeyValutazione);
+
+  /// `null` o stringa vuota cancella la chiave salvata.
+  Future<void> impostaApiKeyValutazione(String? apiKey) {
+    return _secureStorage.write(_chiaveApiKeyValutazione, apiKey);
   }
 }
 

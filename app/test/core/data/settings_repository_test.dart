@@ -242,4 +242,22 @@ void main() {
 
     expect(await repo.apiKeyComics, isNull);
   });
+
+  test(
+    'apiKeyValutazione è uno scalare singolo indipendente da apiKeyComics/API key AI',
+    () async {
+      await repo.impostaApiKeyValutazione('chiave-pricecharting');
+      await repo.impostaApiKeyComics('chiave-comicvine');
+
+      expect(await repo.apiKeyValutazione, 'chiave-pricecharting');
+      expect(await repo.apiKeyComics, 'chiave-comicvine');
+    },
+  );
+
+  test('impostare apiKeyValutazione a stringa vuota la cancella', () async {
+    await repo.impostaApiKeyValutazione('chiave-pricecharting');
+    await repo.impostaApiKeyValutazione('');
+
+    expect(await repo.apiKeyValutazione, isNull);
+  });
 }
