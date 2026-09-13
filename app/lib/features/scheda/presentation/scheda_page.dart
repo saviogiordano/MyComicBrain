@@ -80,6 +80,7 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
       if (copia.seller != null) 'venditore',
       if (copia.location != null) 'posizione',
       if (copia.notes != null) 'note',
+      if (copia.valutazione != null) 'valutazione',
     ];
     return campi.join(', ');
   }
@@ -514,7 +515,7 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
                   Expanded(
                     child: Text(
                       '${voce.label} · ${copia.condition?.label ?? '—'}'
-                      '${copia.purchasePrice != null ? ' · € ${copia.purchasePrice}' : ''}',
+                      '${copia.purchasePrice != null ? ' · ${_prezzoFormattato(copia)}' : ''}',
                       style: AppTypography.bodyMedium.copyWith(
                         color: AppColors.textPrimary,
                       ),
@@ -538,10 +539,17 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
                         child: AppChip(label: voce.label, selected: true),
                       ),
                       const SizedBox(height: AppSpacing.xs),
+                      _campo('Condizione', copia.condition?.label ?? '—'),
                       _campo(
                         'Prezzo',
                         copia.purchasePrice != null
-                            ? '€ ${copia.purchasePrice}'
+                            ? _prezzoFormattato(copia)
+                            : '—',
+                      ),
+                      _campo(
+                        'Valutazione',
+                        copia.valutazione != null
+                            ? '€ ${copia.valutazione}'
                             : '—',
                       ),
                       _campo(
@@ -596,6 +604,14 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
         ),
       ),
     );
+  }
+
+  /// `purchasePrice` col simbolo della valuta in cui è stato letto (§35,
+  /// `null` su `purchasePriceCurrency` = EUR — vedi `ValutaPrezzo`): un
+  /// fumetto americano confermato da Scansione riporta il prezzo in dollari.
+  String _prezzoFormattato(CopiaDettaglio copia) {
+    final simbolo = (copia.purchasePriceCurrency ?? ValutaPrezzo.eur).simbolo;
+    return '$simbolo ${copia.purchasePrice}';
   }
 
   Widget _campo(String label, String valore) {

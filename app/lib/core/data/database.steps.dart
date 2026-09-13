@@ -3921,6 +3921,383 @@ i1.GeneratedColumn<double> _column_68(String aliasedName) =>
       type: i1.DriftSqlType.double,
       $customConstraints: 'NULL',
     );
+
+final class Schema14 extends i0.VersionedSchema {
+  Schema14({required super.database}) : super(version: 14);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    opere,
+    serie,
+    edizioni,
+    scansioni,
+    copie,
+    analisiCopertina,
+    identificazione,
+    candidati,
+    creator,
+    comicCreator,
+    tag,
+    edizioneTag,
+    character,
+    comicCharacter,
+    edizioneGenere,
+    conversazione,
+    messaggio,
+    valoreStimato,
+  ];
+  late final Shape0 opere = Shape0(
+    source: i0.VersionedTable(
+      entityName: 'opere',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_1, _column_2],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape24 serie = Shape24(
+    source: i0.VersionedTable(
+      entityName: 'serie',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_3, _column_4, _column_46, _column_10],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape19 edizioni = Shape19(
+    source: i0.VersionedTable(
+      entityName: 'edizioni',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_5,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+        _column_10,
+        _column_47,
+        _column_48,
+        _column_49,
+        _column_50,
+        _column_51,
+        _column_52,
+        _column_2,
+        _column_53,
+        _column_54,
+        _column_57,
+        _column_58,
+        _column_42,
+        _column_59,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape4 scansioni = Shape4(
+    source: i0.VersionedTable(
+      entityName: 'scansioni',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_21, _column_22, _column_2],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape28 copie = Shape28(
+    source: i0.VersionedTable(
+      entityName: 'copie',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_11,
+        _column_12,
+        _column_13,
+        _column_14,
+        _column_15,
+        _column_69,
+        _column_16,
+        _column_17,
+        _column_70,
+        _column_18,
+        _column_19,
+        _column_2,
+        _column_20,
+        _column_38,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape23 analisiCopertina = Shape23(
+    source: i0.VersionedTable(
+      entityName: 'analisi_copertina',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_23,
+        _column_24,
+        _column_9,
+        _column_7,
+        _column_25,
+        _column_26,
+        _column_27,
+        _column_28,
+        _column_47,
+        _column_42,
+        _column_49,
+        _column_50,
+        _column_51,
+        _column_46,
+        _column_33,
+        _column_34,
+        _column_35,
+        _column_36,
+        _column_37,
+        _column_57,
+        _column_58,
+        _column_54,
+        _column_29,
+        _column_30,
+        _column_31,
+        _column_32,
+        _column_2,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape8 identificazione = Shape8(
+    source: i0.VersionedTable(
+      entityName: 'identificazione',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_23,
+        _column_30,
+        _column_31,
+        _column_2,
+        _column_32,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape16 candidati = Shape16(
+    source: i0.VersionedTable(
+      entityName: 'candidati',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_39,
+        _column_40,
+        _column_41,
+        _column_24,
+        _column_25,
+        _column_9,
+        _column_7,
+        _column_42,
+        _column_43,
+        _column_44,
+        _column_45,
+        _column_54,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape14 creator = Shape14(
+    source: i0.VersionedTable(
+      entityName: 'creator',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_3],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape15 comicCreator = Shape15(
+    source: i0.VersionedTable(
+      entityName: 'comic_creator',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['UNIQUE(edizione_id, creator_id, ruolo)'],
+      columns: [_column_0, _column_11, _column_55, _column_56],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape14 tag = Shape14(
+    source: i0.VersionedTable(
+      entityName: 'tag',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_3],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape20 edizioneTag = Shape20(
+    source: i0.VersionedTable(
+      entityName: 'edizione_tag',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['UNIQUE(edizione_id, tag_id)'],
+      columns: [_column_0, _column_11, _column_60],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape14 character = Shape14(
+    source: i0.VersionedTable(
+      entityName: 'character',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_3],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape21 comicCharacter = Shape21(
+    source: i0.VersionedTable(
+      entityName: 'comic_character',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['UNIQUE(edizione_id, character_id)'],
+      columns: [_column_0, _column_11, _column_61],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape22 edizioneGenere = Shape22(
+    source: i0.VersionedTable(
+      entityName: 'edizione_genere',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['UNIQUE(edizione_id, genere)'],
+      columns: [_column_0, _column_11, _column_62],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape25 conversazione = Shape25(
+    source: i0.VersionedTable(
+      entityName: 'conversazione',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_2],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape26 messaggio = Shape26(
+    source: i0.VersionedTable(
+      entityName: 'messaggio',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_63,
+        _column_56,
+        _column_64,
+        _column_65,
+        _column_66,
+        _column_2,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape27 valoreStimato = Shape27(
+    source: i0.VersionedTable(
+      entityName: 'valore_stimato',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['UNIQUE(copia_id)'],
+      columns: [
+        _column_0,
+        _column_67,
+        _column_12,
+        _column_68,
+        _column_31,
+        _column_32,
+        _column_2,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+}
+
+class Shape28 extends i0.VersionedTable {
+  Shape28({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<int> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get edizioneId =>
+      columnsByName['edizione_id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get status =>
+      columnsByName['status']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get readingStatus =>
+      columnsByName['reading_status']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get condition =>
+      columnsByName['condition']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<double> get purchasePrice =>
+      columnsByName['purchase_price']! as i1.GeneratedColumn<double>;
+  i1.GeneratedColumn<String> get purchasePriceCurrency =>
+      columnsByName['purchase_price_currency']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get purchaseDate =>
+      columnsByName['purchase_date']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get seller =>
+      columnsByName['seller']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<double> get valutazione =>
+      columnsByName['valutazione']! as i1.GeneratedColumn<double>;
+  i1.GeneratedColumn<String> get location =>
+      columnsByName['location']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get notes =>
+      columnsByName['notes']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get updatedAt =>
+      columnsByName['updated_at']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get scansioneId =>
+      columnsByName['scansione_id']! as i1.GeneratedColumn<int>;
+}
+
+i1.GeneratedColumn<String> _column_69(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'purchase_price_currency',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NULL',
+    );
+i1.GeneratedColumn<double> _column_70(String aliasedName) =>
+    i1.GeneratedColumn<double>(
+      'valutazione',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.double,
+      $customConstraints: 'NULL',
+    );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
@@ -3934,6 +4311,7 @@ i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema11 schema) from10To11,
   required Future<void> Function(i1.Migrator m, Schema12 schema) from11To12,
   required Future<void> Function(i1.Migrator m, Schema13 schema) from12To13,
+  required Future<void> Function(i1.Migrator m, Schema14 schema) from13To14,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -3997,6 +4375,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from12To13(migrator, schema);
         return 13;
+      case 13:
+        final schema = Schema14(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from13To14(migrator, schema);
+        return 14;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -4016,6 +4399,7 @@ i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema11 schema) from10To11,
   required Future<void> Function(i1.Migrator m, Schema12 schema) from11To12,
   required Future<void> Function(i1.Migrator m, Schema13 schema) from12To13,
+  required Future<void> Function(i1.Migrator m, Schema14 schema) from13To14,
 }) => i0.VersionedSchema.stepByStepHelper(
   step: migrationSteps(
     from1To2: from1To2,
@@ -4030,5 +4414,6 @@ i1.OnUpgrade stepByStep({
     from10To11: from10To11,
     from11To12: from11To12,
     from12To13: from12To13,
+    from13To14: from13To14,
   ),
 );

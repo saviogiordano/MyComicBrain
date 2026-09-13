@@ -543,6 +543,76 @@ void main() {
   );
 
   test(
+    'confermaCandidato riconosce un prezzo di copertina in dollari (fumetto '
+    'americano) dal simbolo "\$" letto dall\'AI, e lo marca come tale sulla '
+    'Copia',
+    () async {
+      final scansioneId = await scansioneConAnalisi(price: r'$3.99');
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumberLabel: '42',
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.interno,
+        punteggio: 96,
+        edizioneId: edizioneId,
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(copia.purchasePrice, 3.99);
+      expect(copia.purchasePriceCurrency, ValutaPrezzo.usd);
+    },
+  );
+
+  test(
+    'confermaCandidato assume EUR quando il prezzo di copertina letto '
+    "dall'AI non riporta il simbolo del dollaro",
+    () async {
+      final scansioneId = await scansioneConAnalisi(price: '€ 5,30');
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumberLabel: '42',
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.interno,
+        punteggio: 96,
+        edizioneId: edizioneId,
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      final copiaId = await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final copia = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(copia.purchasePriceCurrency, ValutaPrezzo.eur);
+    },
+  );
+
+  test(
     'confermaCandidato esterno crea Opera/Serie/Edizione/Copia da zero e scarica la cover in locale',
     () async {
       final tempBase = await Directory.systemTemp.createTemp(

@@ -237,6 +237,38 @@ void main() {
   });
 
   test(
+    'aggiornaCopia scrive purchasePriceCurrency e valutazione, letti '
+    'indietro su CopiaDettaglio (§35, valutazione manuale distinta dal '
+    'calcolo automatico)',
+    () async {
+      final edizioneId = await edizione();
+      final copiaId = await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+
+      await repo.aggiornaCopia(
+        id: copiaId,
+        purchasePrice: 3.99,
+        purchasePriceCurrency: ValutaPrezzo.usd,
+        valutazione: 12,
+      );
+
+      final riga = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(riga.purchasePrice, 3.99);
+      expect(riga.purchasePriceCurrency, ValutaPrezzo.usd);
+      expect(riga.valutazione, 12);
+
+      final dettaglio = await repo.watchEdizione(edizioneId).first;
+      final copia = dettaglio!.copie.single;
+      expect(copia.purchasePriceCurrency, ValutaPrezzo.usd);
+      expect(copia.valutazione, 12);
+    },
+  );
+
+  test(
     'cambiaStatoCopia scrive solo status/readingStatus, lasciando invariati i campi §8.2',
     () async {
       final edizioneId = await edizione();

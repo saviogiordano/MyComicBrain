@@ -44,3 +44,17 @@ extension CondizioneCopiaLabel on CondizioneCopia {
     CondizioneCopia.poor => 'Poor',
   };
 }
+
+/// Valuta di `Copie.purchasePrice`: un fumetto americano letto da una
+/// Scansione AI riporta il prezzo di copertina in dollari, non in euro —
+/// `null` su `Copie.purchasePriceCurrency` significa `eur` (stessa
+/// convenzione di `condition`/`readingStatus`: assenza = valore di
+/// default, non "sconosciuto").
+enum ValutaPrezzo { eur, usd }
+
+extension ValutaPrezzoSimbolo on ValutaPrezzo {
+  String get simbolo => switch (this) {
+    ValutaPrezzo.eur => '€',
+    ValutaPrezzo.usd => r'$',
+  };
+}

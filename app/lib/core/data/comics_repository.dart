@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/exchange_rate_client.dart';
 import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
@@ -28,11 +29,37 @@ import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 /// farle vedere Drift: prende e restituisce tipi di dominio, mai i tipi
 /// generati (`OpereData`, `CopieData`, ...).
 class ComicsRepository {
-  ComicsRepository(this._db, {CopertinaDownloader? copertinaDownloader})
-    : _copertinaDownloader = copertinaDownloader ?? CopertinaDownloader();
+  ComicsRepository(
+    this._db, {
+    CopertinaDownloader? copertinaDownloader,
+    ExchangeRateClient? exchangeRateClient,
+  }) : _copertinaDownloader = copertinaDownloader ?? CopertinaDownloader(),
+       _exchangeRateClient =
+           exchangeRateClient ?? FrankfurterExchangeRateClient();
 
   final AppDatabase _db;
   final CopertinaDownloader _copertinaDownloader;
+  final ExchangeRateClient _exchangeRateClient;
+
+  /// Cache in-process del tasso USD→EUR per [watchDashboardKpis]: una sola
+  /// chiamata di rete ogni [_validitaCacheTasso], non una ad ogni emissione
+  /// dello stream (che altrimenti ripartirebbe ad ogni scrittura sul
+  /// catalogo — la Dashboard resta reattiva sulle sole tabelle SQL).
+  double? _tassoUsdEurCache;
+  DateTime? _tassoUsdEurCacheAl;
+  static const _validitaCacheTasso = Duration(hours: 1);
+
+  Future<double> _tassoUsdEur() async {
+    final cacheAl = _tassoUsdEurCacheAl;
+    if (cacheAl != null &&
+        DateTime.now().difference(cacheAl) < _validitaCacheTasso) {
+      return _tassoUsdEurCache!;
+    }
+    final tasso = await _exchangeRateClient.tassoUsdEur();
+    _tassoUsdEurCache = tasso;
+    _tassoUsdEurCacheAl = DateTime.now();
+    return tasso;
+  }
 
   // --- Scrittura (usata dai test per costruire fixture; superficie minima
   // per il catalogo — nessuna schermata di questa mappa scrive dati). ---
@@ -193,10 +220,12 @@ class ComicsRepository {
     StatoLettura? readingStatus,
     CondizioneCopia? condition,
     double? purchasePrice,
+    ValutaPrezzo? purchasePriceCurrency,
     DateTime? purchaseDate,
     String? seller,
     String? location,
     String? notes,
+    double? valutazione,
     DateTime? createdAt,
     DateTime? updatedAt,
     int? scansioneId,
@@ -211,10 +240,12 @@ class ComicsRepository {
             readingStatus: Value(readingStatus),
             condition: Value(condition),
             purchasePrice: Value(purchasePrice),
+            purchasePriceCurrency: Value(purchasePriceCurrency),
             purchaseDate: Value(purchaseDate),
             seller: Value(seller),
             location: Value(location),
             notes: Value(notes),
+            valutazione: Value(valutazione),
             createdAt: createdAt ?? now,
             updatedAt: updatedAt ?? createdAt ?? now,
             scansioneId: Value(scansioneId),
@@ -795,22 +826,28 @@ class ComicsRepository {
         // `analisiCopertinaPerScansione`).
         : await _creaEdizioneDaCandidato(candidato, scansioneId, analisi!);
 
+    final prezzo = _prezzoDaAnalisi(analisi?.price);
     return aggiungiCopia(
       edizioneId: edizioneId,
       status: StatoCopia.posseduta,
       condition: CondizioneCopia.fine,
-      purchasePrice: _prezzoDaAnalisi(analisi?.price),
+      purchasePrice: prezzo?.importo,
+      purchasePriceCurrency: prezzo?.valuta,
       scansioneId: scansioneId,
     );
   }
 
   /// Converte il prezzo di copertina letto dall'AI (testo libero, es.
-  /// "€ 5,30" — resta testo su `Edizione.coverPrice`, deciso su #63) in un
-  /// importo numerico da usare come prezzo di acquisto di default sulla
-  /// Copia appena creata da [confermaCandidato]. Prende il primo numero
+  /// "€ 5,30" o "$3.99" — resta testo su `Edizione.coverPrice`, deciso su
+  /// #63) in un importo numerico + valuta da usare come prezzo di acquisto
+  /// di default sulla Copia appena creata da [confermaCandidato]. Un
+  /// fumetto americano riporta il prezzo in dollari: `$` nel testo letto
+  /// dall'AI è l'unico segnale disponibile (nessun campo valuta strutturato
+  /// nell'estrazione, §6.1/§6.2), assenza di `$` assume EUR (fumetti
+  /// italiani/europei, maggioranza del catalogo). Prende il primo numero
   /// trovato nel testo e normalizza la virgola italiana come separatore
   /// decimale; `null` se il testo non contiene un numero.
-  double? _prezzoDaAnalisi(String? raw) {
+  ({double importo, ValutaPrezzo valuta})? _prezzoDaAnalisi(String? raw) {
     final testo = raw?.trim();
     if (testo == null || testo.isEmpty) return null;
     final match = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(testo);
@@ -819,7 +856,10 @@ class ComicsRepository {
     if (numero.contains(',')) {
       numero = numero.replaceAll('.', '').replaceAll(',', '.');
     }
-    return double.tryParse(numero);
+    final importo = double.tryParse(numero);
+    if (importo == null) return null;
+    final valuta = testo.contains(r'$') ? ValutaPrezzo.usd : ValutaPrezzo.eur;
+    return (importo: importo, valuta: valuta);
   }
 
   /// Crea Opera/Serie/Edizione per un Candidato `esterno` (ComicVine). I
@@ -1129,12 +1169,31 @@ class ComicsRepository {
   /// venduta/persa escono dai conteggi, vedi `CONTEXT.md`), e i numeri
   /// mancanti/serie complete condividono la stessa CTE ricorsiva 1..totale
   /// per serie (§17, §6 di `docs/research/drift-setup.md`).
-  Stream<DashboardKpis> watchDashboardKpis() {
+  Stream<DashboardKpis> watchDashboardKpis() async* {
     final ora = DateTime.now();
     final inizioMese = DateTime(ora.year, ora.month);
     final inizioMeseProssimo = DateTime(ora.year, ora.month + 1);
+    // Le Copie con `purchasePriceCurrency = 'usd'` (prezzo letto in dollari
+    // da una Scansione di un fumetto americano) entrano nel totale "Speso
+    // finora" convertite in EUR con il tasso corrente — §4.1 mostra un solo
+    // totale in EUR, non una cifra mista per valuta. Il tasso è interrogato
+    // solo se esiste almeno una Copia in dollari: altrimenti il `CASE` SQL
+    // sotto non lo usa mai, e la stragrande maggioranza delle collezioni
+    // (tutta in EUR) non paga mai questa chiamata di rete.
+    final haCopieInDollari =
+        await (_db.selectOnly(_db.copie)
+              ..addColumns([_db.copie.id])
+              ..where(
+                _db.copie.purchasePriceCurrency.equalsValue(
+                  ValutaPrezzo.usd,
+                ),
+              )
+              ..limit(1))
+            .getSingleOrNull() !=
+        null;
+    final tassoUsdEur = haCopieInDollari ? await _tassoUsdEur() : 1.0;
 
-    return _db
+    yield* _db
         .customSelect(
           '''
 WITH RECURSIVE
@@ -1173,7 +1232,9 @@ SELECT
   (SELECT COUNT(*) FROM mancanti) AS numeri_mancanti,
   (SELECT COUNT(*) FROM serie_valutabile sv
      WHERE NOT EXISTS (SELECT 1 FROM mancanti m WHERE m.serie_id = sv.id)) AS serie_complete,
-  COALESCE((SELECT SUM(purchase_price) FROM copie WHERE status IN ('posseduta', 'prestata')), 0.0) AS speso_finora,
+  COALESCE((SELECT SUM(
+     CASE WHEN purchase_price_currency = 'usd' THEN purchase_price * ?3 ELSE purchase_price END
+   ) FROM copie WHERE status IN ('posseduta', 'prestata')), 0.0) AS speso_finora,
   (SELECT COUNT(*) FROM copie
      WHERE status IN ('posseduta', 'prestata') AND created_at >= ?1 AND created_at < ?2) AS aggiunti_mese,
   COALESCE((SELECT SUM(vs.value) FROM copie c
@@ -1186,6 +1247,7 @@ SELECT
           variables: [
             Variable.withDateTime(inizioMese),
             Variable.withDateTime(inizioMeseProssimo),
+            Variable.withReal(tassoUsdEur),
           ],
           readsFrom: {_db.serieTable, _db.edizioni, _db.copie, _db.valoreStimatoTable},
         )
@@ -1669,10 +1731,12 @@ ORDER BY p.n
             readingStatus: copia.readingStatus,
             condition: copia.condition,
             purchasePrice: copia.purchasePrice,
+            purchasePriceCurrency: copia.purchasePriceCurrency,
             purchaseDate: copia.purchaseDate,
             seller: copia.seller,
             location: copia.location,
             notes: copia.notes,
+            valutazione: copia.valutazione,
             statoValoreStimato: valoreStimato?.status,
             valoreStimato: valoreStimato?.value,
             valoreStimatoErrorMessage: valoreStimato?.errorMessage,
@@ -1853,10 +1917,12 @@ ORDER BY p.n
     required int id,
     CondizioneCopia? condition,
     double? purchasePrice,
+    ValutaPrezzo? purchasePriceCurrency,
     DateTime? purchaseDate,
     String? seller,
     String? location,
     String? notes,
+    double? valutazione,
   }) {
     return (_db.update(
       _db.copie,
@@ -1864,10 +1930,12 @@ ORDER BY p.n
       CopieCompanion(
         condition: Value(condition),
         purchasePrice: Value(purchasePrice),
+        purchasePriceCurrency: Value(purchasePriceCurrency),
         purchaseDate: Value(purchaseDate),
         seller: Value(seller),
         location: Value(location),
         notes: Value(notes),
+        valutazione: Value(valutazione),
         updatedAt: Value(DateTime.now()),
       ),
     );

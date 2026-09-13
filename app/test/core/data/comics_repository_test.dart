@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/exchange_rate_client.dart';
 import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
@@ -891,6 +892,64 @@ void main() {
 
         final kpis = await repo.watchDashboardKpis().first;
         expect(kpis.spesoFinora, closeTo(12.5, 0.0001));
+      },
+    );
+
+    test(
+      'converte in EUR le Copie con prezzo in dollari (fumetto americano) '
+      'usando il tasso corrente',
+      () async {
+        final repoConTasso = ComicsRepository(
+          db,
+          exchangeRateClient: _TassoFisso(0.9),
+        );
+
+        final operaUsd = await repoConTasso.aggiungiOpera(title: 'USD');
+        final edizioneUsd = await repoConTasso.aggiungiEdizione(
+          operaId: operaUsd,
+        );
+        await repoConTasso.aggiungiCopia(
+          edizioneId: edizioneUsd,
+          status: StatoCopia.posseduta,
+          purchasePrice: 10,
+          purchasePriceCurrency: ValutaPrezzo.usd,
+        );
+
+        final operaEur = await repoConTasso.aggiungiOpera(title: 'EUR');
+        final edizioneEur = await repoConTasso.aggiungiEdizione(
+          operaId: operaEur,
+        );
+        await repoConTasso.aggiungiCopia(
+          edizioneId: edizioneEur,
+          status: StatoCopia.posseduta,
+          purchasePrice: 5,
+        );
+
+        final kpis = await repoConTasso.watchDashboardKpis().first;
+        // 10 USD * 0.9 + 5 EUR = 14.
+        expect(kpis.spesoFinora, closeTo(14, 0.0001));
+      },
+    );
+
+    test(
+      'nessuna Copia in dollari: il tasso di cambio non viene interrogato',
+      () async {
+        final repoConTasso = ComicsRepository(
+          db,
+          exchangeRateClient: _TassoCheFallisceSempre(),
+        );
+        final operaId = await repoConTasso.aggiungiOpera(title: 'Solo EUR');
+        final edizioneId = await repoConTasso.aggiungiEdizione(
+          operaId: operaId,
+        );
+        await repoConTasso.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+          purchasePrice: 5,
+        );
+
+        final kpis = await repoConTasso.watchDashboardKpis().first;
+        expect(kpis.spesoFinora, closeTo(5, 0.0001));
       },
     );
   });
@@ -2167,4 +2226,23 @@ void main() {
       },
     );
   });
+}
+
+/// Tasso fisso, senza rete — per testare la conversione USD→EUR di
+/// [ComicsRepository.watchDashboardKpis] in modo deterministico.
+class _TassoFisso implements ExchangeRateClient {
+  _TassoFisso(this._tasso);
+
+  final double _tasso;
+
+  @override
+  Future<double> tassoUsdEur() async => _tasso;
+}
+
+/// Fallisce sempre: usato per verificare che [ComicsRepository] non
+/// interroghi il tasso di cambio quando non ci sono Copie in dollari.
+class _TassoCheFallisceSempre implements ExchangeRateClient {
+  @override
+  Future<double> tassoUsdEur() async =>
+      throw StateError('non doveva essere chiamato');
 }

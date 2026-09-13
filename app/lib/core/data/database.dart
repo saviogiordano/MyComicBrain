@@ -161,8 +161,22 @@ class Copie extends Table {
   TextColumn get readingStatus => textEnum<StatoLettura>().nullable()();
   TextColumn get condition => textEnum<CondizioneCopia>().nullable()();
   RealColumn get purchasePrice => real().nullable()();
+
+  /// Valuta di [purchasePrice] (`null` = EUR, vedi `ValutaPrezzo`) — un
+  /// fumetto americano confermato da Scansione (§6.3) arriva con un prezzo
+  /// di copertina in dollari, rilevato da `ComicsRepository._prezzoDaAnalisi`.
+  TextColumn get purchasePriceCurrency =>
+      textEnum<ValutaPrezzo>().nullable()();
   DateTimeColumn get purchaseDate => dateTime().nullable()();
   TextColumn get seller => text().nullable()();
+
+  /// Valutazione inserita manualmente dall'utente in EUR — deliberatamente
+  /// **non** lo stesso concetto di `ValoreStimatoTable` (§35, calcolo
+  /// automatico via provider esterno, ADR-0006): quel meccanismo resta a sé,
+  /// sospeso finché non si sottoscrive un provider a pagamento (mappa #157).
+  /// Questo campo è il valore di mercato stimato "a occhio" dal
+  /// collezionista, modificabile in qualunque momento dalla Scheda.
+  RealColumn get valutazione => real().nullable()();
 
   /// Campo libero, niente albero: nessuna schermata di questa mappa
   /// richiede una gerarchia di posizioni.
@@ -556,11 +570,15 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from13To14: (m, schema) async {
+        await m.addColumn(schema.copie, schema.copie.purchasePriceCurrency);
+        await m.addColumn(schema.copie, schema.copie.valutazione);
+      },
       from12To13: (m, schema) async {
         await m.createTable(schema.valoreStimato);
       },

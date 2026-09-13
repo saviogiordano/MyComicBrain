@@ -11,10 +11,12 @@ class CopiaDettaglio {
     this.readingStatus,
     this.condition,
     this.purchasePrice,
+    this.purchasePriceCurrency,
     this.purchaseDate,
     this.seller,
     this.location,
     this.notes,
+    this.valutazione,
     this.statoValoreStimato,
     this.valoreStimato,
     this.valoreStimatoErrorMessage,
@@ -26,10 +28,19 @@ class CopiaDettaglio {
   final StatoLettura? readingStatus;
   final CondizioneCopia? condition;
   final double? purchasePrice;
+
+  /// Valuta di [purchasePrice] — `null` = EUR (vedi `ValutaPrezzo`).
+  final ValutaPrezzo? purchasePriceCurrency;
   final DateTime? purchaseDate;
   final String? seller;
   final String? location;
   final String? notes;
+
+  /// Valutazione inserita manualmente dall'utente, sempre in EUR —
+  /// deliberatamente distinta da [valoreStimato] (§35, calcolo automatico
+  /// via provider esterno, oggi sospeso, vedi il commento su
+  /// `Copie.valutazione`).
+  final double? valutazione;
 
   /// Stato del Valore stimato (§35) — `null` = nessuna riga
   /// `ValoreStimatoTable` ancora creata, trattato dalla UI come `inCorso`
@@ -53,7 +64,8 @@ class CopiaDettaglio {
       purchaseDate != null ||
       seller != null ||
       location != null ||
-      notes != null;
+      notes != null ||
+      valutazione != null;
 }
 
 /// Un'Edizione con le sue Copie e i suoi Autori, per la Scheda del fumetto

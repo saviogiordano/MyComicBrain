@@ -42,8 +42,13 @@ class _ModificaCopiaSheetState extends ConsumerState<_ModificaCopiaSheet> {
     text: widget.copia.location ?? '',
   );
   late final _note = TextEditingController(text: widget.copia.notes ?? '');
+  late final _valutazione = TextEditingController(
+    text: widget.copia.valutazione?.toString() ?? '',
+  );
   late CondizioneCopia? _condizione = widget.copia.condition;
   late DateTime? _dataAcquisto = widget.copia.purchaseDate;
+  late ValutaPrezzo _valutaPrezzo =
+      widget.copia.purchasePriceCurrency ?? ValutaPrezzo.eur;
   bool _salvando = false;
 
   @override
@@ -52,6 +57,7 @@ class _ModificaCopiaSheetState extends ConsumerState<_ModificaCopiaSheet> {
     _venditore.dispose();
     _posizione.dispose();
     _note.dispose();
+    _valutazione.dispose();
     super.dispose();
   }
 
@@ -72,6 +78,7 @@ class _ModificaCopiaSheetState extends ConsumerState<_ModificaCopiaSheet> {
     final venditore = _venditore.text.trim();
     final posizione = _posizione.text.trim();
     final note = _note.text.trim();
+    final valutazione = _valutazione.text.trim();
 
     await ref
         .read(comicsRepositoryProvider)
@@ -81,10 +88,16 @@ class _ModificaCopiaSheetState extends ConsumerState<_ModificaCopiaSheet> {
           purchasePrice: prezzo.isEmpty
               ? null
               : double.tryParse(prezzo.replaceAll(',', '.')),
+          // Nessuna valuta senza un prezzo: evita una `purchasePriceCurrency`
+          // orfana se l'utente svuota il campo Prezzo lasciando "$" selezionato.
+          purchasePriceCurrency: prezzo.isEmpty ? null : _valutaPrezzo,
           purchaseDate: _dataAcquisto,
           seller: venditore.isEmpty ? null : venditore,
           location: posizione.isEmpty ? null : posizione,
           notes: note.isEmpty ? null : note,
+          valutazione: valutazione.isEmpty
+              ? null
+              : double.tryParse(valutazione.replaceAll(',', '.')),
         );
 
     if (!mounted) return;
@@ -129,10 +142,53 @@ class _ModificaCopiaSheetState extends ConsumerState<_ModificaCopiaSheet> {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            _campo(
-              _prezzo,
+            Text(
               'Prezzo di acquisto',
-              'es. 5.30',
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxs),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final v in ValutaPrezzo.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.xs),
+                    child: AppChip(
+                      label: v.simbolo,
+                      selected: _valutaPrezzo == v,
+                      onTap: () => setState(() => _valutaPrezzo = v),
+                    ),
+                  ),
+                Expanded(
+                  child: TextField(
+                    controller: _prezzo,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    style: AppTypography.bodyLarge.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'es. 5.30',
+                      hintStyle: AppTypography.bodyLarge.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: AppRadii.smRadius,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _campo(
+              _valutazione,
+              'Valutazione (€)',
+              'es. 12.00',
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
