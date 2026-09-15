@@ -43,4 +43,23 @@ void main() {
       expect(numeroIntero('42 Variant'), isNull);
     });
   });
+
+  group('numeroDecimale', () {
+    test('numero decimale valido', () {
+      expect(numeroDecimale('699.1'), 699.1);
+      expect(numeroDecimale('#699.1'), 699.1);
+    });
+
+    test('numero intero semplice resta null (nessuna cella propria)', () {
+      expect(numeroDecimale('699'), isNull);
+      expect(numeroDecimale('#699'), isNull);
+    });
+
+    test('etichette non numeriche o variant testuali restano null', () {
+      expect(numeroDecimale('42 Variant'), isNull);
+      expect(numeroDecimale('Annual 1'), isNull);
+      expect(numeroDecimale(null), isNull);
+      expect(numeroDecimale(''), isNull);
+    });
+  });
 }

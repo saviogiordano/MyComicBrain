@@ -144,6 +144,134 @@ void main() {
     );
   });
 
+  testWidgets(
+    'un\'Edizione con numero decimale (es. "699.1") ottiene una cella '
+    'propria fra gli interi invece di fondersi in quello intero (richiesta '
+    'utente: non è una variant di copertina, è un albo a sé — bug '
+    'osservato: spariva del tutto dalla griglia quando anche il numero '
+    'intero corrispondente era posseduto)',
+    (tester) async {
+      final serieId = await repository.aggiungiSerie(
+        name: 'Kaiju Bianco',
+        totalIssues: 3,
+      );
+      await edizioneConCopia(
+        titolo: 'Kaiju #1',
+        serieId: serieId,
+        issueNumber: 1,
+      );
+      final decimale = await edizioneConCopia(
+        titolo: 'Kaiju #1.1',
+        serieId: serieId,
+        issueNumber: 1,
+        issueNumberLabel: '1.1',
+      );
+
+      await pumpDettaglio(tester, serieId: serieId);
+
+      // Sia il #1 che la sua cella decimale propria sono visibili.
+      expect(
+        find.descendant(of: find.byType(GridView), matching: find.text('1')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(GridView),
+          matching: find.text('1.1'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(GridView),
+          matching: find.text('1.1'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Naviga diretto: nessun selettore, l'Edizione è già risolta.
+      expect(find.text('Scheda $decimale'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'senza numero totale: un numero decimale ottiene un proprio chip, '
+    'distinto da quello del numero intero',
+    (tester) async {
+      final serieId = await repository.aggiungiSerie(name: 'Ombre di Marte');
+      await edizioneConCopia(
+        titolo: 'Ombre #1',
+        serieId: serieId,
+        issueNumber: 1,
+      );
+      final decimale = await edizioneConCopia(
+        titolo: 'Ombre #1.1',
+        serieId: serieId,
+        issueNumber: 1,
+        issueNumberLabel: '1.1',
+      );
+
+      await pumpDettaglio(tester, serieId: serieId);
+
+      expect(find.text('#1'), findsOneWidget);
+      expect(find.text('#1.1'), findsOneWidget);
+
+      await tester.tap(find.text('#1.1'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Scheda $decimale'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'vista cover: la cella decimale resta distinta da quella del numero '
+    'intero anche nella griglia con le copertine',
+    (tester) async {
+      final serieId = await repository.aggiungiSerie(
+        name: 'Kaiju Bianco',
+        totalIssues: 3,
+      );
+      await edizioneConCopia(
+        titolo: 'Kaiju #1',
+        serieId: serieId,
+        issueNumber: 1,
+      );
+      final decimale = await edizioneConCopia(
+        titolo: 'Kaiju #1.1',
+        serieId: serieId,
+        issueNumber: 1,
+        issueNumberLabel: '1.1',
+      );
+
+      await pumpDettaglio(tester, serieId: serieId);
+      await tester.tap(find.byIcon(Icons.grid_view_rounded));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(of: find.byType(GridView), matching: find.text('1')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(GridView),
+          matching: find.text('1.1'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(GridView),
+          matching: find.text('1.1'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Scheda $decimale'), findsOneWidget);
+    },
+  );
+
   testWidgets('serie completa: badge "Serie completa"', (tester) async {
     final serieId = await repository.aggiungiSerie(
       name: 'Dylan Dog',

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
@@ -105,6 +106,9 @@ class _Corpo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vistaNumeri = ref.watch(vistaNumeriSerieProvider);
+    final edizioniPossedute =
+        ref.watch(edizioniPosseduteDiSerieProvider(serie.serieId)).valueOrNull ??
+        const [];
     final pct = serie.numeriTotali == null
         ? null
         : serie.numeriPosseduti.length / serie.numeriTotali!;
@@ -220,9 +224,19 @@ class _Corpo extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         if (serie.numeriTotali == null)
-          _SenzaTotale(serie: serie, onNumero: onNumero, vista: vistaNumeri)
+          _SenzaTotale(
+            serie: serie,
+            onNumero: onNumero,
+            vista: vistaNumeri,
+            edizioniPossedute: edizioniPossedute,
+          )
         else
-          _ConTotale(serie: serie, onNumero: onNumero, vista: vistaNumeri),
+          _ConTotale(
+            serie: serie,
+            onNumero: onNumero,
+            vista: vistaNumeri,
+            edizioniPossedute: edizioniPossedute,
+          ),
       ],
     );
   }
@@ -270,11 +284,13 @@ class _SenzaTotale extends StatelessWidget {
     required this.serie,
     required this.onNumero,
     required this.vista,
+    required this.edizioniPossedute,
   });
 
   final SerieDettaglio serie;
   final void Function(int numero) onNumero;
   final VistaNumeriSerie vista;
+  final List<EdizioneCatalogo> edizioniPossedute;
 
   @override
   Widget build(BuildContext context) {
@@ -291,20 +307,27 @@ class _SenzaTotale extends StatelessWidget {
             spacing: AppSpacing.xs,
             runSpacing: AppSpacing.xs,
             children: [
-              for (final n in serie.numeriPosseduti)
-                AppChip(
-                  label: '#$n',
-                  selected: true,
-                  onTap: () => onNumero(n),
-                ),
+              for (final cella in _celleGriglia(
+                numeri: serie.numeriPosseduti,
+                edizioni: edizioniPossedute,
+              ))
+                if (cella.numero case final n?)
+                  AppChip(label: '#$n', selected: true, onTap: () => onNumero(n))
+                else
+                  AppChip(
+                    label: '#${cella.edizioneDecimale!.issueNumberLabel}',
+                    selected: true,
+                    onTap: () =>
+                        _apriEdizione(context, cella.edizioneDecimale!.edizioneId),
+                  ),
             ],
           )
         else
           _CoverGrid(
-            serieId: serie.serieId,
             nomeSerie: serie.nome,
             numeri: serie.numeriPosseduti,
             posseduti: serie.numeriPosseduti.toSet(),
+            edizioniPossedute: edizioniPossedute,
             onNumero: onNumero,
           ),
         const SizedBox(height: AppSpacing.md),
@@ -353,11 +376,13 @@ class _ConTotale extends StatelessWidget {
     required this.serie,
     required this.onNumero,
     required this.vista,
+    required this.edizioniPossedute,
   });
 
   final SerieDettaglio serie;
   final void Function(int numero) onNumero;
   final VistaNumeriSerie vista;
+  final List<EdizioneCatalogo> edizioniPossedute;
 
   @override
   Widget build(BuildContext context) {
@@ -390,20 +415,34 @@ class _ConTotale extends StatelessWidget {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             children: [
-              for (var n = 1; n <= serie.numeriTotali!; n++)
-                _NumeroCell(
-                  numero: n,
-                  posseduto: posseduti.contains(n),
-                  onTap: posseduti.contains(n) ? () => onNumero(n) : null,
-                ),
+              for (final cella in _celleGriglia(
+                numeri: [for (var n = 1; n <= serie.numeriTotali!; n++) n],
+                edizioni: edizioniPossedute,
+              ))
+                if (cella.numero case final n?)
+                  _NumeroCell(
+                    numero: n,
+                    posseduto: posseduti.contains(n),
+                    onTap: posseduti.contains(n) ? () => onNumero(n) : null,
+                  )
+                else
+                  _NumeroCell(
+                    numero: cella.edizioneDecimale!.issueNumber ?? 0,
+                    etichetta: cella.edizioneDecimale!.issueNumberLabel,
+                    posseduto: true,
+                    onTap: () => _apriEdizione(
+                      context,
+                      cella.edizioneDecimale!.edizioneId,
+                    ),
+                  ),
             ],
           )
         else
           _CoverGrid(
-            serieId: serie.serieId,
             nomeSerie: serie.nome,
             numeri: [for (var n = 1; n <= serie.numeriTotali!; n++) n],
             posseduti: posseduti,
+            edizioniPossedute: edizioniPossedute,
             onNumero: onNumero,
           ),
         const SizedBox(height: AppSpacing.md),
@@ -498,10 +537,16 @@ class _NumeroCell extends StatelessWidget {
     required this.numero,
     required this.posseduto,
     required this.onTap,
-  });
+    String? etichetta,
+  }) : etichetta = etichetta ?? '$numero';
 
   final int numero;
   final bool posseduto;
+
+  /// L'etichetta mostrata nella cella — `'$numero'` di default, oppure
+  /// l'etichetta completa (es. `"699.1"`) per la cella propria di
+  /// un'Edizione con numero decimale (vedi [_celleGriglia]).
+  final String etichetta;
 
   /// Null per i numeri mancanti — nessuna Edizione a cui navigare.
   final VoidCallback? onTap;
@@ -527,7 +572,7 @@ class _NumeroCell extends StatelessWidget {
             borderRadius: AppRadii.xsRadius,
           ),
           child: Text(
-            '$numero',
+            etichetta,
             style: AppTypography.monoLabel.copyWith(
               color: posseduto ? AppColors.accentLight : AppColors.amber,
               fontSize: 11,
@@ -612,31 +657,28 @@ class _VistaNumeriSegment extends StatelessWidget {
 
 /// La vista "cover con numero sotto" dei numeri posseduti (§11) — risolve
 /// la copertina di ciascun numero dalle Edizioni possedute della serie
-/// ([edizioniPosseduteDiSerieProvider]); i numeri senza Edizione (mancanti
-/// in [_ConTotale]) ricadono sul segnaposto procedurale di
-/// [ComicCoverImage], come nel resto dell'app.
-class _CoverGrid extends ConsumerWidget {
+/// (passate da [_Corpo] via [edizioniPosseduteDiSerieProvider]); i numeri
+/// senza Edizione (mancanti in [_ConTotale]) ricadono sul segnaposto
+/// procedurale di [ComicCoverImage], come nel resto dell'app.
+class _CoverGrid extends StatelessWidget {
   const _CoverGrid({
-    required this.serieId,
     required this.nomeSerie,
     required this.numeri,
     required this.posseduti,
+    required this.edizioniPossedute,
     required this.onNumero,
   });
 
-  final int serieId;
   final String nomeSerie;
   final List<int> numeri;
   final Set<int> posseduti;
+  final List<EdizioneCatalogo> edizioniPossedute;
   final void Function(int numero) onNumero;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final edizioni =
-        ref.watch(edizioniPosseduteDiSerieProvider(serieId)).valueOrNull ??
-        const [];
+  Widget build(BuildContext context) {
     final coverPerNumero = <int, EdizioneCatalogo>{};
-    for (final e in edizioni) {
+    for (final e in edizioniPossedute) {
       final numero = e.issueNumber;
       if (numero != null) coverPerNumero.putIfAbsent(numero, () => e);
     }
@@ -649,14 +691,28 @@ class _CoverGrid extends ConsumerWidget {
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 0.62,
       children: [
-        for (final n in numeri)
-          _NumeroCoverCell(
-            numero: n,
-            posseduto: posseduti.contains(n),
-            coverImage: coverPerNumero[n]?.coverImage,
-            titolo: coverPerNumero[n]?.title ?? nomeSerie,
-            onTap: posseduti.contains(n) ? () => onNumero(n) : null,
-          ),
+        for (final cella in _celleGriglia(
+          numeri: numeri,
+          edizioni: edizioniPossedute,
+        ))
+          if (cella.numero case final n?)
+            _NumeroCoverCell(
+              numero: n,
+              posseduto: posseduti.contains(n),
+              coverImage: coverPerNumero[n]?.coverImage,
+              titolo: coverPerNumero[n]?.title ?? nomeSerie,
+              onTap: posseduti.contains(n) ? () => onNumero(n) : null,
+            )
+          else
+            _NumeroCoverCell(
+              numero: cella.edizioneDecimale!.issueNumber ?? 0,
+              etichetta: cella.edizioneDecimale!.issueNumberLabel,
+              posseduto: true,
+              coverImage: cella.edizioneDecimale!.coverImage,
+              titolo: cella.edizioneDecimale!.title,
+              onTap: () =>
+                  _apriEdizione(context, cella.edizioneDecimale!.edizioneId),
+            ),
       ],
     );
   }
@@ -669,12 +725,18 @@ class _NumeroCoverCell extends StatelessWidget {
     required this.coverImage,
     required this.titolo,
     required this.onTap,
-  });
+    String? etichetta,
+  }) : etichetta = etichetta ?? '$numero';
 
   final int numero;
   final bool posseduto;
   final String? coverImage;
   final String titolo;
+
+  /// L'etichetta mostrata — `'$numero'` di default, oppure l'etichetta
+  /// completa (es. `"699.1"`) per la cella propria di un'Edizione con
+  /// numero decimale (vedi [_celleGriglia]).
+  final String etichetta;
 
   /// Null per i numeri mancanti — nessuna Edizione a cui navigare.
   final VoidCallback? onTap;
@@ -695,14 +757,14 @@ class _NumeroCoverCell extends StatelessWidget {
                   coverImage: coverImage,
                   titolo: titolo,
                   numero: numero,
-                  etichetta: '#$numero',
+                  etichetta: '#$etichetta',
                   compatto: true,
                 ),
               ),
             ),
             const SizedBox(height: 3),
             Text(
-              '$numero',
+              etichetta,
               style: AppTypography.monoLabel.copyWith(
                 color: posseduto ? AppColors.accentLight : AppColors.amber,
                 fontSize: 11,
@@ -722,6 +784,61 @@ String _missingLabel(List<int> numeri) {
   final visibili = numeri.take(soglia).map((n) => '#$n').join(', ');
   if (numeri.length <= soglia) return visibili;
   return '$visibili e altri ${numeri.length - soglia}';
+}
+
+/// Tap su una cella decimale (es. "699.1") della griglia — l'Edizione è già
+/// risolta da [_celleGriglia], nessun selettore necessario a differenza di
+/// [_apriNumero].
+void _apriEdizione(BuildContext context, int edizioneId) {
+  unawaited(context.push('/scheda/$edizioneId'));
+}
+
+/// Una cella della griglia/elenco dei numeri posseduti (§11): un numero
+/// intero della sequenza (posseduto o mancante), oppure — per un'Edizione
+/// con etichetta decimale come "699.1" — una cella propria inserita fra
+/// l'intero precedente e successivo invece di fondersi in quello come una
+/// variant di copertina (richiesta utente: un "point one" è un albo a sé,
+/// non una variant del numero intero — vedi [numeroDecimale]).
+class _CellaGriglia {
+  const _CellaGriglia.intera(int numero)
+    : numero = numero,
+      posizione = numero * 1.0,
+      edizioneDecimale = null;
+
+  const _CellaGriglia.decimale(this.posizione, EdizioneCatalogo edizione)
+    : numero = null,
+      edizioneDecimale = edizione;
+
+  /// La chiave di ordinamento nella sequenza — l'intero stesso per una
+  /// cella intera, il numero decimale completo (`699.1`) per una cella
+  /// decimale, così finisce sempre subito dopo il suo intero e prima del
+  /// successivo.
+  final double posizione;
+
+  /// Non null per una cella intera.
+  final int? numero;
+
+  /// Non null per una cella decimale.
+  final EdizioneCatalogo? edizioneDecimale;
+}
+
+/// Costruisce e ordina le celle di [numeri] (la sequenza base di interi,
+/// posseduti o mancanti) più una cella propria per ogni Edizione di
+/// [edizioni] con un'etichetta decimale (vedi [numeroDecimale]) — usata sia
+/// dalla vista "solo numero" sia da quella "cover" del dettaglio Serie.
+List<_CellaGriglia> _celleGriglia({
+  required List<int> numeri,
+  required List<EdizioneCatalogo> edizioni,
+}) {
+  final celle = [for (final n in numeri) _CellaGriglia.intera(n)];
+  for (final edizione in edizioni) {
+    final posizione = numeroDecimale(edizione.issueNumberLabel);
+    if (posizione != null) {
+      celle.add(_CellaGriglia.decimale(posizione, edizione));
+    }
+  }
+  celle.sort((a, b) => a.posizione.compareTo(b.posizione));
+  return celle;
 }
 
 /// Tap su un numero posseduto: naviga diretto alla Scheda se una sola

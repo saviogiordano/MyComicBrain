@@ -33,3 +33,23 @@ int? numeroIntero(String? label) {
   final match = RegExp(r'^(\d+)(?:\.\d+)?$').firstMatch(pulito);
   return match == null ? null : int.tryParse(match.group(1)!);
 }
+
+/// Il numero come `double`, solo quando l'etichetta è un vero numero
+/// decimale (es. `"699.1"`) — a differenza di [numeroIntero] (che tronca lo
+/// stesso decimale alla parte intera per `Edizioni.issueNumber`, usato per
+/// ordinamento e conteggio mancanti/§17), questo valore serve solo alla
+/// griglia numerica di Serie (§11/#99) per dare a un "point one" una cella
+/// propria fra il numero intero precedente e successivo invece di fonderlo
+/// in quello intero come una variant di copertina (richiesta utente: un
+/// "699.1" è un albo a sé con propria uscita, non una variant del #699 —
+/// bug osservato: spariva del tutto dalla griglia, raggiungibile solo
+/// tramite il selettore di `_apriNumero` quando anche il #699 era
+/// posseduto). `null` per un'etichetta puramente intera (`"699"`) o non
+/// numerica (`"42 Variant"`, `"Annual 1"`) — quei casi restano fusi nello
+/// slot intero come oggi.
+double? numeroDecimale(String? label) {
+  final pulito = numeroPulito(label);
+  if (pulito == null) return null;
+  final match = RegExp(r'^\d+\.\d+$').firstMatch(pulito);
+  return match == null ? null : double.tryParse(pulito);
+}
