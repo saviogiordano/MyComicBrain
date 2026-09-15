@@ -506,6 +506,82 @@ void main() {
   );
 
   test(
+    "confermaCandidato interno applica la Descrizione letta dall'Analisi "
+    "Copertina di questa Scansione quando l'Edizione già catalogata non ne "
+    'ha ancora una — una seconda copia dello stesso numero non deve far '
+    'perdere una trama nel frattempo disponibile (richiesta utente)',
+    () async {
+      final scansioneId = await scansioneConAnalisi(
+        description: 'Peter Parker affronta il Green Goblin.',
+      );
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumberLabel: '42',
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.interno,
+        punteggio: 96,
+        edizioneId: edizioneId,
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(edizioneId))).getSingle();
+      expect(edizione.description, 'Peter Parker affronta il Green Goblin.');
+    },
+  );
+
+  test(
+    'confermaCandidato interno non sovrascrive la Descrizione già presente '
+    "sull'Edizione con quella (diversa) letta da questa Analisi Copertina — "
+    'stesso principio "primo valore buono vince" del percorso esterno',
+    () async {
+      final scansioneId = await scansioneConAnalisi(
+        description: 'Trama letta in questa nuova scansione.',
+      );
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumberLabel: '42',
+        description: 'Trama già presente in catalogo.',
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.interno,
+        punteggio: 96,
+        edizioneId: edizioneId,
+      );
+      final candidato =
+          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+
+      await repo.confermaCandidato(
+        candidato: candidato,
+        scansioneId: scansioneId,
+      );
+
+      final edizione = await (db.select(
+        db.edizioni,
+      )..where((e) => e.id.equals(edizioneId))).getSingle();
+      expect(edizione.description, 'Trama già presente in catalogo.');
+    },
+  );
+
+  test(
     'confermaCandidato aggiunge la Copia con condizione di default "Fine" e '
     'prezzo di acquisto pre-compilato dal prezzo di copertina letto '
     "dall'AI (bug osservato: la Copia veniva creata senza condizione né "

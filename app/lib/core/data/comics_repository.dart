@@ -801,14 +801,15 @@ class ComicsRepository {
   /// Conferma un Candidato (schermo di conferma, §6.3, deciso su #54/#59):
   /// marca la riga scelta e collega/crea la Copia risultante. Se `interno`
   /// (Edizione già catalogata), aggiunge solo una nuova Copia a
-  /// quell'Edizione; se `esterno` (ComicVine, nessuna Edizione propria
-  /// ancora), crea Opera/Serie/Edizione da zero a partire dai campi grezzi
-  /// del candidato prima di aggiungere la Copia. La Copia creata parte con
-  /// condizione di default `fine` e prezzo di acquisto pre-compilato dal
-  /// prezzo di copertina letto dall'AI su questa Scansione, quando
-  /// disponibile (punto di partenza modificabile dalla Scheda, non un dato
-  /// definitivo — bug osservato: la Copia veniva creata senza condizione né
-  /// prezzo). Ritorna l'id della Copia creata.
+  /// quell'Edizione (più [_completaDescrizioneMancante], vedi il commento
+  /// lì); se `esterno` (ComicVine, nessuna Edizione propria ancora), crea
+  /// Opera/Serie/Edizione da zero a partire dai campi grezzi del candidato
+  /// prima di aggiungere la Copia. La Copia creata parte con condizione di
+  /// default `fine` e prezzo di acquisto pre-compilato dal prezzo di
+  /// copertina letto dall'AI su questa Scansione, quando disponibile (punto
+  /// di partenza modificabile dalla Scheda, non un dato definitivo — bug
+  /// osservato: la Copia veniva creata senza condizione né prezzo). Ritorna
+  /// l'id della Copia creata.
   Future<int> confermaCandidato({
     required Candidato candidato,
     required int scansioneId,
@@ -819,12 +820,20 @@ class ComicsRepository {
       _db.analisiCopertinaTable,
     )..where((a) => a.scansioneId.equals(scansioneId))).getSingleOrNull();
 
-    final edizioneId = candidato.source == FonteCandidato.interno
-        ? candidato.edizioneId!
-        // Un candidato `esterno` presuppone un'Analisi Copertina completata
-        // (l'Identificazione parte solo dopo, vedi commento su
-        // `analisiCopertinaPerScansione`).
-        : await _creaEdizioneDaCandidato(candidato, scansioneId, analisi!);
+    final int edizioneId;
+    if (candidato.source == FonteCandidato.interno) {
+      edizioneId = candidato.edizioneId!;
+      await _completaDescrizioneMancante(edizioneId, analisi);
+    } else {
+      // Un candidato `esterno` presuppone un'Analisi Copertina completata
+      // (l'Identificazione parte solo dopo, vedi commento su
+      // `analisiCopertinaPerScansione`).
+      edizioneId = await _creaEdizioneDaCandidato(
+        candidato,
+        scansioneId,
+        analisi!,
+      );
+    }
 
     final prezzo = _prezzoDaAnalisi(analisi?.price);
     return aggiungiCopia(
@@ -917,6 +926,34 @@ class ComicsRepository {
       description: _nonVuoto(analisi.description),
       printingType: _nonVuoto(analisi.printingType),
       classificazione: _nonVuoto(analisi.classificazione),
+    );
+  }
+
+  /// Un candidato `interno` conferma una seconda Copia su un'Edizione già
+  /// catalogata (richiesta utente): normalmente [confermaCandidato] non
+  /// tocca più nessun campo bibliografico di quell'Edizione, ma se questa
+  /// non ha ancora una Descrizione — creata prima che l'AI la generasse, o
+  /// da un'Analisi Copertina che allora non l'aveva letta — e la nuova
+  /// Analisi Copertina di questa Scansione sì, la si applica invece di
+  /// scartarla: una trama già disponibile non deve andare persa dietro una
+  /// seconda copia confermata come `interno`. Non sovrascrive mai una
+  /// Descrizione già presente (stesso principio "primo valore buono vince"
+  /// già in vigore su [_creaEdizioneDaCandidato], qui applicato in un punto
+  /// dove l'Edizione normalmente non verrebbe toccata affatto).
+  Future<void> _completaDescrizioneMancante(
+    int edizioneId,
+    AnalisiCopertinaTableData? analisi,
+  ) async {
+    final descrizioneAi = _nonVuoto(analisi?.description);
+    if (descrizioneAi == null) return;
+    final edizione = await (_db.select(
+      _db.edizioni,
+    )..where((e) => e.id.equals(edizioneId))).getSingleOrNull();
+    if (edizione == null || _nonVuoto(edizione.description) != null) return;
+    await (_db.update(
+      _db.edizioni,
+    )..where((e) => e.id.equals(edizioneId))).write(
+      EdizioniCompanion(description: Value(descrizioneAi)),
     );
   }
 
@@ -1249,7 +1286,12 @@ SELECT
             Variable.withDateTime(inizioMeseProssimo),
             Variable.withReal(tassoUsdEur),
           ],
-          readsFrom: {_db.serieTable, _db.edizioni, _db.copie, _db.valoreStimatoTable},
+          readsFrom: {
+            _db.serieTable,
+            _db.edizioni,
+            _db.copie,
+            _db.valoreStimatoTable,
+          },
         )
         .watch()
         .map((rows) {
