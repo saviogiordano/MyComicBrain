@@ -7,6 +7,7 @@ import 'package:mycomicbrain/core/data/exchange_rate_client.dart';
 import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
+import 'package:mycomicbrain/core/data/prezzo_pulito.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/catalogo_stampabile.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
@@ -835,7 +836,7 @@ class ComicsRepository {
       );
     }
 
-    final prezzo = _prezzoDaAnalisi(analisi?.price);
+    final prezzo = prezzoDaTesto(analisi?.price);
     return aggiungiCopia(
       edizioneId: edizioneId,
       status: StatoCopia.posseduta,
@@ -844,31 +845,6 @@ class ComicsRepository {
       purchasePriceCurrency: prezzo?.valuta,
       scansioneId: scansioneId,
     );
-  }
-
-  /// Converte il prezzo di copertina letto dall'AI (testo libero, es.
-  /// "€ 5,30" o "$3.99" — resta testo su `Edizione.coverPrice`, deciso su
-  /// #63) in un importo numerico + valuta da usare come prezzo di acquisto
-  /// di default sulla Copia appena creata da [confermaCandidato]. Un
-  /// fumetto americano riporta il prezzo in dollari: `$` nel testo letto
-  /// dall'AI è l'unico segnale disponibile (nessun campo valuta strutturato
-  /// nell'estrazione, §6.1/§6.2), assenza di `$` assume EUR (fumetti
-  /// italiani/europei, maggioranza del catalogo). Prende il primo numero
-  /// trovato nel testo e normalizza la virgola italiana come separatore
-  /// decimale; `null` se il testo non contiene un numero.
-  ({double importo, ValutaPrezzo valuta})? _prezzoDaAnalisi(String? raw) {
-    final testo = raw?.trim();
-    if (testo == null || testo.isEmpty) return null;
-    final match = RegExp(r'\d+(?:[.,]\d+)?').firstMatch(testo);
-    if (match == null) return null;
-    var numero = match.group(0)!;
-    if (numero.contains(',')) {
-      numero = numero.replaceAll('.', '').replaceAll(',', '.');
-    }
-    final importo = double.tryParse(numero);
-    if (importo == null) return null;
-    final valuta = testo.contains(r'$') ? ValutaPrezzo.usd : ValutaPrezzo.eur;
-    return (importo: importo, valuta: valuta);
   }
 
   /// Crea Opera/Serie/Edizione per un Candidato `esterno` (ComicVine). I

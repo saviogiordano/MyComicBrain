@@ -194,7 +194,34 @@ void main() {
       expect(copie, hasLength(1));
       expect(copie.single.edizioneId, edizioni.single.id);
       expect(copie.single.status, StatoCopia.posseduta);
+      expect(copie.single.condition, CondizioneCopia.fine);
+      expect(copie.single.purchasePrice, isNull);
       expect(copie.single.scansioneId, scansioneId);
+    },
+  );
+
+  testWidgets(
+    'compilando "Prezzo di copertina" salva il prezzo di acquisto sulla '
+    'Copia (bug osservato: il salvataggio manuale non lo riportava)',
+    (tester) async {
+      final scansioneId = await scansione();
+      await pumpInserisciManualmente(tester, scansioneId: scansioneId);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'es. Batman'),
+        'Saga sconosciuta',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'es. € 5,30'),
+        '€ 5,30',
+      );
+      await tester.pump();
+      await tester.tap(find.text('Salva'));
+      await tester.pumpAndSettle();
+
+      final copie = await db.select(db.copie).get();
+      expect(copie.single.purchasePrice, 5.30);
+      expect(copie.single.purchasePriceCurrency, ValutaPrezzo.eur);
     },
   );
 

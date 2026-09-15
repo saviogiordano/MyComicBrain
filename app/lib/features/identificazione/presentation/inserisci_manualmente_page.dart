@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/numero_pulito.dart';
+import 'package:mycomicbrain/core/data/prezzo_pulito.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
@@ -141,6 +142,13 @@ class _InserisciManualmentePageState
   /// doverne combinare due (`== null`, `.isEmpty`) a ogni chiamata.
   String _valore(String? v) => v?.trim() ?? '';
 
+  /// Crea Opera/Serie/Edizione dai campi del form, poi la Copia con
+  /// condizione di default `fine` e prezzo di acquisto pre-compilato dallo
+  /// stesso testo digitato in "Prezzo di copertina" ([prezzoDaTesto]),
+  /// stessa conversione usata da `ComicsRepository.confermaCandidato` sul
+  /// prezzo letto dall'AI — bug osservato: la Copia veniva creata senza
+  /// condizione né prezzo, perché questo percorso passava solo `status` ad
+  /// `aggiungiCopia`.
   Future<void> _salva() async {
     setState(() => _salvando = true);
 
@@ -187,9 +195,13 @@ class _InserisciManualmentePageState
       printingType: printingType.isEmpty ? null : printingType,
     );
 
+    final prezzo = prezzoDaTesto(coverPrice);
     await repository.aggiungiCopia(
       edizioneId: edizioneId,
       status: StatoCopia.posseduta,
+      condition: CondizioneCopia.fine,
+      purchasePrice: prezzo?.importo,
+      purchasePriceCurrency: prezzo?.valuta,
       scansioneId: widget.scansioneId,
     );
 
