@@ -53,6 +53,10 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
     final esito = ref
         .watch(identificazioneProvider(widget.scansioneId))
         .valueOrNull;
+    final descrizioneAi = ref
+        .watch(analisiCopertinaProvider(widget.scansioneId))
+        .valueOrNull
+        ?.description;
 
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
@@ -60,11 +64,11 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
         backgroundColor: AppColors.surfaceDeepest,
         title: const Text('Possibile corrispondenza'),
       ),
-      body: SafeArea(child: _corpo(esito)),
+      body: SafeArea(child: _corpo(esito, descrizioneAi)),
     );
   }
 
-  Widget _corpo(EsitoIdentificazione? esito) {
+  Widget _corpo(EsitoIdentificazione? esito, String? descrizioneAi) {
     if (esito == null ||
         esito.stato == StatoIdentificazione.pending ||
         esito.stato == StatoIdentificazione.inCorso) {
@@ -107,6 +111,7 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
               final c = esito.candidati[i];
               return _RigaCandidato(
                 candidato: c,
+                descrizioneAi: descrizioneAi,
                 selezionato: i == _selezionato,
                 onTap: () => setState(() => _selezionato = i),
               );
@@ -147,11 +152,13 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
 class _RigaCandidato extends StatelessWidget {
   const _RigaCandidato({
     required this.candidato,
+    required this.descrizioneAi,
     required this.selezionato,
     required this.onTap,
   });
 
   final Candidato candidato;
+  final String? descrizioneAi;
   final bool selezionato;
   final VoidCallback onTap;
 
@@ -208,7 +215,10 @@ class _RigaCandidato extends StatelessWidget {
             tooltip: 'Dettagli',
             onPressed: () => showDialog<void>(
               context: context,
-              builder: (_) => _DettagliCandidatoDialog(candidato: candidato),
+              builder: (_) => _DettagliCandidatoDialog(
+                candidato: candidato,
+                descrizioneAi: descrizioneAi,
+              ),
             ),
           ),
         ],
@@ -222,11 +232,21 @@ class _RigaCandidato extends StatelessWidget {
 /// compatta (anno, sorgente per esteso). Sola lettura — la selezione
 /// resta un'azione separata sulla riga, non duplicata qui (deciso in
 /// sessione: icona info dedicata, il tap sulla riga continua a
-/// selezionare come prima).
+/// selezionare come prima). La Descrizione non è un campo del Candidato
+/// (`Candidato` non la espone: viene letta una sola volta per Scansione,
+/// non per Candidato) ma dell'Analisi Copertina della stessa Scansione —
+/// passata a parte, uguale per ogni Candidato in lista, altrimenti restava
+/// invisibile fino a conferma avvenuta (bug segnalato da utente: il summary
+/// letto dall'AI compariva nel raw della Scansione ma non da nessuna parte
+/// nello schermo di conferma).
 class _DettagliCandidatoDialog extends StatelessWidget {
-  const _DettagliCandidatoDialog({required this.candidato});
+  const _DettagliCandidatoDialog({
+    required this.candidato,
+    required this.descrizioneAi,
+  });
 
   final Candidato candidato;
+  final String? descrizioneAi;
 
   @override
   Widget build(BuildContext context) {
@@ -268,6 +288,15 @@ class _DettagliCandidatoDialog extends StatelessWidget {
               candidato.year != null ? '${candidato.year}' : null,
             ),
             _rigaDettaglio('Confidenza', '${candidato.punteggio.round()}%'),
+            if (descrizioneAi != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                descrizioneAi!,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
             const SizedBox(height: AppSpacing.md),
             SizedBox(
               width: double.infinity,

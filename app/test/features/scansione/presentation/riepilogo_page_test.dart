@@ -419,6 +419,54 @@ void main() {
   );
 
   testWidgets(
+    'la chip "Completata" richiede una nuova Analisi Copertina al tocco',
+    (tester) async {
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = ComicsRepository(db);
+      final scansioni = scansioniFinte(1);
+      await repository.aggiungiScansione(image: scansioni.single.path);
+      final scansioneId = await repository.idScansionePerImmagine(
+        scansioni.single.path,
+      );
+      final analisiId = await repository.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
+      await repository.completaAnalisiCopertina(
+        id: analisiId,
+        rawResponse: '{}',
+      );
+
+      final pipeline = _FakeAnalisiCopertinaPipeline();
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        pipeline: pipeline,
+        repository: repository,
+      );
+
+      expect(find.text('Completata'), findsOneWidget);
+
+      await tester.tap(find.text('Completata'));
+      await tester.pumpAndSettle();
+
+      expect(pipeline.riprovati, [scansioni.single.path]);
+      expect(
+        find.text('Riepilogo batch'),
+        findsOneWidget,
+        reason:
+            'il tocco sulla chip richiede una nuova analisi, non apre la '
+            'conferma candidato',
+      );
+    },
+  );
+
+  testWidgets(
     'una riga con Analisi Copertina completata apre la conferma candidato al tocco (#59)',
     (tester) async {
       final db = AppDatabase(

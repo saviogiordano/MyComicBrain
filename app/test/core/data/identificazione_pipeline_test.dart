@@ -197,4 +197,54 @@ void main() {
       expect(candidati, isEmpty);
     },
   );
+
+  test(
+    'rieseguire identifica() sulla stessa Scansione riusa la riga invece di '
+    'duplicarla, sostituendo i Candidati del giro precedente (richiesta di '
+    'nuova Analisi Copertina su una riga già completata, riepilogo)',
+    () async {
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      await repo.aggiungiEdizione(
+        operaId: operaId,
+        publisher: 'DC Comics',
+        issueNumberLabel: '42',
+      );
+      final scansioneId = await scansioneConAnalisiCompletata(
+        title: 'Batman',
+        publisher: 'DC Comics',
+        issueNumberLabel: '42',
+      );
+      final pipeline = IdentificazionePipeline(
+        repository: repo,
+        comicVineClient: _FakeComicVineClient(),
+      );
+
+      await pipeline.identifica(scansioneId: scansioneId);
+      final primaIdentificazione = await unicaIdentificazione();
+
+      await pipeline.identifica(scansioneId: scansioneId);
+      final secondaIdentificazione = await unicaIdentificazione();
+
+      expect(
+        secondaIdentificazione.id,
+        primaIdentificazione.id,
+        reason:
+            'la relazione con scansioneId è 1:1: una seconda riga la '
+            'romperebbe (stesso meccanismo del bug #86 su AnalisiCopertina)',
+      );
+      final candidati = await (db.select(
+        db.candidatiTable,
+      )..where(
+        (c) => c.identificazioneId.equals(secondaIdentificazione.id),
+      )).get();
+      expect(
+        candidati,
+        hasLength(1),
+        reason:
+            'i Candidati del primo giro vanno sostituiti, non sommati: '
+            'altrimenti watchIdentificazione (che raggruppa per scansioneId) '
+            'li mostrerebbe mescolati',
+      );
+    },
+  );
 }

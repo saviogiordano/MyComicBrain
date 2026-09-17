@@ -27,12 +27,24 @@ class IdentificazionePipeline {
   /// Avvia l'Identificazione per la Scansione con questo id, la cui Analisi
   /// Copertina deve già essere `completata`. Un fallimento tecnico (es.
   /// ComicVine irraggiungibile) porta l'Identificazione a `fallita` — nessun
-  /// retry automatico, come `AnalisiCopertinaPipeline`.
+  /// retry automatico, come `AnalisiCopertinaPipeline`. Idempotente rispetto
+  /// alla Scansione: se un'Identificazione esiste già (rieseguita dopo una
+  /// richiesta di nuova Analisi Copertina su una riga già `completata`,
+  /// riepilogo), riprende quella riga invece di inserirne una seconda — la
+  /// relazione con `scansioneId` è 1:1.
   Future<void> identifica({required int scansioneId}) async {
     final analisi = await _repository.analisiCopertinaPerScansione(scansioneId);
-    final identificazioneId = await _repository.avviaIdentificazione(
-      scansioneId: scansioneId,
-    );
+    final identificazioneEsistente = await _repository
+        .idIdentificazionePerScansione(scansioneId);
+    final int identificazioneId;
+    if (identificazioneEsistente != null) {
+      identificazioneId = identificazioneEsistente;
+      await _repository.riavviaIdentificazione(id: identificazioneId);
+    } else {
+      identificazioneId = await _repository.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+    }
 
     try {
       final catalogo = await _repository.catalogoPerMatching();

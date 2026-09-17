@@ -657,6 +657,40 @@ class ComicsRepository {
         );
   }
 
+  /// L'id della riga `Identificazione` già esistente per questa Scansione,
+  /// se presente — usato per riprendere la riga invece di crearne una
+  /// seconda, che romperebbe la relazione 1:1 con la Scansione (stesso
+  /// motivo di [idAnalisiCopertinaPerScansione]). `null` se l'Analisi
+  /// Copertina non ha ancora agganciato l'Identificazione (#58).
+  Future<int?> idIdentificazionePerScansione(int scansioneId) async {
+    final riga = await (_db.select(
+      _db.identificazioneTable,
+    )..where((i) => i.scansioneId.equals(scansioneId))).getSingleOrNull();
+    return riga?.id;
+  }
+
+  /// Riporta un'Identificazione già esistente in stato `inCorso` per un
+  /// nuovo giro (richiesta utente dal riepilogo: rieseguire l'Analisi
+  /// Copertina di una Scansione già `completata` riaggancia anche
+  /// l'Identificazione, #58) — ripulisce prima i Candidati proposti dal giro
+  /// precedente: [watchIdentificazione] raggruppa per `scansioneId`, non per
+  /// riga, quindi lasciarli mescolerebbe i Candidati vecchi a quelli nuovi.
+  /// Sul modello di [riavviaAnalisiCopertina].
+  Future<void> riavviaIdentificazione({required int id}) async {
+    await (_db.delete(
+      _db.candidatiTable,
+    )..where((c) => c.identificazioneId.equals(id))).go();
+    await (_db.update(
+      _db.identificazioneTable,
+    )..where((i) => i.id.equals(id))).write(
+      const IdentificazioneTableCompanion(
+        status: Value(StatoIdentificazione.inCorso),
+        errorMessage: Value(null),
+        completedAt: Value(null),
+      ),
+    );
+  }
+
   /// Persiste un Candidato proposto per un'Identificazione — una riga per
   /// candidato, non appena proposto (deciso su #53), indipendentemente da
   /// quale verrà poi confermato con [marcaCandidatoScelto].

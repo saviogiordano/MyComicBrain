@@ -53,8 +53,8 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
   /// scansioneId, mandando in errore `identifica()` a valle (`getSingle` su
   /// due righe) e bloccando il resto del batch (stesso meccanismo del bug
   /// segnalato da utente su #86) — oltre a richiamare `estraiCopertina` una
-  /// seconda volta a vuoto. Le righe `Fallita` hanno il proprio retry
-  /// manuale dalla chip (`riprova`), non passano da qui.
+  /// seconda volta a vuoto. Le righe `Fallita`/`Completata` hanno il proprio
+  /// retry manuale dalla chip (`riprova`), non passano da qui.
   void _fine() {
     setState(() => _avviato = true);
     final daInviare = _scansioni.where((s) {
@@ -325,7 +325,15 @@ class _RigaScansione extends ConsumerWidget {
 /// utente) scavalca sempre lo stato di `AnalisiCopertina`: una riga già
 /// confermata resta "Salvata" per distinguerla da quelle ancora da
 /// confermare, e la riga smette di essere selezionabile (vedi `pronta` in
-/// `_RigaScansione`) per impedire una seconda conferma.
+/// `_RigaScansione`) per impedire una seconda conferma. Anche la chip
+/// "Completata" (non ancora confermata) è tappabile, sullo stesso modello:
+/// richiede all'utente di rieseguire l'Analisi Copertina da capo (richiesta
+/// utente), scartando il risultato corrente — `AnalisiCopertinaPipeline.
+/// riprova` riusa la riga esistente e riaggancia l'Identificazione a valle
+/// senza duplicarla (#58). Il resto della riga (`AppCard.onTap` in
+/// `_RigaScansione`) resta la via per aprire la conferma candidato: le due
+/// zone di tocco coesistono, la chip vince sul proprio piccolo riquadro
+/// (nested `InkWell`, stesso meccanismo della chip "Fallita").
 class _ChipStatoAnalisi extends StatelessWidget {
   const _ChipStatoAnalisi({
     required this.stato,
@@ -344,6 +352,8 @@ class _ChipStatoAnalisi extends StatelessWidget {
     final configurazioneMancante =
         stato == StatoAnalisiCopertina.fallita &&
         erroreConfigurazioneMancante(errorMessage);
+    final riesguibile =
+        stato == StatoAnalisiCopertina.completata && !confermata;
 
     final (String label, Color colore) = switch (stato) {
       _ when confermata => ('Salvata', AppColors.accent),
@@ -370,18 +380,30 @@ class _ChipStatoAnalisi extends StatelessWidget {
         borderRadius: AppRadii.pillRadius,
         border: Border.all(color: colore),
       ),
-      child: Text(
-        label,
-        style: AppTypography.labelMedium.copyWith(color: colore),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: AppTypography.labelMedium.copyWith(color: colore),
+          ),
+          if (riesguibile) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.refresh, size: 14, color: colore),
+          ],
+        ],
       ),
     );
 
-    if (stato != StatoAnalisiCopertina.fallita) return chip;
+    if (stato != StatoAnalisiCopertina.fallita && !riesguibile) return chip;
 
     return Tooltip(
-      message: configurazioneMancante
-          ? '${errorMessage ?? ''} · tocca per aprire le Impostazioni'
-          : errorMessage ?? 'Motivo del fallimento non disponibile',
+      message: switch (true) {
+        _ when riesguibile => "Tocca per rieseguire l'analisi",
+        _ when configurazioneMancante =>
+          '${errorMessage ?? ''} · tocca per aprire le Impostazioni',
+        _ => errorMessage ?? 'Motivo del fallimento non disponibile',
+      },
       child: InkWell(
         borderRadius: AppRadii.pillRadius,
         onTap: configurazioneMancante

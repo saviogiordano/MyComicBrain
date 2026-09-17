@@ -62,9 +62,15 @@ class AnalisiCopertinaPipeline {
     );
   }
 
-  /// Ripete l'Analisi Copertina di una Scansione già `fallita` (retry
-  /// manuale dal riepilogo, nessun retry automatico — #27): riusa la riga
-  /// `AnalisiCopertina` esistente invece di crearne una seconda.
+  /// Ripete l'Analisi Copertina di una Scansione — retry manuale dal
+  /// riepilogo (nessun retry automatico — #27): riusa la riga
+  /// `AnalisiCopertina` esistente invece di crearne una seconda. Chiamato
+  /// sia da una riga `fallita` (retry sulla chip di errore) sia, su
+  /// richiesta esplicita dell'utente, da una riga già `completata` (chip
+  /// "Completata" del riepilogo): in quel caso scarta il risultato
+  /// precedente e riaggancia anche l'Identificazione a valle (#58), che
+  /// riprende a sua volta la propria riga invece di duplicarla — vedi
+  /// `IdentificazionePipeline.identifica`.
   Future<void> riprova(String percorsoImmagine) async {
     final scansioneId = await _repository.idScansionePerImmagine(
       percorsoImmagine,
