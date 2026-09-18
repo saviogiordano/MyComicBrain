@@ -137,8 +137,10 @@ void main() {
     List<XFile> scansioni, {
     AnalisiCopertinaPipeline? pipeline,
     ComicsRepository? repository,
+    bool ripresa = false,
   }) async {
     final risultato = _RisultatoPop();
+    final rotta = ripresa ? '/scansione/riepilogo/ripresa' : '/scansione/riepilogo';
     final router = GoRouter(
       initialLocation: '/scansione',
       routes: [
@@ -149,7 +151,7 @@ void main() {
               child: ElevatedButton(
                 onPressed: () async {
                   risultato.valore = await context.push<bool>(
-                    '/scansione/riepilogo',
+                    rotta,
                     extra: scansioni,
                   );
                 },
@@ -162,6 +164,13 @@ void main() {
           path: '/scansione/riepilogo',
           builder: (context, state) =>
               RiepilogoPage(scansioni: state.extra! as List<XFile>),
+        ),
+        GoRoute(
+          path: '/scansione/riepilogo/ripresa',
+          builder: (context, state) => RiepilogoPage(
+            scansioni: state.extra! as List<XFile>,
+            ripresa: true,
+          ),
         ),
         GoRoute(
           path: '/dashboard',
@@ -724,4 +733,188 @@ void main() {
       );
     },
   );
+
+  group('ripresa (riapertura dalla Dashboard di un batch lasciato a metà)', () {
+    testWidgets(
+      'una riga già avviata altrove: "Fine" resta disponibile per la Scansione '
+      'ancora In sospeso, e lo swipe resta attivo su entrambe (richiesta utente)',
+      (tester) async {
+        final db = AppDatabase(
+          DatabaseConnection(
+            NativeDatabase.memory(),
+            closeStreamsSynchronously: true,
+          ),
+        );
+        addTearDown(db.close);
+        final repository = ComicsRepository(db);
+        final scansioni = scansioniFinte(2);
+        for (final s in scansioni) {
+          await repository.aggiungiScansione(image: s.path);
+        }
+        final scansioneIdCompletata = await repository.idScansionePerImmagine(
+          scansioni.first.path,
+        );
+        final analisiId = await repository.avviaAnalisiCopertina(
+          scansioneId: scansioneIdCompletata,
+        );
+        await repository.completaAnalisiCopertina(
+          id: analisiId,
+          rawResponse: '{}',
+        );
+
+        final pipeline = _FakeAnalisiCopertinaPipeline();
+        await pumpRiepilogo(
+          tester,
+          scansioni,
+          pipeline: pipeline,
+          repository: repository,
+          ripresa: true,
+        );
+
+        expect(find.text('Fine'), findsOneWidget);
+        expect(find.byType(Dismissible), findsNWidgets(2));
+        expect(find.text('Elimina tutte'), findsOneWidget);
+
+        await tester.tap(find.text('Fine'));
+        await tester.pumpAndSettle();
+
+        expect(
+          pipeline.batchRicevuti,
+          [
+            [scansioni[1].path],
+          ],
+          reason:
+              'solo la Scansione ancora In sospeso deve entrare in avviaBatch',
+        );
+      },
+    );
+
+    testWidgets(
+      'tutte le righe ancora genuinamente In sospeso: si comporta come un '
+      'batch nuovo (bottone "Fine", swipe attivo)',
+      (tester) async {
+        final db = AppDatabase(
+          DatabaseConnection(
+            NativeDatabase.memory(),
+            closeStreamsSynchronously: true,
+          ),
+        );
+        addTearDown(db.close);
+        final repository = ComicsRepository(db);
+        final scansioni = scansioniFinte(2);
+        for (final s in scansioni) {
+          await repository.aggiungiScansione(image: s.path);
+        }
+
+        final pipeline = _FakeAnalisiCopertinaPipeline();
+        await pumpRiepilogo(
+          tester,
+          scansioni,
+          pipeline: pipeline,
+          repository: repository,
+          ripresa: true,
+        );
+
+        expect(find.text('Fine'), findsOneWidget);
+        expect(find.byType(Dismissible), findsNWidgets(2));
+
+        await tester.tap(find.text('Fine'));
+        await tester.pumpAndSettle();
+
+        expect(pipeline.batchRicevuti, [
+          [scansioni[0].path, scansioni[1].path],
+        ]);
+      },
+    );
+
+    testWidgets(
+      'lo swipe rimuove anche una riga già Completata (sicuro: '
+      'AnalisiCopertinaPipeline salta le Scansioni cancellate)',
+      (tester) async {
+        final db = AppDatabase(
+          DatabaseConnection(
+            NativeDatabase.memory(),
+            closeStreamsSynchronously: true,
+          ),
+        );
+        addTearDown(db.close);
+        final repository = ComicsRepository(db);
+        final scansioni = scansioniFinte(1);
+        await repository.aggiungiScansione(image: scansioni.single.path);
+        final scansioneId = await repository.idScansionePerImmagine(
+          scansioni.single.path,
+        );
+        final analisiId = await repository.avviaAnalisiCopertina(
+          scansioneId: scansioneId,
+        );
+        await repository.completaAnalisiCopertina(
+          id: analisiId,
+          rawResponse: '{}',
+        );
+
+        await pumpRiepilogo(
+          tester,
+          scansioni,
+          repository: repository,
+          ripresa: true,
+        );
+        expect(find.text('Completata'), findsOneWidget);
+
+        await tester.runAsync(() async {
+          await tester.drag(
+            find.byType(Dismissible),
+            const Offset(-500, 0),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Rimuovi'));
+          await tester.pumpAndSettle();
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          await tester.pump();
+        });
+
+        final righeRimaste = await db.select(db.scansioni).get();
+        expect(righeRimaste, isEmpty);
+      },
+    );
+
+    testWidgets('"Elimina tutte" rimuove tutte le scansioni (file e righe DB)', (
+      tester,
+    ) async {
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = ComicsRepository(db);
+      final scansioni = scansioniFinte(2);
+      for (final s in scansioni) {
+        await repository.aggiungiScansione(image: s.path);
+      }
+
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        repository: repository,
+        ripresa: true,
+      );
+
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Elimina tutte'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Rimuovi tutte'));
+        await tester.pumpAndSettle();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await tester.pump();
+      });
+
+      expect(find.text('Riepilogo batch'), findsOneWidget);
+      final righeRimaste = await db.select(db.scansioni).get();
+      expect(righeRimaste, isEmpty);
+      for (final s in scansioni) {
+        expect(File(s.path).existsSync(), isFalse);
+      }
+    });
+  });
 }

@@ -2226,6 +2226,45 @@ void main() {
       },
     );
   });
+
+  group('watchImmaginiScansioniNonConfermate (Dashboard, batch in sospeso)', () {
+    test('nessuna Scansione: lista vuota', () async {
+      final immagini = await repo.watchImmaginiScansioniNonConfermate().first;
+      expect(immagini, isEmpty);
+    });
+
+    test(
+      'include le Scansioni senza Copia collegata, in ordine di creazione',
+      () async {
+        await repo.aggiungiScansione(
+          image: 'a.jpg',
+          createdAt: DateTime(2026, 1, 2),
+        );
+        await repo.aggiungiScansione(
+          image: 'b.jpg',
+          createdAt: DateTime(2026, 1, 1),
+        );
+
+        final immagini = await repo.watchImmaginiScansioniNonConfermate().first;
+        expect(immagini, ['b.jpg', 'a.jpg']);
+      },
+    );
+
+    test('esclude le Scansioni già confermate (con una Copia collegata)', () async {
+      final scansioneId = await repo.aggiungiScansione(image: 'confermata.jpg');
+      await repo.aggiungiScansione(image: 'da-confermare.jpg');
+      final operaId = await repo.aggiungiOpera(title: 'Titolo');
+      final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+        scansioneId: scansioneId,
+      );
+
+      final immagini = await repo.watchImmaginiScansioniNonConfermate().first;
+      expect(immagini, ['da-confermare.jpg']);
+    });
+  });
 }
 
 /// Tasso fisso, senza rete — per testare la conversione USD→EUR di

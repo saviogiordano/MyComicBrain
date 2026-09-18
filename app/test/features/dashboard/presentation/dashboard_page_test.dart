@@ -242,4 +242,64 @@ void main() {
       expect(find.byType(Image), findsOneWidget);
     },
   );
+
+  group('batch in sospeso (riapertura del riepilogo, segnalato da utente)', () {
+    testWidgets('nessuna Scansione non confermata: banner assente', (
+      tester,
+    ) async {
+      await pumpDashboard(tester);
+
+      expect(find.textContaining('in sospeso'), findsNothing);
+    });
+
+    testWidgets(
+      'una Scansione non confermata mostra il banner, anche a collezione vuota',
+      (tester) async {
+        await repo.aggiungiScansione(image: 'scansione.jpg');
+
+        await pumpDashboard(tester);
+
+        // Collezione ancora vuota (nessuna Copia): il banner deve comunque
+        // comparire, non solo nello stato "collezione popolata".
+        expect(
+          find.text('È vuota — comincia dalla prima copertina'),
+          findsOneWidget,
+        );
+        expect(find.text('1 scansione in sospeso'), findsOneWidget);
+        expect(
+          find.text('Tocca per riprendere il riconoscimento AI'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('più Scansioni non confermate: conteggio al plurale', (
+      tester,
+    ) async {
+      await repo.aggiungiScansione(image: 'a.jpg');
+      await repo.aggiungiScansione(image: 'b.jpg');
+
+      await pumpDashboard(tester);
+
+      expect(find.text('2 scansioni in sospeso'), findsOneWidget);
+    });
+
+    testWidgets(
+      'una Scansione già confermata (con Copia collegata) non conta',
+      (tester) async {
+        final scansioneId = await repo.aggiungiScansione(image: 'a.jpg');
+        final operaId = await repo.aggiungiOpera(title: 'Titolo');
+        final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+        await repo.aggiungiCopia(
+          edizioneId: edizioneId,
+          status: StatoCopia.posseduta,
+          scansioneId: scansioneId,
+        );
+
+        await pumpDashboard(tester);
+
+        expect(find.textContaining('in sospeso'), findsNothing);
+      },
+    );
+  });
 }

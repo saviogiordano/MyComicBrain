@@ -320,6 +320,16 @@ final StreamProviderFamily<bool, String> scansioneConfermataProvider =
           .watchScansioneConfermata(image);
     });
 
+/// I percorsi immagine delle Scansioni ancora da confermare (nessuna `Copia`
+/// collegata) — usato dalla Dashboard per riproporre un batch lasciato a
+/// metà dopo un'uscita che ha perso lo stato in memoria del riepilogo, vedi
+/// [ComicsRepository.watchImmaginiScansioniNonConfermate].
+final scansioniNonConfermateProvider = StreamProvider<List<String>>((ref) {
+  return ref
+      .watch(comicsRepositoryProvider)
+      .watchImmaginiScansioniNonConfermate();
+});
+
 /// L'esito osservabile dell'Identificazione di una Scansione (§6.3, schermo
 /// di conferma #59), per id — a differenza di [statoAnalisiCopertinaProvider]
 /// (per percorso immagine) usa `scansioneId` perché è la chiave con cui il

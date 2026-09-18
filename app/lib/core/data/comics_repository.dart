@@ -638,6 +638,43 @@ class ComicsRepository {
     });
   }
 
+  /// I percorsi immagine di tutte le Scansioni non ancora confermate (nessuna
+  /// `Copia` che le referenzia, stesso criterio di [watchScansioneConfermata]
+  /// ma per l'intero elenco), in ordine di creazione — usato dalla Dashboard
+  /// per riproporre un batch il cui riepilogo è stato lasciato senza
+  /// confermare tutte le righe (uscita verso la Dashboard, o qualunque altra
+  /// tab, prima di "Vai alla Dashboard": quel riepilogo viveva solo nella
+  /// lista `extra` passata alla rotta, persa non appena la pagina viene
+  /// rimossa dallo stack — segnalato da utente). Ricostruisce da `Scansioni`
+  /// + `AnalisiCopertina`/`Copie`, non da uno stato in memoria: la pipeline
+  /// (`avviaBatch`) scrive comunque su queste tabelle anche a pagina chiusa,
+  /// quindi riflette lo stato reale indipendentemente da quanto tempo fa il
+  /// riepilogo è stato abbandonato.
+  Stream<List<String>> watchImmaginiScansioniNonConfermate() {
+    final query = _db.select(_db.scansioni).join([
+      leftOuterJoin(
+        _db.copie,
+        _db.copie.scansioneId.equalsExp(_db.scansioni.id),
+      ),
+    ])..orderBy([OrderingTerm.asc(_db.scansioni.createdAt)]);
+
+    return query.watch().map((rows) {
+      final confermate = <int>{};
+      final immagini = <int, String>{};
+      for (final row in rows) {
+        final scansione = row.readTable(_db.scansioni);
+        immagini[scansione.id] = scansione.image;
+        if (row.readTableOrNull(_db.copie) != null) {
+          confermate.add(scansione.id);
+        }
+      }
+      return [
+        for (final entry in immagini.entries)
+          if (!confermate.contains(entry.key)) entry.value,
+      ];
+    });
+  }
+
   /// Crea la riga `Identificazione` di una Scansione, in stato `inCorso` —
   /// la pipeline (§6.3, deciso su #53) la crea appena prende in carico la
   /// Scansione dopo il completamento dell'Analisi Copertina, sul modello di

@@ -333,6 +333,34 @@ void main() {
   );
 
   test(
+    'una Scansione cancellata prima che il batch la raggiunga non blocca le successive '
+    '(swipe-to-delete su un batch ripreso resta sicuro, vedi RiepilogoPage.ripresa)',
+    () async {
+      final cancellata = await scansioneConImmagine('cancellata.jpg');
+      final ok = await scansioneConImmagine('ok.jpg');
+      // Simula lo swipe-to-delete: rimuove la riga `Scansioni` senza passare
+      // dal repository di produzione (che vive nell'UI), stesso identico
+      // effetto sul DB.
+      final scansioneId = await repo.idScansionePerImmagine(cancellata);
+      await (db.delete(db.scansioni)..where((s) => s.id.equals(scansioneId))).go();
+
+      final pipeline = AnalisiCopertinaPipeline(
+        repository: repo,
+        client: _FakeCoverAnalysisClient(risultato: _risultatoCompleto),
+      );
+
+      await pipeline.avviaBatch([cancellata, ok]);
+
+      final analisi = await unicaAnalisi();
+      expect(
+        analisi.status,
+        StatoAnalisiCopertina.completata,
+        reason: 'la Scansione ancora presente deve comunque essere elaborata',
+      );
+    },
+  );
+
+  test(
     'la rielaborazione di una Scansione già completata non blocca le Scansioni successive del batch (bug #86)',
     () async {
       // Riproduce il bug segnalato da utente: `ScansionePage` teneva nel

@@ -49,9 +49,20 @@ class AnalisiCopertinaPipeline {
   }
 
   Future<void> _avviaUna(String percorsoImmagine) async {
-    final scansioneId = await _repository.idScansionePerImmagine(
-      percorsoImmagine,
-    );
+    final int scansioneId;
+    try {
+      scansioneId = await _repository.idScansionePerImmagine(percorsoImmagine);
+    } on Object {
+      // La Scansione può essere stata cancellata con lo swipe-to-delete dopo
+      // che questo batch è stato messo in coda ma prima che il `for`
+      // sequenziale di `avviaBatch` la raggiungesse — possibile su un batch
+      // ripreso dalla Dashboard, dove la cancellazione resta sempre
+      // disponibile anche a pipeline già avviata (segnalato da utente, vedi
+      // `RiepilogoPage.ripresa`). Nulla da analizzare: si salta all'elemento
+      // successivo invece di propagare l'eccezione e interrompere l'intero
+      // batch, stesso principio del catch sotto per i fallimenti AI/rete.
+      return;
+    }
     final analisiId = await _repository.avviaAnalisiCopertina(
       scansioneId: scansioneId,
     );

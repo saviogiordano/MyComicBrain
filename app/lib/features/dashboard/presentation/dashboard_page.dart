@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
 import 'package:mycomicbrain/features/dashboard/application/dashboard_providers.dart';
@@ -30,27 +34,142 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final kpisAsync = ref.watch(dashboardKpisProvider);
+    // Fuori da `kpisAsync.when`: un batch in sospeso deve restare
+    // raggiungibile anche a collezione vuota (`_EmptyCollection`, es. primo
+    // batch mai scansionato ancora tutto da confermare) — non solo nello
+    // stato "collezione popolata" (segnalato da utente).
+    final inSospeso =
+        ref.watch(scansioniNonConfermateProvider).valueOrNull ?? const [];
 
     return Scaffold(
       body: SafeArea(
-        child: kpisAsync.when(
-          data: (kpis) => kpis.totaleCopie == 0
-              ? const _EmptyCollection()
-              : _Collection(kpis: kpis),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stackTrace) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Text(
-                'Non è stato possibile caricare la collezione.',
-                textAlign: TextAlign.center,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textTertiary,
+        child: Column(
+          children: [
+            if (inSospeso.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  0,
+                ),
+                child: _BatchInSospesoBanner(percorsi: inSospeso),
+              ),
+            Expanded(
+              child: kpisAsync.when(
+                data: (kpis) => kpis.totaleCopie == 0
+                    ? const _EmptyCollection()
+                    : _Collection(kpis: kpis),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stackTrace) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Text(
+                      'Non è stato possibile caricare la collezione.',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Riapre il riepilogo di un batch lasciato a metà (righe non ancora
+/// confermate — pipeline mai avviata, in corso, completata o fallita) da
+/// `scansioniNonConfermateProvider`: prima di questo banner non c'era modo
+/// di tornarci una volta usciti dalla Dashboard o da un'altra tab
+/// (segnalato da utente — la lista viveva solo nell'`extra` di navigazione
+/// del riepilogo appena lasciato). Nascosto del tutto se vuoto, stesso
+/// criterio delle altre sezioni della Dashboard (#8). Mostra le cover reali
+/// delle scansioni in sospeso, non solo un'icona generica (richiesta utente
+/// dopo test manuale: senza anteprima non si riconosce di che batch si
+/// tratta prima di rientrare nel riepilogo).
+class _BatchInSospesoBanner extends StatelessWidget {
+  const _BatchInSospesoBanner({required this.percorsi});
+
+  final List<String> percorsi;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = percorsi.length;
+    return AppCard(
+      onTap: () => context.push(
+        '/scansione/riepilogo/ripresa',
+        extra: [for (final percorso in percorsi) XFile(percorso)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.hourglass_top_outlined,
+                color: AppColors.amber,
+                size: 20,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  n == 1 ? '1 scansione in sospeso' : '$n scansioni in sospeso',
+                  style: AppTypography.titleMedium.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right, color: AppColors.textMuted),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Tocca per riprendere il riconoscimento AI',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: 64,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: percorsi.length,
+              separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.xs),
+              itemBuilder: (context, i) => ClipRRect(
+                borderRadius: AppRadii.smRadius,
+                child: Image.file(
+                  File(percorsi[i]),
+                  width: 48,
+                  height: 64,
+                  fit: BoxFit.cover,
+                  // Se il file non è più leggibile a questo percorso
+                  // (es. Scansione persistita in una sessione precedente il
+                  // cui storage non è più raggiungibile) un'icona resta
+                  // comunque visibile, invece dello spazio vuoto silenzioso
+                  // di default di `Image` — segnalato da utente dopo test
+                  // manuale.
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 48,
+                    height: 64,
+                    color: AppColors.overlayCard,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: AppColors.textMuted,
+                      size: 20,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -28,11 +28,31 @@ import 'package:mycomicbrain/core/domain/errore_configurazione.dart';
 /// riga si può eliminare con uno swipe (richiesta utente dopo test manuale
 /// #59): dopo "Fine" le righe sono già passate ad `avviaBatch`, e
 /// rimuoverne una a quel punto romperebbe la Scansione che la pipeline
-/// sequenziale si aspetta di trovare — lo swipe viene quindi disabilitato.
+/// sequenziale si aspetta di trovare — lo swipe viene quindi disabilitato
+/// (eccetto su un batch [ripresa], vedi sotto). "Elimina tutte" applica la
+/// stessa regola all'intero batch in un colpo solo (richiesta utente).
 class RiepilogoPage extends ConsumerStatefulWidget {
-  const RiepilogoPage({required this.scansioni, super.key});
+  const RiepilogoPage({
+    required this.scansioni,
+    this.ripresa = false,
+    super.key,
+  });
 
   final List<XFile> scansioni;
+
+  /// True quando il riepilogo è stato riaperto dalla Dashboard per un batch
+  /// lasciato a metà (uscita prima di "Vai alla Dashboard"/"Aggiungi altre")
+  /// invece che dal flusso di scansione appena concluso — vedi
+  /// `scansioniNonConfermateProvider`. Alcune righe possono già avere una
+  /// pipeline avviata in background da quella sessione precedente: lo swipe
+  /// e "Elimina tutte" restano comunque sempre disponibili qui (richiesta
+  /// utente, a differenza del batch appena confermato, dove restano bloccati
+  /// dopo "Fine" — vedi sopra), perché sono sicuri anche in quel caso —
+  /// `AnalisiCopertinaPipeline._avviaUna` salta silenziosamente una
+  /// Scansione cancellata prima di raggiungerla nel `for` sequenziale,
+  /// invece di interrompere il resto del batch (stesso principio del bug
+  /// #86 che il filtro di `_fine` già previene lato invio).
+  final bool ripresa;
 
   @override
   ConsumerState<RiepilogoPage> createState() => _RiepilogoPageState();
@@ -121,8 +141,53 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
     setState(() => _scansioni.remove(scansione));
   }
 
+  Future<bool> _confermaEliminazioneTutte(BuildContext context) async {
+    final conferma = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rimuovere tutte le scansioni?'),
+        content: Text(
+          'Le ${_scansioni.length} foto verranno eliminate e non entreranno '
+          'nel riconoscimento AI.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annulla'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Rimuovi tutte'),
+          ),
+        ],
+      ),
+    );
+    return conferma ?? false;
+  }
+
+  Future<void> _eliminaTutte() async {
+    if (!await _confermaEliminazioneTutte(context) || !mounted) return;
+    final repository = ref.read(comicsRepositoryProvider);
+    final storage = ref.read(scansioneStorageProvider);
+    final daEliminare = List<XFile>.of(_scansioni);
+    for (final scansione in daEliminare) {
+      final scansioneId = await repository.idScansionePerImmagine(
+        scansione.path,
+      );
+      await repository.eliminaScansione(id: scansioneId);
+      await storage.elimina(scansione.path);
+    }
+    if (!mounted) return;
+    setState(() => _scansioni.removeWhere(daEliminare.contains));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final avviato = _avviato;
+    // Su un batch ripreso lo swipe e "Elimina tutte" restano disponibili
+    // anche a pipeline già avviata (richiesta utente) — vedi
+    // `RiepilogoPage.ripresa`.
+    final eliminabile = widget.ripresa || !avviato;
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
       body: SafeArea(
@@ -138,11 +203,22 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Riepilogo batch',
-                    style: AppTypography.titleLarge.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Riepilogo batch',
+                          style: AppTypography.titleLarge.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      if (eliminabile && _scansioni.isNotEmpty)
+                        TextButton(
+                          onPressed: _eliminaTutte,
+                          child: const Text('Elimina tutte'),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
@@ -167,7 +243,7 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                 itemBuilder: (context, i) {
                   final scansione = _scansioni[i];
                   final riga = _RigaScansione(indice: i, scansione: scansione);
-                  if (_avviato) return riga;
+                  if (!eliminabile) return riga;
                   return Dismissible(
                     key: ValueKey(scansione.path),
                     direction: DismissDirection.endToStart,
@@ -190,19 +266,19 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => context.pop(_avviato),
+                      onPressed: () => context.pop(avviato),
                       child: const Text('Aggiungi altre'),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: FilledButton(
-                      onPressed: _avviato
+                      onPressed: avviato
                           ? _vaiAllaDashboard
                           : _scansioni.isEmpty
                           ? null
                           : _fine,
-                      child: Text(_avviato ? 'Vai alla Dashboard' : 'Fine'),
+                      child: Text(avviato ? 'Vai alla Dashboard' : 'Fine'),
                     ),
                   ),
                 ],
@@ -287,6 +363,21 @@ class _RigaScansione extends ConsumerWidget {
               width: 48,
               height: 48,
               fit: BoxFit.cover,
+              // File non più leggibile a questo percorso: icona invece dello
+              // spazio vuoto silenzioso di default di `Image` (segnalato da
+              // utente dopo test manuale, stesso fallback del banner
+              // "in sospeso" della Dashboard).
+              errorBuilder: (context, error, stackTrace) => Container(
+                width: 48,
+                height: 48,
+                color: AppColors.overlayCard,
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: AppColors.textMuted,
+                  size: 18,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: AppSpacing.sm),

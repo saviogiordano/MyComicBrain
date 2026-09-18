@@ -132,6 +132,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             RiepilogoPage(scansioni: state.extra! as List<XFile>),
       ),
+      // Riapertura del riepilogo per un batch lasciato a metà (Dashboard,
+      // segnalato da utente): il riepilogo non persisteva la lista del
+      // batch da nessuna parte raggiungibile una volta uscita dallo stack di
+      // navigazione, quindi non c'era modo di tornarci dopo "Vai alla
+      // Dashboard"/back fisico verso un'altra tab. Stesso schermo di
+      // `/scansione/riepilogo`, ricostruito da `scansioniNonConfermateProvider`
+      // invece che dal batch appena scansionato — vedi `RiepilogoPage.ripresa`.
+      GoRoute(
+        path: '/scansione/riepilogo/ripresa',
+        builder: (context, state) => RiepilogoPage(
+          scansioni: state.extra! as List<XFile>,
+          ripresa: true,
+        ),
+      ),
       // Schermo "Possibile corrispondenza" (§6.3, deciso su #54, implementato
       // su #59): raggiunto dal riepilogo per una Scansione la cui Analisi
       // Copertina è completata.
