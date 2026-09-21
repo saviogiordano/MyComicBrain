@@ -7,6 +7,7 @@ import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/edizione_collezione.dart';
 import 'package:mycomicbrain/features/collezione/application/collezione_providers.dart';
 import 'package:mycomicbrain/features/collezione/application/filtri_collezione_logic.dart';
+import 'package:mycomicbrain/features/collezione/presentation/prototype_selezione_multipla.dart';
 import 'package:mycomicbrain/features/serie/presentation/serie_page.dart';
 
 /// Schermo Collezione (§9, deciso su #90, prototipo visivo validato su #96):
@@ -47,32 +48,54 @@ class _CollezionePageState extends ConsumerState<CollezionePage> {
   Widget build(BuildContext context) {
     final vista = ref.watch(vistaCollezioneProvider);
 
+    // PROTOTIPO throwaway (ticket #164) — `?variant=a|b|c` sostituisce la
+    // vista "Fumetti" con una delle tre varianti di selezione multipla +
+    // azione in blocco "Segna come in vendita". Da rimuovere insieme a
+    // prototype_selezione_multipla.dart una volta scelta una variante — vedi
+    // quel file per il dettaglio.
+    final variante =
+        VariantePrototipo.fromParam(
+          GoRouterState.of(context).uri.queryParameters['variant'],
+        ) ??
+        VariantePrototipo.a;
+
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const _Titolo(),
-                    _VistaToggle(vista: vista),
-                  ],
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const _Titolo(),
+                        _VistaToggle(vista: vista),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: vista == VistaCollezione.serie
+                        ? const SerieListaBody()
+                        : SelezioneMultiplaPrototype(variante: variante),
+                  ),
+                ],
+              ),
+            ),
+            if (vista == VistaCollezione.singoli)
+              PrototypeSwitcher(
+                corrente: variante,
+                onCambia: (v) => context.go(
+                  '/collezione?variant=${v.chiave.toLowerCase()}',
                 ),
               ),
-              Expanded(
-                child: vista == VistaCollezione.serie
-                    ? const SerieListaBody()
-                    : const _ContenutoSingoli(),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
