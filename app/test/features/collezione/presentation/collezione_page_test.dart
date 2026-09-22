@@ -105,9 +105,24 @@ void main() {
     await tester.tap(find.text('Filtri e ordina'));
     await tester.pumpAndSettle();
 
+    expect(find.text('In vendita'), findsOneWidget);
     expect(find.text('Serie'), findsWidgets);
     expect(find.text('Editore'), findsWidgets);
     expect(find.text('Genere'), findsWidgets);
+
+    // Il toggle "In vendita" (§163/§164) aggiunge contenuto in cima al
+    // foglio: il blocco Ordina/Ricorda in fondo richiede ora uno scroll per
+    // diventare visibile in questo viewport di test.
+    for (
+      var i = 0;
+      i < 10 && find.text('Ricorda filtri e ordinamento').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.drag(find.byType(ListView), const Offset(0, -300));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+
     expect(find.text('Ordina per'), findsOneWidget);
     expect(find.text('Ricorda filtri e ordinamento'), findsOneWidget);
   });
@@ -153,4 +168,111 @@ void main() {
     // stessa ragione della card 'con Edizioni possedute' più sopra.
     expect(find.text('E100'), findsWidgets);
   });
+
+  testWidgets(
+    'una copia "in vendita" mostra la fascia "IN VENDITA" sulla card '
+    '(§163/§164)',
+    (tester) async {
+      final edizioneId = await edizionePosseduta(titolo: 'Dylan Dog');
+      final copiaId = (await (db.select(
+        db.copie,
+      )..where((c) => c.edizioneId.equals(edizioneId))).getSingle()).id;
+      await repository.impostaInVendita(id: copiaId, inVendita: true);
+
+      await pumpCollezione(tester);
+
+      expect(find.text('IN VENDITA'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'il pannello Filtri ha un toggle "In vendita" separato dai 12 assi '
+    '(§163/§164)',
+    (tester) async {
+      await edizionePosseduta(titolo: 'Dylan Dog');
+      await pumpCollezione(tester);
+
+      await tester.tap(find.text('Filtri e ordina'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('In vendita'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    '"Seleziona" entra in modalità selezione: il tap su una card la '
+    'seleziona invece di navigare (§164, variante B)',
+    (tester) async {
+      await edizionePosseduta(titolo: 'Dylan Dog');
+      await pumpCollezione(tester);
+
+      await tester.tap(find.text('Seleziona'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('0 selezionati'), findsOneWidget);
+      expect(find.byType(FloatingActionButton), findsNothing);
+
+      await tester.tap(find.text('Dylan Dog').first, warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 selezionati'), findsOneWidget);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(
+        find.text('Scheda'),
+        findsNothing,
+        reason: 'in selezione il tap seleziona, non naviga alla Scheda',
+      );
+    },
+  );
+
+  testWidgets(
+    'confermare l\'azione in blocco chiama segnaEdizioniInVendita e mostra '
+    'il banner di esito (§164, variante B)',
+    (tester) async {
+      final edizioneId = await edizionePosseduta(titolo: 'Dylan Dog');
+      await pumpCollezione(tester);
+
+      await tester.tap(find.text('Seleziona'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dylan Dog').first, warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Segna come in vendita'), findsOneWidget);
+      final rimuovi = tester.widget<ListTile>(
+        find.widgetWithText(ListTile, 'Rimuovi da in vendita'),
+      );
+      expect(rimuovi.enabled, isFalse, reason: 'deliberatamente non implementata');
+
+      await tester.tap(find.text('Segna come in vendita'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confermo'), findsOneWidget);
+
+      await tester.tap(find.text('Confermo'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MaterialBanner), findsOneWidget);
+      expect(
+        find.text('1 edizioni (1 copie) segnate come in vendita'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('0 selezionati'),
+        findsNothing,
+        reason: 'la modalità selezione si chiude dopo la conferma',
+      );
+
+      final riga = await (db.select(
+        db.copie,
+      )..where((c) => c.edizioneId.equals(edizioneId))).getSingle();
+      expect(riga.forSale, isTrue);
+
+      // Smaltisce il timer di auto-dismiss del banner (~4s) prima che il
+      // test termini, altrimenti il binding segnala un timer pendente.
+      await tester.pump(const Duration(seconds: 5));
+    },
+  );
 }

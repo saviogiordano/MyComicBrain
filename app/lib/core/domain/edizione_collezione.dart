@@ -66,6 +66,11 @@ class EdizioneCollezioneIndice {
     final label = issueNumberLabel ?? issueNumber?.toString();
     return label == null ? '' : '#$label';
   }
+
+  /// "In vendita" (§9, deciso su #163/#164): non è uno dei 12 assi, è un
+  /// filtro toggle a sé — stessa regola di cascata "almeno una copia
+  /// posseduta" degli assi per-Copia.
+  bool get inVendita => copiePossedute.any((c) => c.forSale);
 }
 
 /// I soli campi di una Copia posseduta/prestata rilevanti per gli assi
@@ -76,6 +81,7 @@ class CopiaAsseCollezione {
     required this.condition,
     required this.location,
     required this.createdAt,
+    required this.forSale,
   });
 
   final StatoLettura? readingStatus;
@@ -87,6 +93,9 @@ class CopiaAsseCollezione {
   /// nel mese corrente", stesso significato di `Copia.createdAt` per il KPI
   /// omonimo (`watchDashboardKpis`).
   final DateTime createdAt;
+
+  /// "In vendita" (§9, deciso su #163/#164) — alimenta [EdizioneCollezioneIndice.inVendita].
+  final bool forSale;
 }
 
 /// Una riga della finestra caricata dallo scroll infinito della Collezione
@@ -117,4 +126,5 @@ class EdizioneCollezioneFinestra {
   int? get issueNumber => indice.issueNumber;
   int get numeroCopie => indice.numeroCopie;
   String get numeroVisualizzato => indice.numeroVisualizzato;
+  bool get inVendita => indice.inVendita;
 }

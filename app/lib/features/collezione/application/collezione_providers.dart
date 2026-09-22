@@ -62,6 +62,9 @@ class FiltriCollezioneNotifier extends Notifier<FiltriCollezioneState> {
   void impostaOrdinamento(OrdinamentoCollezione ordinamento) =>
       _aggiorna(state.conOrdinamento(ordinamento));
 
+  void impostaSoloInVendita(bool valore) =>
+      _aggiorna(state.conSoloInVendita(valore));
+
   void _aggiorna(FiltriCollezioneState nuovoStato) {
     state = nuovoStato;
     if (ref.read(ricordaFiltriProvider)) {
@@ -231,4 +234,44 @@ class VistaCollezioneNotifier extends Notifier<VistaCollezione> {
 final vistaCollezioneProvider =
     NotifierProvider<VistaCollezioneNotifier, VistaCollezione>(
       VistaCollezioneNotifier.new,
+    );
+
+/// La modalità selezione multipla della Collezione (§9, variante B decisa
+/// su #164) — a sé rispetto ai filtri, non persistita: si azzera ad ogni
+/// apertura dello schermo, come [vistaCollezioneProvider].
+class ModalitaSelezioneNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void attiva() => state = true;
+
+  void disattiva() {
+    state = false;
+    ref.read(edizioniSelezionateProvider.notifier).azzera();
+  }
+}
+
+final modalitaSelezioneProvider =
+    NotifierProvider<ModalitaSelezioneNotifier, bool>(
+      ModalitaSelezioneNotifier.new,
+    );
+
+/// Le Edizioni selezionate mentre [modalitaSelezioneProvider] è attivo (§9,
+/// deciso su #164) — insieme di `edizioneId`, non persistito.
+class EdizioniSelezionateNotifier extends Notifier<Set<int>> {
+  @override
+  Set<int> build() => const {};
+
+  void toggle(int edizioneId) {
+    final selezionati = Set<int>.from(state);
+    if (!selezionati.add(edizioneId)) selezionati.remove(edizioneId);
+    state = selezionati;
+  }
+
+  void azzera() => state = const {};
+}
+
+final edizioniSelezionateProvider =
+    NotifierProvider<EdizioniSelezionateNotifier, Set<int>>(
+      EdizioniSelezionateNotifier.new,
     );

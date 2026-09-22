@@ -291,6 +291,98 @@ void main() {
   );
 
   test(
+    'impostaInVendita scrive solo forSale, lasciando invariati gli altri campi',
+    () async {
+      final edizioneId = await edizione();
+      final copiaId = await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+        readingStatus: StatoLettura.letto,
+        seller: 'Edicola di zona',
+      );
+
+      await repo.impostaInVendita(id: copiaId, inVendita: true);
+
+      final riga = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(riga.forSale, isTrue);
+      expect(riga.status, StatoCopia.posseduta, reason: 'invariato');
+      expect(riga.readingStatus, StatoLettura.letto, reason: 'invariato');
+      expect(riga.seller, 'Edicola di zona', reason: 'invariato');
+
+      await repo.impostaInVendita(id: copiaId, inVendita: false);
+      final rigaSpenta = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(rigaSpenta.forSale, isFalse);
+    },
+  );
+
+  test(
+    'segnaEdizioniInVendita marca solo le copie possedute/prestate delle '
+    'edizioni indicate (§163/§164)',
+    () async {
+      final edizioneA = await edizione();
+      final edizioneB = await edizione();
+      final edizioneC = await edizione();
+
+      final copiaAPosseduta = await repo.aggiungiCopia(
+        edizioneId: edizioneA,
+        status: StatoCopia.posseduta,
+      );
+      final copiaAPrestata = await repo.aggiungiCopia(
+        edizioneId: edizioneA,
+        status: StatoCopia.prestata,
+      );
+      final copiaAVenduta = await repo.aggiungiCopia(
+        edizioneId: edizioneA,
+        status: StatoCopia.venduta,
+      );
+      final copiaB = await repo.aggiungiCopia(
+        edizioneId: edizioneB,
+        status: StatoCopia.posseduta,
+      );
+      final copiaC = await repo.aggiungiCopia(
+        edizioneId: edizioneC,
+        status: StatoCopia.posseduta,
+      );
+
+      final scritte = await repo.segnaEdizioniInVendita([
+        edizioneA,
+        edizioneB,
+      ]);
+
+      expect(scritte, 3, reason: 'copiaAPosseduta + copiaAPrestata + copiaB');
+
+      Future<bool> forSaleDi(int id) async {
+        final riga = await (db.select(
+          db.copie,
+        )..where((c) => c.id.equals(id))).getSingle();
+        return riga.forSale;
+      }
+
+      expect(await forSaleDi(copiaAPosseduta), isTrue);
+      expect(await forSaleDi(copiaAPrestata), isTrue);
+      expect(
+        await forSaleDi(copiaAVenduta),
+        isFalse,
+        reason: 'venduta, non "posseduta"',
+      );
+      expect(await forSaleDi(copiaB), isTrue);
+      expect(
+        await forSaleDi(copiaC),
+        isFalse,
+        reason: 'edizione non indicata nella selezione',
+      );
+    },
+  );
+
+  test('segnaEdizioniInVendita con lista vuota non scrive nulla', () async {
+    expect(await repo.segnaEdizioniInVendita(const []), 0);
+  });
+
+  test(
     'rimuoviCopia rimuove solo la Copia quando ne restano altre',
     () async {
       final edizioneId = await edizione();

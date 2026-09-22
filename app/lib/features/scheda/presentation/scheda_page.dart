@@ -539,6 +539,28 @@ class _SchedaPageState extends ConsumerState<SchedaPage> {
                         child: AppChip(label: voce.label, selected: true),
                       ),
                       const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Switch(
+                            value: copia.forSale,
+                            onChanged: (valore) => ref
+                                .read(comicsRepositoryProvider)
+                                .impostaInVendita(
+                                  id: copia.id,
+                                  inVendita: valore,
+                                ),
+                            activeThumbColor: AppColors.accent,
+                          ),
+                          Text(
+                            'In vendita',
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
                       _campo('Condizione', copia.condition?.label ?? '—'),
                       _campo(
                         'Prezzo',

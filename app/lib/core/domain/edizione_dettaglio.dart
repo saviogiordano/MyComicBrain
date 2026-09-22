@@ -21,6 +21,7 @@ class CopiaDettaglio {
     this.valoreStimato,
     this.valoreStimatoErrorMessage,
     this.valoreStimatoAggiornatoAl,
+    this.forSale = false,
   });
 
   final int id;
@@ -28,6 +29,10 @@ class CopiaDettaglio {
   final StatoLettura? readingStatus;
   final CondizioneCopia? condition;
   final double? purchasePrice;
+
+  /// "In vendita" (§8.4, deciso su #163/#164) — asse a sé come [status]/
+  /// [readingStatus], non un campo personale: escluso da [haDatiPersonali].
+  final bool forSale;
 
   /// Valuta di [purchasePrice] — `null` = EUR (vedi `ValutaPrezzo`).
   final ValutaPrezzo? purchasePriceCurrency;

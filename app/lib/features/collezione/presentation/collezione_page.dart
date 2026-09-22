@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/edizione_collezione.dart';
 import 'package:mycomicbrain/features/collezione/application/collezione_providers.dart';
@@ -46,8 +47,17 @@ class _CollezionePageState extends ConsumerState<CollezionePage> {
   @override
   Widget build(BuildContext context) {
     final vista = ref.watch(vistaCollezioneProvider);
+    final modalitaSelezione = ref.watch(modalitaSelezioneProvider);
+    final selezionati = ref.watch(edizioniSelezionateProvider);
 
     return Scaffold(
+      floatingActionButton: modalitaSelezione && selezionati.isNotEmpty
+          ? FloatingActionButton(
+              onPressed: () => _apriAzioneSelezione(context),
+              backgroundColor: AppColors.accent,
+              child: const Icon(Icons.sell_outlined, color: AppColors.onAccent),
+            )
+          : null,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.only(top: AppSpacing.lg),
@@ -58,16 +68,52 @@ class _CollezionePageState extends ConsumerState<CollezionePage> {
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md,
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const _Titolo(),
-                    _VistaToggle(vista: vista),
-                  ],
-                ),
+                child: modalitaSelezione
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${selezionati.length} selezionati',
+                            style: AppTypography.headline.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => ref
+                                .read(modalitaSelezioneProvider.notifier)
+                                .disattiva(),
+                            child: Text(
+                              'Annulla',
+                              style: AppTypography.labelMedium.copyWith(
+                                color: AppColors.accent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const _Titolo(),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _VistaToggle(vista: vista),
+                              if (vista == VistaCollezione.singoli) ...[
+                                const SizedBox(width: AppSpacing.xs),
+                                const _SelezionaButton(),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
               ),
               Expanded(
-                child: vista == VistaCollezione.serie
+                // La modalità selezione (§9, variante B decisa su #164) ha
+                // senso solo sulla griglia "Fumetti", non sulla vista Serie:
+                // forza quella vista mentre è attiva, indipendentemente da
+                // [vista].
+                child: !modalitaSelezione && vista == VistaCollezione.serie
                     ? const SerieListaBody()
                     : const _ContenutoSingoli(),
               ),
@@ -76,6 +122,67 @@ class _CollezionePageState extends ConsumerState<CollezionePage> {
         ),
       ),
     );
+  }
+
+  /// Apre il foglio dell'azione in blocco "Segna come in vendita" (§9,
+  /// variante B decisa su #164) e, alla conferma, mostra il banner di
+  /// esito in cima alla griglia.
+  Future<void> _apriAzioneSelezione(BuildContext context) async {
+    final edizioneIds = ref.read(edizioniSelezionateProvider);
+    if (edizioneIds.isEmpty) return;
+
+    final indice = ref.read(indiceCollezioneProvider).valueOrNull ?? const [];
+    final numeroCopie = indice
+        .where((e) => edizioneIds.contains(e.edizioneId))
+        .fold<int>(0, (tot, e) => tot + e.copiePossedute.length);
+
+    final scritte = await showModalBottomSheet<int?>(
+      context: context,
+      backgroundColor: AppColors.surfaceRaised,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => _AzioneSelezioneSheet(
+        numeroEdizioni: edizioneIds.length,
+        numeroCopie: numeroCopie,
+        onConferma: () => ref
+            .read(comicsRepositoryProvider)
+            .segnaEdizioniInVendita(edizioneIds.toList()),
+      ),
+    );
+    if (scritte == null) return;
+
+    ref.read(modalitaSelezioneProvider.notifier).disattiva();
+    if (!context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearMaterialBanners();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        backgroundColor: AppColors.surfaceRaised,
+        content: Text(
+          '${edizioneIds.length} edizioni ($scritte copie) segnate come '
+          'in vendita',
+          style: AppTypography.bodyMedium.copyWith(
+            color: AppColors.textPrimary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: messenger.hideCurrentMaterialBanner,
+            child: Text(
+              'Chiudi',
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.accent,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    Future.delayed(const Duration(seconds: 4), () {
+      if (context.mounted) messenger.hideCurrentMaterialBanner();
+    });
   }
 }
 
@@ -188,6 +295,41 @@ class _VistaSegment extends StatelessWidget {
             style: AppTypography.labelMedium.copyWith(
               color: selected ? AppColors.onAccent : AppColors.textMuted,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pulsante dedicato che entra in modalità selezione (§9, variante B decisa
+/// su #164) — l'uscita passa dal pulsante "Annulla" mostrato nell'header al
+/// suo posto mentre la modalità è attiva, non da questo stesso pulsante.
+class _SelezionaButton extends ConsumerWidget {
+  const _SelezionaButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () => ref.read(modalitaSelezioneProvider.notifier).attiva(),
+        borderRadius: AppRadii.pillRadius,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xxs + 2,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.overlayCard,
+            borderRadius: AppRadii.pillRadius,
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: Text(
+            'Seleziona',
+            style: AppTypography.labelMedium.copyWith(
+              color: AppColors.textPrimary,
             ),
           ),
         ),
@@ -341,6 +483,11 @@ class _ChipRow extends ConsumerWidget {
         _RemovableChip(
           label: 'Aggiunti nel mese corrente',
           onRemove: onRimuoviAggiuntiMeseCorrente,
+        ),
+      if (filtri.soloInVendita)
+        _RemovableChip(
+          label: 'In vendita',
+          onRemove: () => notifier.impostaSoloInVendita(false),
         ),
       for (final asse in AsseCollezione.values)
         for (final valore in filtri.valoriSelezionati(asse))
@@ -566,18 +713,26 @@ class _GrigliaState extends ConsumerState<_Griglia> {
   }
 }
 
-class _CardEdizione extends StatelessWidget {
+class _CardEdizione extends ConsumerWidget {
   const _CardEdizione({required this.edizione});
 
   final EdizioneCollezioneFinestra edizione;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final modalitaSelezione = ref.watch(modalitaSelezioneProvider);
+    final selezionata = ref
+        .watch(edizioniSelezionateProvider)
+        .contains(edizione.edizioneId);
     final sottotitolo = edizione.serieName ?? edizione.publisher ?? '';
     final numero = edizione.numeroVisualizzato;
 
     return GestureDetector(
-      onTap: () => context.push('/scheda/${edizione.edizioneId}'),
+      onTap: modalitaSelezione
+          ? () => ref
+              .read(edizioniSelezionateProvider.notifier)
+              .toggle(edizione.edizioneId)
+          : () => context.push('/scheda/${edizione.edizioneId}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -585,14 +740,48 @@ class _CardEdizione extends StatelessWidget {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: ComicCoverImage(
-                    coverImage: edizione.coverImage,
-                    titolo: edizione.titolo,
-                    numero: edizione.issueNumber ?? 0,
-                    etichetta: edizione.numeroVisualizzato,
+                  child: Container(
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      borderRadius: AppRadii.smRadius,
+                      border: modalitaSelezione && selezionata
+                          ? Border.all(color: AppColors.accent, width: 2)
+                          : null,
+                    ),
+                    child: ComicCoverImage(
+                      coverImage: edizione.coverImage,
+                      titolo: edizione.titolo,
+                      numero: edizione.issueNumber ?? 0,
+                      etichetta: edizione.numeroVisualizzato,
+                    ),
                   ),
                 ),
-                if (edizione.numeroCopie > 1)
+                if (modalitaSelezione && !selezionata)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.45),
+                    ),
+                  ),
+                if (!modalitaSelezione && edizione.inVendita)
+                  const Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _InVenditaBand(),
+                  ),
+                // In modalità selezione lo spunta occupa l'angolo in alto a
+                // destra già usato dal badge duplicati (§9, deciso su #93):
+                // durante la selezione il numero di copie non è
+                // l'informazione prioritaria (il foglio dell'azione lo
+                // riepiloga a parte), quindi il badge duplicati è sostituito
+                // dallo spunta invece di essere spostato altrove.
+                if (modalitaSelezione)
+                  Positioned(
+                    top: 5,
+                    right: 5,
+                    child: _SelezioneCheck(selezionata: selezionata),
+                  )
+                else if (edizione.numeroCopie > 1)
                   Positioned(
                     top: 5,
                     right: 5,
@@ -667,6 +856,60 @@ class _DupBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Lo spunta in alto a destra di una card in modalità selezione (§9,
+/// variante B decisa su #164).
+class _SelezioneCheck extends StatelessWidget {
+  const _SelezioneCheck({required this.selezionata});
+
+  final bool selezionata;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 22,
+      height: 22,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selezionata ? AppColors.accent : AppColors.overlayCardHover,
+        border: Border.all(
+          color: selezionata ? AppColors.accent : AppColors.borderStrong,
+          width: 1.5,
+        ),
+      ),
+      child: selezionata
+          ? const Icon(Icons.check, size: 14, color: AppColors.onAccent)
+          : null,
+    );
+  }
+}
+
+/// Fascia "IN VENDITA" sulla card fuori dalla modalità selezione (§9,
+/// deciso su #163/#164) — colore ambra come gli altri segnali di attenzione
+/// della Collezione (badge duplicati), non un colore nuovo.
+class _InVenditaBand extends StatelessWidget {
+  const _InVenditaBand();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      color: AppColors.amberAlpha(0.92),
+      alignment: Alignment.center,
+      child: Text(
+        'IN VENDITA',
+        style: AppTypography.monoLabel.copyWith(
+          color: AppColors.surfaceDeepest,
+          fontSize: 8.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+        ),
       ),
     );
   }
@@ -839,6 +1082,7 @@ class _FiltriSheet extends ConsumerWidget {
                 controller: scrollController,
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                 children: [
+                  const _InVenditaToggleRow(),
                   for (final asse in AsseCollezione.values)
                     _AxisBlock(asse: asse),
                   const _SortBlock(),
@@ -1316,5 +1560,184 @@ class _RicordaToggleRow extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// Il toggle "In vendita" del pannello Filtri (§9, deciso su #163/#164) —
+/// separato visivamente dal loop dei 12 assi in [_FiltriSheet]: non è uno
+/// di loro, è un filtro on/off a sé (stesso trattamento del pre-filtro
+/// "aggiunti nel mese corrente", ma persistito insieme al resto dei
+/// filtri/ordinamento).
+class _InVenditaToggleRow extends ConsumerWidget {
+  const _InVenditaToggleRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final soloInVendita = ref.watch(filtriCollezioneProvider).soloInVendita;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 2),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'In vendita',
+              style: AppTypography.titleMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Switch(
+            value: soloInVendita,
+            activeThumbColor: AppColors.accent,
+            onChanged: (valore) => ref
+                .read(filtriCollezioneProvider.notifier)
+                .impostaSoloInVendita(valore),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Il foglio dell'azione in blocco "Segna come in vendita" (§9, variante B
+/// decisa su #164): mostra prima il menu delle azioni disponibili, poi
+/// espande la conferma nello stesso foglio (non un dialog separato) —
+/// [onConferma] esegue la scrittura e ritorna quante Copie sono state
+/// effettivamente marcate, propagato a [Navigator.pop] come risultato del
+/// foglio.
+class _AzioneSelezioneSheet extends StatefulWidget {
+  const _AzioneSelezioneSheet({
+    required this.numeroEdizioni,
+    required this.numeroCopie,
+    required this.onConferma,
+  });
+
+  final int numeroEdizioni;
+  final int numeroCopie;
+  final Future<int> Function() onConferma;
+
+  @override
+  State<_AzioneSelezioneSheet> createState() => _AzioneSelezioneSheetState();
+}
+
+class _AzioneSelezioneSheetState extends State<_AzioneSelezioneSheet> {
+  bool _mostraConferma = false;
+  bool _confermaInCorso = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: _mostraConferma ? _conferma() : _menu(),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _menu() {
+    return [
+      ListTile(
+        leading: const Icon(Icons.sell_outlined, color: AppColors.accent),
+        title: Text(
+          'Segna come in vendita',
+          style: AppTypography.bodyLarge.copyWith(
+            color: AppColors.textPrimary,
+          ),
+        ),
+        onTap: () => setState(() => _mostraConferma = true),
+      ),
+      // Deliberatamente disabilitata (§9, deciso su #164): l'azione inversa
+      // non è implementata in questo giro, ma resta visibile per segnalare
+      // che è prevista.
+      ListTile(
+        enabled: false,
+        leading: Icon(
+          Icons.remove_shopping_cart_outlined,
+          color: AppColors.textDisabled,
+        ),
+        title: Text(
+          'Rimuovi da in vendita',
+          style: AppTypography.bodyLarge.copyWith(
+            color: AppColors.textDisabled,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _conferma() {
+    final edizioniLabel = widget.numeroEdizioni == 1
+        ? '1 edizione'
+        : '${widget.numeroEdizioni} edizioni';
+    final copieLabel = widget.numeroCopie == 1
+        ? '1 copia posseduta'
+        : '${widget.numeroCopie} copie possedute';
+
+    return [
+      Text(
+        'Segnare come "In vendita" $edizioniLabel ($copieLabel coinvolte)?',
+        style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _confermaInCorso
+                  ? null
+                  : () => Navigator.of(context).pop(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                side: const BorderSide(color: AppColors.borderDefault),
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppRadii.pillRadius,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppSpacing.sm + 1,
+                ),
+              ),
+              child: const Text('Annulla'),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: FilledButton(
+              onPressed: _confermaInCorso
+                  ? null
+                  : () async {
+                      setState(() => _confermaInCorso = true);
+                      final scritte = await widget.onConferma();
+                      if (mounted) Navigator.of(context).pop(scritte);
+                    },
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppRadii.pillRadius,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppSpacing.sm + 1,
+                ),
+              ),
+              child: const Text('Confermo'),
+            ),
+          ),
+        ],
+      ),
+    ];
   }
 }

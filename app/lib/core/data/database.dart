@@ -193,6 +193,11 @@ class Copie extends Table {
   /// una Scansione.
   IntColumn get scansioneId =>
       integer().nullable().references(Scansioni, #id)();
+
+  /// "In vendita" (§9, deciso su #164): l'intenzione del proprietario di
+  /// cedere questa copia — indipendente da [status]/[readingStatus], vedi
+  /// `CONTEXT.md`. Default `false`, nessuna scelta forzata alla creazione.
+  BoolColumn get forSale => boolean().withDefault(const Constant(false))();
 }
 
 /// `Scansione`: una fotografia di cover acquisita e confermata, non ancora
@@ -570,11 +575,14 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from14To15: (m, schema) async {
+        await m.addColumn(schema.copie, schema.copie.forSale);
+      },
       from13To14: (m, schema) async {
         await m.addColumn(schema.copie, schema.copie.purchasePriceCurrency);
         await m.addColumn(schema.copie, schema.copie.valutazione);

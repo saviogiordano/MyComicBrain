@@ -1830,6 +1830,7 @@ ORDER BY p.n
             valoreStimato: valoreStimato?.value,
             valoreStimatoErrorMessage: valoreStimato?.errorMessage,
             valoreStimatoAggiornatoAl: valoreStimato?.completedAt,
+            forSale: copia.forSale,
           );
         }
         final comicCreator = row.readTableOrNull(_db.comicCreator);
@@ -2046,6 +2047,41 @@ ORDER BY p.n
         readingStatus: Value(readingStatus),
         updatedAt: Value(DateTime.now()),
       ),
+    );
+  }
+
+  /// Imposta "In vendita" di una singola Copia (§8.4, deciso su #163/#164)
+  /// — asse a sé come [cambiaStatoCopia]: scrive solo `forSale`, lasciando
+  /// invariati gli altri campi §8.2/§8.3.
+  Future<void> impostaInVendita({required int id, required bool inVendita}) {
+    return (_db.update(
+      _db.copie,
+    )..where((c) => c.id.equals(id))).write(
+      CopieCompanion(
+        forSale: Value(inVendita),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Azione in blocco "Segna come in vendita" dalla Collezione (§9, variante
+  /// B decisa su #164): marca `forSale = true` su tutte le Copie possedute
+  /// (`status` posseduta/prestata, stesso insieme di "copiePossedute"/badge
+  /// duplicati) delle Edizioni indicate — la cascata "un'edizione con più
+  /// copie marca tutte le copie possedute" decisa in fase di destinazione su
+  /// #163. Ritorna il numero di Copie effettivamente scritte, per il
+  /// feedback banner della UI.
+  Future<int> segnaEdizioniInVendita(List<int> edizioneIds) {
+    if (edizioneIds.isEmpty) return Future.value(0);
+    return (_db.update(_db.copie)..where(
+      (c) =>
+          c.edizioneId.isIn(edizioneIds) &
+          c.status.isInValues(const [
+            StatoCopia.posseduta,
+            StatoCopia.prestata,
+          ]),
+    )).write(
+      CopieCompanion(forSale: const Value(true), updatedAt: Value(DateTime.now())),
     );
   }
 
@@ -2306,6 +2342,7 @@ ORDER BY p.n
         condition: copia.condition,
         location: copia.location,
         createdAt: copia.createdAt,
+        forSale: copia.forSale,
       );
     }
 

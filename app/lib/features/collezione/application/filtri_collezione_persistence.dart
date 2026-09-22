@@ -56,6 +56,7 @@ class FiltriCollezionePersistence {
       'secondario': stato.ordinamento.secondario?.name,
       'direzioneSecondario': stato.ordinamento.direzioneSecondario.name,
     },
+    'soloInVendita': stato.soloInVendita,
   };
 
   FiltriCollezioneState _decodifica(Map<String, dynamic> json) {
@@ -82,7 +83,11 @@ class FiltriCollezionePersistence {
           )
         : const OrdinamentoCollezione();
 
-    return FiltriCollezioneState(filtri: filtri, ordinamento: ordinamento);
+    return FiltriCollezioneState(
+      filtri: filtri,
+      ordinamento: ordinamento,
+      soloInVendita: json['soloInVendita'] == true,
+    );
   }
 
   CriterioOrdinamento? _criterioDaNome(Object? nome) {

@@ -39,12 +39,14 @@ void main() {
     StatoLettura? readingStatus,
     CondizioneCopia? condition,
     String? location,
+    bool forSale = false,
   }) {
     return CopiaAsseCollezione(
       readingStatus: readingStatus,
       condition: condition,
       location: location,
       createdAt: DateTime(2026),
+      forSale: forSale,
     );
   }
 
@@ -129,6 +131,55 @@ void main() {
     });
 
     test(
+      'soloInVendita (#163/#164): regola "almeno una copia posseduta"',
+      () {
+        final inVendita = edizione(
+          id: 1,
+          titolo: 'A',
+          copie: [copia(forSale: true), copia()],
+        );
+        final nonInVendita = edizione(
+          id: 2,
+          titolo: 'B',
+          copie: [copia()],
+        );
+
+        const stato = FiltriCollezioneState(soloInVendita: true);
+
+        expect(applicaFiltri([inVendita, nonInVendita], stato), [inVendita]);
+      },
+    );
+
+    test(
+      'soloInVendita si combina in AND con i 12 assi',
+      () {
+        final inVenditaBonelli = edizione(
+          id: 1,
+          titolo: 'A',
+          publisher: 'Bonelli',
+          copie: [copia(forSale: true)],
+        );
+        final inVenditaPanini = edizione(
+          id: 2,
+          titolo: 'B',
+          publisher: 'Panini',
+          copie: [copia(forSale: true)],
+        );
+
+        const stato = FiltriCollezioneState(
+          filtri: {
+            AsseCollezione.editore: {'Bonelli'},
+          },
+          soloInVendita: true,
+        );
+
+        expect(applicaFiltri([inVenditaBonelli, inVenditaPanini], stato), [
+          inVenditaBonelli,
+        ]);
+      },
+    );
+
+    test(
       '"Senza serie" (#94): raggiungibile solo con quel valore esplicito',
       () {
         final conSerie = edizione(
@@ -208,6 +259,16 @@ void main() {
       expect(stato.haFiltriAttivi, isFalse);
     });
 
+    test(
+      'soloInVendita conta per haFiltriAttivi ma non per numeroAssiAttivi',
+      () {
+        const stato = FiltriCollezioneState(soloInVendita: true);
+
+        expect(stato.haFiltriAttivi, isTrue);
+        expect(stato.numeroAssiAttivi, 0);
+      },
+    );
+
     test("azzeraTutti svuota i filtri ma mantiene l'ordinamento", () {
       const ordinamento = OrdinamentoCollezione(
         primario: CriterioOrdinamento.anno,
@@ -216,11 +277,13 @@ void main() {
         filtri: {
           AsseCollezione.editore: {'Bonelli'},
         },
+        soloInVendita: true,
       ).conOrdinamento(ordinamento);
 
       stato = stato.azzeraTutti();
 
       expect(stato.haFiltriAttivi, isFalse);
+      expect(stato.soloInVendita, isFalse);
       expect(stato.ordinamento, ordinamento);
     });
 

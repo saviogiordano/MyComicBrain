@@ -152,6 +152,30 @@ void main() {
     });
 
     test(
+      'al cambio di soloInVendita (§163/§164), torna a una pagina',
+      () async {
+        await aggiungiEdizioniPossedute(150, prefisso: 'Bonelli');
+        await container.read(indiceCollezioneProvider.future);
+        container
+            .read(numeroCaricatiCollezioneProvider.notifier)
+            .caricaAltro();
+        expect(
+          container.read(numeroCaricatiCollezioneProvider),
+          2 * dimensionePaginaCollezione,
+        );
+
+        container
+            .read(filtriCollezioneProvider.notifier)
+            .impostaSoloInVendita(true);
+
+        expect(
+          container.read(numeroCaricatiCollezioneProvider),
+          dimensionePaginaCollezione,
+        );
+      },
+    );
+
+    test(
       'al cambio di soloAggiuntiMeseCorrenteProvider, torna a una pagina',
       () async {
         await aggiungiEdizioniPossedute(150);
@@ -318,5 +342,60 @@ void main() {
         );
       },
     );
+  });
+
+  group('soloInVendita (§163/§164)', () {
+    test('filtra edizioniVisibiliProvider e viene persistito', () async {
+      final conVendita = await edizionePosseduta('In vendita');
+      final copiaConVendita = await (db.select(
+        db.copie,
+      )..where((c) => c.edizioneId.equals(conVendita))).getSingle();
+      await repository.impostaInVendita(
+        id: copiaConVendita.id,
+        inVendita: true,
+      );
+      await edizionePosseduta('Non in vendita');
+
+      container.read(filtriCollezioneProvider.notifier).impostaSoloInVendita(
+        true,
+      );
+      await container.read(indiceCollezioneProvider.future);
+
+      final visibili = container.read(edizioniVisibiliProvider).valueOrNull!;
+      expect(visibili.map((e) => e.edizioneId), [conVendita]);
+
+      final persistito = container
+          .read(filtriCollezionePersistenceProvider)
+          .leggiStato();
+      expect(persistito?.soloInVendita, isTrue);
+    });
+  });
+
+  group('modalitaSelezioneProvider/edizioniSelezionateProvider (§164)', () {
+    test('attiva/disattiva e toggle della selezione', () {
+      expect(container.read(modalitaSelezioneProvider), isFalse);
+      expect(container.read(edizioniSelezionateProvider), isEmpty);
+
+      container.read(modalitaSelezioneProvider.notifier).attiva();
+      expect(container.read(modalitaSelezioneProvider), isTrue);
+
+      container.read(edizioniSelezionateProvider.notifier).toggle(1);
+      container.read(edizioniSelezionateProvider.notifier).toggle(2);
+      expect(container.read(edizioniSelezionateProvider), {1, 2});
+
+      container.read(edizioniSelezionateProvider.notifier).toggle(1);
+      expect(container.read(edizioniSelezionateProvider), {2});
+    });
+
+    test('disattiva azzera anche la selezione', () {
+      container.read(modalitaSelezioneProvider.notifier).attiva();
+      container.read(edizioniSelezionateProvider.notifier).toggle(1);
+      expect(container.read(edizioniSelezionateProvider), {1});
+
+      container.read(modalitaSelezioneProvider.notifier).disattiva();
+
+      expect(container.read(modalitaSelezioneProvider), isFalse);
+      expect(container.read(edizioniSelezionateProvider), isEmpty);
+    });
   });
 }

@@ -202,6 +202,32 @@ void main() {
   );
 
   testWidgets(
+    'lo switch "In vendita" chiama impostaInVendita (§163/§164)',
+    (tester) async {
+      final edizioneId = await operaEdizione(titolo: 'Batman');
+      final copiaId = await repository.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+
+      await pumpScheda(tester, edizioneId: edizioneId);
+
+      final switchFinder = find.byType(Switch);
+      expect(switchFinder, findsOneWidget);
+      expect(tester.widget<Switch>(switchFinder).value, isFalse);
+
+      await tester.tap(switchFinder);
+      await tester.pumpAndSettle();
+
+      final riga = await (db.select(
+        db.copie,
+      )..where((c) => c.id.equals(copiaId))).getSingle();
+      expect(riga.forSale, isTrue);
+      expect(tester.widget<Switch>(switchFinder).value, isTrue);
+    },
+  );
+
+  testWidgets(
     "rimuovere l'ultima Copia elimina anche l'Edizione e torna indietro",
     (
       tester,
