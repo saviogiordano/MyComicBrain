@@ -49,3 +49,7 @@ app/**/*.db
 app/**/*.sqlite
 app/**/*.sqlite3
 app/tool/cover_analysis_config.json
+.env
+.env.*
+*.p8
+/keys/

@@ -189,7 +189,9 @@ TOTAL_STAGES=6
 # GitHub issue #156 ("Task — attivare Apple Developer Program e configurare
 # Sign in with Apple", child del wayfinder map #149) chiede questi valori
 # fuori dal repo: usiamo un env file dedicato in home, non l'.env di progetto.
-ENV_FILE="${ENV_FILE:-$HOME/.mycomicbrain-apple-signin.env}"
+# Assegnazione diretta (non ${ENV_FILE:-...}): la libreria sopra ha già
+# valorizzato ENV_FILE a ".env", quindi un fallback qui non scatterebbe mai.
+ENV_FILE="$HOME/.mycomicbrain-apple-signin.env"
 KEY_DIR="${KEY_DIR:-$HOME/.mycomicbrain-secrets/apple-signin}"
 DEFAULT_BUNDLE_ID="com.saviogiordano.mycomicbrain.mycomicbrain"
 
