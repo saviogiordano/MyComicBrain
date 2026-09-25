@@ -53,3 +53,6 @@ app/tool/cover_analysis_config.json
 .env.*
 *.p8
 /keys/
+
+# Prototipi Flutter
+prototype/**/build/
