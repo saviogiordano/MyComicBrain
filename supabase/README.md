@@ -27,3 +27,10 @@ supabase link --project-ref ojfwicezfctlwpouudsa   # chiede la password del DB
 supabase db push --dry-run                          # mostra le migrazioni da applicare
 supabase db push
 ```
+
+## Provider di login
+
+Si configurano dal dashboard, non con `supabase config push`, che sovrascriverebbe tutta la configurazione Auth remota con quella di `config.toml`. Le wizard guidano i passi manuali e salvano gli identificatori in un env file in home, fuori dal repo:
+
+- `scripts/setup-apple-signin.sh`: Sign in with Apple (`~/.mycomicbrain-apple-signin.env`).
+- `scripts/setup-google-signin.sh`: Google Sign-In (`~/.mycomicbrain-google-signin.env`). Rilanciala quando esisterà la chiave di release Android, per aggiungere il relativo client.
