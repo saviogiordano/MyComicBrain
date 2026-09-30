@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,7 +29,32 @@ final esportazioneServiceProvider = Provider<EsportazioneService>(
 /// CSV/JSON/Excel condividono schema/granularità; il PDF/catalogo
 /// stampabile ha un layout suo (variante C, deciso su #141) e una
 /// consegna diversa — vedi [EsportazioneService.esporta].
-enum FormatoEsportazione { csv, json, excel, pdf }
+enum FormatoEsportazione {
+  csv('CSV'),
+  json('JSON'),
+  excel('Excel'),
+  pdf('PDF');
+
+  const FormatoEsportazione(this.label);
+
+  /// Nome mostrato all'utente (es. nella dialog di attesa dell'export).
+  final String label;
+}
+
+/// Un export già generato in memoria, pronto per [EsportazioneService.condividi]:
+/// separato dalla consegna così la UI può chiudere la dialog di attesa
+/// prima che si apra lo share sheet di sistema.
+class EsportazionePronta {
+  const EsportazionePronta({
+    required this.formato,
+    required this.bytes,
+    required this.nomeFile,
+  });
+
+  final FormatoEsportazione formato;
+  final Uint8List bytes;
+  final String nomeFile;
+}
 
 extension _EstensioneFormato on FormatoEsportazione {
   String get estensione => switch (this) {
@@ -48,8 +75,9 @@ const _fontMono = 'assets/fonts/IBMPlexMono-Regular.ttf';
 /// Impostazioni). CSV/JSON/Excel (deciso su
 /// [#139](https://github.com/saviogiordano/MyComicBrain/issues/139)/
 /// [#140](https://github.com/saviogiordano/MyComicBrain/issues/140))
-/// condividono lo stesso schema e vengono consegnati via lo share sheet di
-/// sistema (`share_plus`); il PDF/catalogo stampabile (layout deciso su
+/// condividono lo stesso schema e vengono consegnati come zip (file dati +
+/// cover in `copertine/`) via lo share sheet di sistema (`share_plus`); il
+/// PDF/catalogo stampabile (layout deciso su
 /// [#141](https://github.com/saviogiordano/MyComicBrain/issues/141)) ha
 /// riga/query proprie (con cover) e passa dallo share sheet via `printing`
 /// invece che da un file temporaneo scritto a mano — stesso risultato per
@@ -61,51 +89,94 @@ class EsportazioneService {
 
   final ComicsRepository _repository;
 
-  Future<void> esporta(FormatoEsportazione formato) {
-    if (formato == FormatoEsportazione.pdf) return _esportaPdf();
-    return _esportaFile(formato);
+  /// Genera e consegna in un colpo solo — equivalente a [prepara] seguito da
+  /// [condividi].
+  Future<void> esporta(FormatoEsportazione formato) async {
+    await condividi(await prepara(formato));
   }
 
-  Future<void> _esportaFile(FormatoEsportazione formato) async {
-    final righe = await _repository.tutteLeCopiePerEsportazione();
-
-    final directory = await getTemporaryDirectory();
-    final nomeFile = _nomeFile(formato);
-    final percorso = p.join(directory.path, nomeFile);
-    final File file;
-    switch (formato) {
-      case FormatoEsportazione.csv:
-        file = await File(
-          percorso,
-        ).writeAsString(generaCsvEsportazione(righe));
-      case FormatoEsportazione.json:
-        file = await File(
-          percorso,
-        ).writeAsString(generaJsonEsportazione(righe));
-      case FormatoEsportazione.excel:
-        file = await File(
-          percorso,
-        ).writeAsBytes(generaExcelEsportazione(righe));
-      case FormatoEsportazione.pdf:
-        throw UnsupportedError('Il PDF passa da _esportaPdf');
+  /// Genera l'export in memoria: lo zip (file dati + cover) per
+  /// CSV/JSON/Excel, il PDF/catalogo stampabile per [FormatoEsportazione.pdf].
+  Future<EsportazionePronta> prepara(FormatoEsportazione formato) async {
+    final nomeBase = _nomeBase();
+    if (formato == FormatoEsportazione.pdf) {
+      return EsportazionePronta(
+        formato: formato,
+        bytes: await _generaPdf(),
+        nomeFile: '$nomeBase.${formato.estensione}',
+      );
     }
-
-    await SharePlus.instance.share(
-      ShareParams(files: [XFile(file.path)], fileNameOverrides: [nomeFile]),
+    return EsportazionePronta(
+      formato: formato,
+      bytes: await _generaZip(formato, nomeBase),
+      nomeFile: '$nomeBase.zip',
     );
   }
 
-  Future<void> _esportaPdf() async {
+  /// Consegna un export già generato tramite lo share sheet di sistema: il
+  /// PDF via `printing`, lo zip via un file temporaneo e `share_plus`.
+  Future<void> condividi(EsportazionePronta esportazione) async {
+    if (esportazione.formato == FormatoEsportazione.pdf) {
+      await Printing.sharePdf(
+        bytes: esportazione.bytes,
+        filename: esportazione.nomeFile,
+      );
+      return;
+    }
+
+    final directory = await getTemporaryDirectory();
+    final file = await File(
+      p.join(directory.path, esportazione.nomeFile),
+    ).writeAsBytes(esportazione.bytes);
+
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        fileNameOverrides: [esportazione.nomeFile],
+      ),
+    );
+  }
+
+  /// CSV/JSON/Excel: uno zip con il file dati alla radice e le cover sotto
+  /// `copertine/`, colonna "Copertina" col percorso del file nello zip.
+  Future<Uint8List> _generaZip(
+    FormatoEsportazione formato,
+    String nomeBase,
+  ) async {
+    final righe = await _repository.tutteLeCopiePerEsportazione();
+    final copertine = await raccogliCopertineEsportazione(righe);
+    final fileCopertine = copertine.fileCopertine;
+
+    final List<int> bytesDati = switch (formato) {
+      FormatoEsportazione.csv => utf8.encode(
+        generaCsvEsportazione(righe, fileCopertine: fileCopertine),
+      ),
+      FormatoEsportazione.json => utf8.encode(
+        generaJsonEsportazione(righe, fileCopertine: fileCopertine),
+      ),
+      FormatoEsportazione.excel => generaExcelEsportazione(
+        righe,
+        fileCopertine: fileCopertine,
+      ),
+      FormatoEsportazione.pdf => throw UnsupportedError(
+        'Il PDF passa da _generaPdf',
+      ),
+    };
+
+    return generaZipEsportazione(
+      nomeFileDati: '$nomeBase.${formato.estensione}',
+      bytesDati: bytesDati,
+      copertine: copertine.bytesPerFile,
+    );
+  }
+
+  Future<Uint8List> _generaPdf() async {
     final righe = await _repository.tutteLeCopiePerCatalogoStampabile();
-    final bytes = await generaPdfCatalogoStampabile(
+    return generaPdfCatalogoStampabile(
       righe,
       fontRegular: await _caricaFont(_fontTitoli),
       fontBold: await _caricaFont(_fontTitoli),
       fontMono: await _caricaFont(_fontMono),
-    );
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: _nomeFile(FormatoEsportazione.pdf),
     );
   }
 
@@ -114,7 +185,6 @@ class EsportazioneService {
     return pw.Font.ttf(data);
   }
 
-  String _nomeFile(FormatoEsportazione formato) =>
-      'mycomicbrain_collezione_'
-      '${DateTime.now().millisecondsSinceEpoch}.${formato.estensione}';
+  String _nomeBase() =>
+      'mycomicbrain_collezione_${DateTime.now().millisecondsSinceEpoch}';
 }

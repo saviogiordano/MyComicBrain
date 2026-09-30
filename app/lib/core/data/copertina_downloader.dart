@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -83,4 +84,23 @@ class CopertinaDownloader {
     final salvato = await sorgente.copy(destPath);
     return salvato.path;
   }
+
+  /// Salva i byte di una cover già in memoria (import da zip, §16) in
+  /// `<ApplicationSupportDirectory>/copertine/`, stesso schema di
+  /// [salvaLocale]. Il contatore evita collisioni di nome quando l'import
+  /// salva molte cover nello stesso istante.
+  Future<String> salvaBytes(Uint8List bytes, {String estensione = 'jpg'}) async {
+    final base = await _baseDirectory();
+    final dir = Directory(p.join(base.path, _cartellaCopertine));
+    await dir.create(recursive: true);
+
+    final destPath = p.join(
+      dir.path,
+      '${DateTime.now().microsecondsSinceEpoch}_${_contatore++}.$estensione',
+    );
+    final file = await File(destPath).writeAsBytes(bytes);
+    return file.path;
+  }
+
+  static var _contatore = 0;
 }
