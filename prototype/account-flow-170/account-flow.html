@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prototipo flusso account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!--
+  PROTOTIPO THROWAWAY — ticket #170 (mappa #165). Non è codice di produzione.
+  Domanda: come appare e si comporta l'esperienza di account (ingresso, conferma
+  email, account in Impostazioni, prompt di importazione ADR-0005, offline)?
+  Apri il file con doppio click. Varianti condivisibili via URL:
+  ?ingresso=A|B|C&email=A|B&import=A|B&offline=A|B
+-->
+<style>
+:root{
+  --deep:#08090A;--base:#0E1113;--raised:#141A1D;--card:rgba(255,255,255,.02);
+  --b1:rgba(255,255,255,.06);--b2:rgba(255,255,255,.08);--b3:rgba(255,255,255,.14);
+  --t:#F2F4F5;--t2:rgba(242,244,245,.6);--t3:rgba(242,244,245,.5);--t4:rgba(242,244,245,.34);
+  --accent:#22B8CF;--amber:#E9A23B;--red:#E5484D;
+  --pbg:#F6F5F2;--pfg:#1B1D1F;--pmuted:#6B6F73;--pline:#E3E1DC;--pacc:#0E7C8C;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--pbg);color:var(--pfg);font:14px/1.5 'Space Grotesk',system-ui,sans-serif}
+.wrap{display:grid;grid-template-columns:420px 1fr;gap:32px;max-width:1320px;margin:0 auto;padding:28px 24px 60px}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
+.lead{color:var(--pmuted);margin:0 0 20px;max-width:760px}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;background:#1B1D1F;color:#F6F5F2;padding:2px 8px;border-radius:99px;margin-bottom:8px}
+
+/* ── phone ── */
+.phone{position:sticky;top:20px;width:390px;height:800px;border-radius:52px;background:#000;padding:12px;box-shadow:0 30px 60px rgba(0,0,0,.25)}
+.screen{position:relative;width:100%;height:100%;border-radius:42px;overflow:hidden;background:linear-gradient(180deg,#0E1113,#0A0C0D);color:var(--t)}
+.island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:110px;height:32px;border-radius:20px;background:#000;z-index:50}
+.status{position:absolute;top:0;left:0;right:0;height:52px;display:flex;justify-content:space-between;align-items:center;padding:6px 30px 0;font-size:13px;font-weight:600;z-index:40}
+.sc{position:absolute;inset:0;padding:64px 22px 26px;display:flex;flex-direction:column;overflow:auto}
+.sc.between{justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px}
+.logo i{width:26px;height:26px;border-radius:7px;background:var(--accent);display:flex;align-items:center;justify-content:center;font:700 13px 'Space Grotesk';color:var(--deep);font-style:normal}
+.logo b{font-weight:600;font-size:15px}
+.h{font:600 28px/1.1 'Space Grotesk';letter-spacing:-.025em;margin:22px 0 10px}
+.h2{font:600 21px/1.2 'Space Grotesk';letter-spacing:-.02em;margin:0 0 8px}
+.p{color:var(--t3);font-size:13.5px;line-height:1.6;margin:0}
+.small{color:var(--t4);font-size:11px;line-height:1.5;text-align:center}
+.btn{height:50px;border-radius:15px;display:flex;align-items:center;justify-content:center;gap:8px;font:600 15px 'Space Grotesk';cursor:pointer;border:0;width:100%;color:var(--t);background:transparent}
+.btn.pri{background:var(--accent);color:var(--deep)}
+.btn.out{border:1px solid var(--b3);font-weight:500}
+.btn.white{background:#fff;color:#000}
+.btn.ghost{height:40px;font-weight:500;color:var(--t2)}
+.btn.danger{background:var(--red);color:#fff}
+.btn.link{height:auto;padding:6px;color:var(--accent);font-weight:500;font-size:13.5px}
+.btn[disabled]{opacity:.35;cursor:not-allowed}
+.stack{display:flex;flex-direction:column;gap:10px}
+.div{display:flex;align-items:center;gap:10px;color:var(--t4);font-size:11.5px}
+.div:before,.div:after{content:"";flex:1;height:1px;background:var(--b2)}
+.field{height:48px;border-radius:13px;border:1px solid var(--b2);background:var(--card);display:flex;align-items:center;padding:0 14px;color:var(--t2);font-size:14px}
+.seg{display:flex;background:var(--card);border:1px solid var(--b2);border-radius:12px;padding:3px}
+.seg span{flex:1;text-align:center;padding:7px;border-radius:9px;font-size:13px;color:var(--t3);cursor:pointer}
+.seg span.on{background:rgba(255,255,255,.08);color:var(--t)}
+.card{border:1px solid var(--b2);border-radius:14px;background:var(--card);padding:14px}
+.card.acc{border-color:rgba(34,184,207,.35);background:rgba(34,184,207,.06)}
+.card.amb{border-color:rgba(233,162,59,.35);background:rgba(233,162,59,.07)}
+.back{color:var(--t2);font-size:14px;cursor:pointer;margin-bottom:14px}
+.row{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-bottom:1px solid var(--b1);font-size:14px}
+.row:last-child{border-bottom:0}
+.row .v{color:var(--t3);font-size:13px}
+.row.click{cursor:pointer}
+.group{border:1px solid var(--b2);border-radius:14px;background:var(--card);overflow:hidden}
+.gl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--t4);margin:18px 4px 8px}
+.appbody{position:absolute;inset:0;padding:60px 18px 96px;overflow:auto}
+.nav{position:absolute;left:0;right:0;bottom:0;height:84px;border-top:1px solid var(--b1);background:rgba(14,17,19,.96);display:flex;justify-content:space-around;padding-top:10px;font-size:10.5px;color:var(--t4);z-index:20}
+.nav div{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+.nav div.on{color:var(--accent)}
+.nav .ic{width:22px;height:22px;border-radius:6px;border:1.5px solid currentColor}
+.kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.kpi .card b{display:block;font:500 22px 'Space Grotesk';color:var(--accent)}
+.kpi .card span{font-size:11.5px;color:var(--t3)}
+.banner{margin:-4px 0 12px;padding:9px 12px;border-radius:11px;font-size:12.5px;display:flex;gap:8px;align-items:center}
+.banner.off{background:rgba(233,162,59,.12);color:var(--amber)}
+.banner.acc{background:rgba(34,184,207,.1);color:var(--accent)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:99px;font-size:11.5px;border:1px solid var(--b2);color:var(--t2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--t4)}
+.dot.on{background:#3DD68C}.dot.off{background:var(--amber)}
+.avatar{width:42px;height:42px;border-radius:50%;background:rgba(34,184,207,.18);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:600}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:30;display:flex;flex-direction:column;justify-content:flex-end}
+.scrim.center{justify-content:center;padding:28px}
+.sheet{background:var(--raised);border-radius:24px 24px 0 0;padding:10px 20px 30px;border-top:1px solid var(--b2)}
+.sheet .grab{width:38px;height:5px;border-radius:3px;background:var(--b3);margin:0 auto 16px}
+.dialog{background:var(--raised);border-radius:20px;padding:20px;border:1px solid var(--b2)}
+.bar{height:8px;border-radius:4px;background:var(--b2);overflow:hidden;margin:18px 0 10px}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .4s}
+.steps{display:flex;flex-direction:column;gap:9px;margin-top:10px;font-size:13.5px}
+.steps div{display:flex;gap:10px;align-items:center;color:var(--t3)}
+.steps div.done{color:var(--t)}
+.steps div.now{color:var(--accent)}
+.bigic{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;background:rgba(34,184,207,.12);color:var(--accent);margin-bottom:18px}
+.bigic.amb{background:rgba(233,162,59,.12);color:var(--amber)}
+.bigic.red{background:rgba(229,72,77,.14);color:var(--red)}
+.toast{position:absolute;left:18px;right:18px;bottom:100px;background:#F2F4F5;color:#08090A;border-radius:12px;padding:11px 14px;font-size:13px;z-index:60}
+.off-screen{display:flex;align-items:center;justify-content:center;height:100%;color:var(--t4);font-size:13px;flex-direction:column;gap:12px;text-align:center;padding:30px}
+ul.cons{margin:10px 0 0;padding-left:18px;color:var(--t2);font-size:13.5px;line-height:1.7}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--t2);cursor:pointer;margin:16px 0}
+.check i{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--b3);flex:none;font-style:normal;display:flex;align-items:center;justify-content:center;font-size:13px}
+.check i.on{background:var(--accent);border-color:var(--accent);color:var(--deep)}
+
+/* ── panel ── */
+.panel section{background:#fff;border:1px solid var(--pline);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+.panel h3{margin:0 0 10px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--pmuted)}
+.state{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:13px}
+.state .k{color:var(--pmuted)}
+.state .kv{display:flex;justify-content:space-between;gap:10px;padding:3px 6px;border-radius:6px}
+.state .kv.chg{background:#FFF1C9}
+.state .sub{grid-column:1/-1;font-weight:600;margin-top:8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--pfg)}
+.changed{margin-top:10px;font-size:12.5px;color:var(--pmuted)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.pb{border:1px solid var(--pline);background:#fff;border-radius:10px;padding:7px 11px;font:500 13px 'Space Grotesk';cursor:pointer;color:var(--pfg)}
+.pb:hover{border-color:var(--pacc)}
+.pb.on{background:var(--pacc);border-color:var(--pacc);color:#fff}
+.pb[disabled]{opacity:.35;cursor:not-allowed}
+.vars{display:grid;grid-template-columns:130px 1fr;gap:10px 14px;align-items:start;font-size:13px}
+.vars .desc{grid-column:2;color:var(--pmuted);font-size:12.5px;margin-top:-4px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.tabs span{padding:6px 10px;border-radius:9px;font-size:12.5px;cursor:pointer;border:1px solid var(--pline)}
+.tabs span.on{background:#1B1D1F;color:#fff;border-color:#1B1D1F}
+.wdesc{color:var(--pmuted);font-size:13px;margin:0 0 12px}
+.wsteps{display:flex;flex-direction:column;gap:6px}
+.wsteps button{text-align:left}
+.wsteps button.done{background:#EEF7F8;border-color:#BFE3E8;color:var(--pmuted)}
+.qs{margin:0;padding-left:18px;font-size:13px;line-height:1.6}
+.qs li{margin-bottom:6px}
+code{font-size:12px;background:#F0EFEB;padding:1px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div><div class="phone"><div class="screen" id="phone"></div></div></div>
+  <div class="panel">
+    <span class="tag">Prototipo throwaway · #170</span>
+    <h1>Flusso di accesso, account e prompt di importazione</h1>
+    <p class="lead">Prova l'esperienza di account dell'app: primo avvio, scelta fra Modalità locale e account, conferma email, sezione Account in Impostazioni, logout ed eliminazione, prompt di importazione di ADR-0005 (con errore e nuovo tentativo) e cosa vede un Profilo autenticato senza rete. Tutto è simulato in memoria, senza backend. Le varianti a confronto sono qui sotto.</p>
+
+    <section>
+      <h3>Varianti</h3>
+      <div class="vars" id="vars"></div>
+    </section>
+
+    <section>
+      <h3>Percorsi guidati</h3>
+      <div class="tabs" id="wtabs"></div>
+      <p class="wdesc" id="wdesc"></p>
+      <div class="wsteps" id="wsteps"></div>
+    </section>
+
+    <section>
+      <h3>Stato</h3>
+      <div class="state" id="state"></div>
+      <div class="changed" id="changed"></div>
+    </section>
+
+    <section>
+      <h3>Azioni libere</h3>
+      <div class="btns" id="free"></div>
+    </section>
+
+    <section>
+      <h3>Domande su cui reagire</h3>
+      <ol class="qs">
+        <li><b>Ingresso</b>: quale delle tre porte (A/B/C)? Negli avvii successivi in Modalità locale l'app entra diretta e non mostra più il benvenuto: va bene?</li>
+        <li><b>Dopo il logout</b>: ADR-0005 dice che, dopo la prima autenticazione, la Modalità locale su quel dispositivo si esaurisce, quindi il benvenuto mostra solo le opzioni di accesso. È quello che vuoi, o "continua senza account" deve tornare disponibile (con un drift vuoto)?</li>
+        <li><b>Conferma email</b>: schermata di attesa bloccante (A) o si torna a usare l'app in Modalità locale con un avviso (B)?</li>
+        <li><b>Prompt di importazione</b>: schermata intera (A) o sheet sopra la Dashboard (B)? Il rifiuto chiede una seconda conferma perché è distruttivo.</li>
+        <li><b>Importazione fallita</b>: oltre a "Riprova" c'è "Esci e riprova più tardi", che fa logout, conserva i dati locali e torna alla Modalità locale. La Modalità locale si esaurisce solo quando l'importazione riesce o viene rifiutata. D'accordo?</li>
+        <li><b>Offline con account</b>: blocco a schermo intero (A) o app visibile con banner e contenuti non caricabili (B)?</li>
+        <li><b>Elimina account</b>: una schermata con le conseguenze, una spunta "Ho capito" e un pulsante rosso. Basta, o serve anche digitare ELIMINA? Senza rete l'azione è disabilitata.</li>
+      </ol>
+    </section>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   MODULO LOGICO — puro, nessun DOM. È la parte trasferibile in
+   SessionNotifier / nel coordinatore di autenticazione+importazione.
+   ═══════════════════════════════════════════════════════════════════════ */
+const AccountFlow = (() => {
+  const APPLE_EMAIL = 'x7k2m9@privaterelay.appleid.com';
+  const GOOGLE_EMAIL = 'mario.rossi@gmail.com';
+  const EMAIL = 'mario@example.com';
+
+  const initial = (config) => ({
+    config, // varianti: { ingresso, email, import, offline }
+    device: {
+      running: true,
+      firstLaunchDone: false,     // l'utente ha già superato il benvenuto
+      localModeExhausted: false,  // ADR-0005: dopo la prima autenticazione riuscita
+      local: { comics: 0, scans: 0 },
+      online: true,
+      session: null,              // { email, provider } — persistita (secure storage)
+      pendingEmail: null,         // registrazione email in attesa di conferma
+    },
+    cloud: { accounts: {} },      // email → { provider, confirmed, comics }
+    sim: { importFails: false, existingElsewhere: false },
+    ui: { screen: 'welcome', tab: 'home', overlay: null, authMode: 'signup',
+          importJob: null, toast: null, error: null, deleteAck: false,
+          ingressoBDismissed: false },
+  });
+
+  const clone = (s) => JSON.parse(JSON.stringify(s));
+  const hasLocalData = (d) => d.local.comics + d.local.scans > 0;
+
+  // Dove atterra l'app a un avvio a freddo.
+  function route(s) {
+    const d = s.device;
+    if (d.session) {
+      if (hasLocalData(d) && !d.localModeExhausted) return 'import-prompt'; // importazione mai completata → si riprende
+      return 'app';
+    }
+    if (d.pendingEmail && s.config.email === 'A') return 'email-pending';
+    if (d.localModeExhausted) return 'welcome';        // solo opzioni di accesso
+    if (d.firstLaunchDone) return 'app';               // Modalità locale, entra diretta
+    return 'welcome';
+  }
+
+  function afterAuth(s, email, provider) {
+    const d = s.device;
+    d.session = { email, provider };
+    d.pendingEmail = null;
+    d.firstLaunchDone = true;
+    s.ui.overlay = null; s.ui.error = null;
+    if (hasLocalData(d) && !d.localModeExhausted) {
+      s.ui.screen = 'import-prompt';
+    } else {
+      d.localModeExhausted = true;
+      s.ui.screen = 'app'; s.ui.tab = 'home';
+      s.ui.toast = `Connesso come ${email}`;
+    }
+  }
+
+  function signInWith(s, provider) {
+    const email = provider === 'apple' ? APPLE_EMAIL : GOOGLE_EMAIL;
+    if (!s.cloud.accounts[email]) {
+      s.cloud.accounts[email] = { provider, confirmed: true, comics: s.sim.existingElsewhere ? 214 : 0 };
+    }
+    afterAuth(s, email, provider);
+  }
+
+  function reduce(prev, a) {
+    const s = clone(prev);
+    const d = s.device, ui = s.ui;
+    ui.toast = null;
+    const needsNet = () => { if (!d.online) { ui.error = 'Serve una connessione a Internet.'; return true; } return false; };
+
+    switch (a.type) {
+      case 'LAUNCH':
+        d.running = true; ui.overlay = null; ui.error = null; ui.tab = 'home';
+        ui.screen = route(s);
+        break;
+      case 'KILL':
+        d.running = false; ui.screen = 'off'; ui.overlay = null;
+        if (ui.importJob && ui.importJob.phase === 'running') ui.importJob.phase = 'interrupted';
+        break;
+      case 'CONTINUE_LOCAL':
+        d.firstLaunchDone = true; ui.overlay = null; ui.screen = 'app'; ui.tab = 'home';
+        break;
+      case 'ASK_LOCAL_INFO': ui.overlay = 'local-info'; break;
+      case 'OPEN_AUTH': ui.screen = 'auth'; ui.authMode = a.mode || ui.authMode; ui.error = null; ui.from = prev.ui.screen === 'auth' ? prev.ui.from : prev.ui.screen; break;
+      case 'AUTH_BACK': ui.screen = ui.from === 'app' ? 'app' : route(s); ui.error = null; break;
+      case 'SET_AUTH_MODE': ui.authMode = a.mode; ui.error = null; break;
+      case 'PROVIDER':
+        if (needsNet()) break;
+        signInWith(s, a.provider);
+        break;
+      case 'EMAIL_SUBMIT': {
+        if (needsNet()) break;
+        const acc = s.cloud.accounts[EMAIL];
+        if (ui.authMode === 'signup') {
+          if (acc) { ui.error = 'Esiste già un account con questa email. Accedi.'; break; }
+          s.cloud.accounts[EMAIL] = { provider: 'email', confirmed: false, comics: s.sim.existingElsewhere ? 214 : 0 };
+          d.pendingEmail = EMAIL;
+          if (s.config.email === 'A') ui.screen = 'email-pending';
+          else { d.firstLaunchDone = true; ui.screen = 'app'; ui.tab = 'home'; ui.toast = `Link di conferma inviato a ${EMAIL}`; }
+        } else {
+          if (!acc) {
+            if (s.sim.existingElsewhere) s.cloud.accounts[EMAIL] = { provider: 'email', confirmed: true, comics: 214 };
+            else { ui.error = 'Email o password non corrette.'; break; }
+          } else if (!acc.confirmed) { ui.error = 'Conferma prima la tua email: controlla la posta.'; break; }
+          afterAuth(s, EMAIL, 'email');
+        }
+        break;
+      }
+      case 'EMAIL_LINK': { // l'utente tocca il link nella mail → deep link apre l'app
+        const acc = s.cloud.accounts[EMAIL];
+        if (!acc || acc.confirmed) break;
+        acc.confirmed = true; d.running = true;
+        afterAuth(s, EMAIL, 'email');
+        break;
+      }
+      case 'EMAIL_RESEND': ui.toast = 'Nuovo link inviato.'; break;
+      case 'EMAIL_CHANGE':
+        delete s.cloud.accounts[d.pendingEmail]; d.pendingEmail = null;
+        ui.screen = 'auth'; ui.authMode = 'signup';
+        break;
+      case 'EMAIL_PENDING_LOCAL': // variante A: "usa l'app nel frattempo"
+        d.firstLaunchDone = true; ui.screen = 'app'; ui.tab = 'home';
+        break;
+
+      case 'IMPORT_ACCEPT':
+        ui.overlay = null;
+        ui.importJob = { phase: 'running', progress: (ui.importJob && ui.importJob.progress) || 0,
+                         total: { ...d.local } };
+        ui.screen = 'importing';
+        break;
+      case 'IMPORT_TICK': {
+        const j = ui.importJob;
+        if (!j || j.phase !== 'running') break;
+        if (!d.online || (s.sim.importFails && j.progress >= 50)) { j.phase = 'failed'; ui.screen = 'import-failed'; break; }
+        j.progress = Math.min(100, j.progress + 10);
+        if (j.progress === 100) {
+          s.cloud.accounts[d.session.email].comics += d.local.comics;
+          d.local = { comics: 0, scans: 0 };
+          d.localModeExhausted = true;
+          j.phase = 'done'; ui.screen = 'import-done';
+        }
+        break;
+      }
+      case 'IMPORT_RETRY':
+        if (needsNet()) break;
+        ui.error = null; ui.importJob.phase = 'running'; ui.screen = 'importing';
+        break;
+      case 'IMPORT_LATER': // logout, dati locali intatti, si torna in Modalità locale
+        d.session = null; ui.importJob = null; ui.screen = 'app'; ui.tab = 'home'; ui.error = null;
+        ui.toast = 'Sei uscito. I tuoi fumetti sono ancora su questo dispositivo.';
+        break;
+      case 'IMPORT_DONE_CONTINUE': ui.importJob = null; ui.screen = 'app'; ui.tab = 'home'; break;
+      case 'IMPORT_DECLINE': ui.overlay = 'decline-confirm'; break;
+      case 'IMPORT_DECLINE_CANCEL': ui.overlay = null; break;
+      case 'IMPORT_DECLINE_CONFIRM':
+        d.local = { comics: 0, scans: 0 }; d.localModeExhausted = true;
+        ui.overlay = null; ui.importJob = null; ui.screen = 'app'; ui.tab = 'home';
+        ui.toast = 'Dati locali eliminati.';
+        break;
+
+      case 'TAB': ui.tab = a.tab; break;
+      case 'ADD_COMIC':
+        if (d.session) {
+          if (needsNet()) break;
+          s.cloud.accounts[d.session.email].comics += 1;
+        } else { d.local.comics += 1; if (Math.random() < .3) d.local.scans += 1; }
+        break;
+      case 'TOGGLE_NET': d.online = !d.online; ui.error = null; break;
+      case 'DISMISS_B_CARD': ui.ingressoBDismissed = true; break;
+
+      case 'LOGOUT': ui.overlay = 'logout-confirm'; break;
+      case 'LOGOUT_CANCEL': case 'CLOSE_OVERLAY': ui.overlay = null; break;
+      case 'LOGOUT_CONFIRM':
+        d.session = null; ui.overlay = null; ui.screen = route(s); ui.tab = 'home';
+        break;
+      case 'DELETE_OPEN': ui.screen = 'delete'; ui.deleteAck = false; ui.error = null; break;
+      case 'DELETE_BACK': ui.screen = 'app'; ui.tab = 'settings'; ui.error = null; break;
+      case 'DELETE_ACK': ui.deleteAck = !ui.deleteAck; break;
+      case 'DELETE_CONFIRM':
+        if (needsNet()) break;
+        delete s.cloud.accounts[d.session.email];
+        d.session = null; ui.screen = route(s); ui.tab = 'home';
+        ui.toast = 'Account eliminato.';
+        break;
+    }
+    return s;
+  }
+
+  return { initial, reduce, route, hasLocalData, EMAIL };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GUSCIO DELLA PAGINA — throwaway.
+   ═══════════════════════════════════════════════════════════════════════ */
+const VARIANTS = {
+  ingresso: { label: 'Ingresso', opts: {
+    A: 'Tre porte: Apple, Google, email e "Continua senza account", tutte sul benvenuto.',
+    B: 'Local-first: un solo "Inizia" (Modalità locale) più "Ho già un account"; l\'account si propone dopo, in Dashboard e in Impostazioni.',
+    C: 'Account-first: "Crea un account" in primo piano; "Usa senza account" è un link che spiega cosa comporta.' } },
+  email: { label: 'Conferma email', opts: {
+    A: 'Schermata di attesa bloccante (Apri Mail / Reinvia / Cambia email), con un link per usare l\'app nel frattempo.',
+    B: 'Si torna subito all\'app in Modalità locale, con un avviso "Conferma la tua email" in Dashboard e in Impostazioni.' } },
+  import: { label: 'Prompt importazione', opts: {
+    A: 'Schermata intera, prima di entrare nell\'app.',
+    B: 'Sheet modale sopra la Dashboard (l\'app si vede dietro ma non si usa).' } },
+  offline: { label: 'Offline con account', opts: {
+    A: 'Blocco a schermo intero: "Serve una connessione", Riprova.',
+    B: 'App visibile, banner "Offline" e contenuti non caricabili con Riprova in linea.' } },
+};
+
+const params = new URLSearchParams(location.search);
+const config = {};
+for (const k in VARIANTS) config[k] = (params.get(k) || 'A').toUpperCase();
+
+let state = AccountFlow.initial(config);
+let prevFlat = flatten(state);
+let lastAction = null;
+
+function dispatch(type, extra) {
+  const before = flatten(state);
+  state = AccountFlow.reduce(state, { type, ...extra });
+  lastAction = type;
+  prevFlat = before;
+  render();
+}
+
+/* ── walkthroughs ── */
+const WALKS = [
+  { name: 'Primo avvio → locale → Apple', variants: {},
+    desc: 'Primo avvio: si sceglie la Modalità locale, si catalogano alcuni fumetti, poi ci si registra con Apple. Nota dove compare il prompt di importazione e cosa succede alla Modalità locale dopo.',
+    steps: [['Continua senza account', 'CONTINUE_LOCAL'], ['Aggiungi un fumetto', 'ADD_COMIC'], ['Aggiungi un fumetto', 'ADD_COMIC'], ['Aggiungi un fumetto', 'ADD_COMIC'],
+            ['Apri Impostazioni', 'TAB', { tab: 'settings' }], ['Crea account o accedi', 'OPEN_AUTH', { mode: 'signup' }], ['Continua con Apple', 'PROVIDER', { provider: 'apple' }],
+            ['Importa nel mio account', 'IMPORT_ACCEPT'], ['(attendi la fine) Continua', 'IMPORT_DONE_CONTINUE'], ['Riavvia l\'app', 'RELAUNCH']] },
+  { name: 'Registrazione email', variants: {},
+    desc: 'Registrazione con email e password e conferma via link. Confronta le varianti "Conferma email" A e B. Nota anche cosa succede se riavvii l\'app mentre la conferma è in attesa.',
+    steps: [['Continua senza account', 'CONTINUE_LOCAL'], ['Aggiungi un fumetto', 'ADD_COMIC'], ['Apri Impostazioni', 'TAB', { tab: 'settings' }],
+            ['Crea account o accedi', 'OPEN_AUTH', { mode: 'signup' }], ['Crea account (email)', 'EMAIL_SUBMIT'], ['Riavvia l\'app', 'RELAUNCH'],
+            ['Tocca il link nella mail', 'EMAIL_LINK'], ['Importa nel mio account', 'IMPORT_ACCEPT']] },
+  { name: 'Account esistente + errore', variants: {}, setup: { existingElsewhere: true, importFails: true },
+    desc: 'Login con Google su un account che ha già 214 fumetti creati su un altro dispositivo: i dati locali vengono uniti. L\'importazione fallisce a metà. Prova "Riprova" dopo aver disattivato "importazione fallirà", oppure "Esci e riprova più tardi".',
+    steps: [['Continua senza account', 'CONTINUE_LOCAL'], ['Aggiungi un fumetto', 'ADD_COMIC'], ['Aggiungi un fumetto', 'ADD_COMIC'],
+            ['Apri Impostazioni', 'TAB', { tab: 'settings' }], ['Crea account o accedi', 'OPEN_AUTH', { mode: 'login' }], ['Continua con Google', 'PROVIDER', { provider: 'google' }],
+            ['Importa nel mio account', 'IMPORT_ACCEPT'], ['(fallisce) Smetti di simulare il fallimento', 'SIM', { key: 'importFails' }], ['Riprova', 'IMPORT_RETRY']] },
+  { name: 'Rifiuto import', variants: {},
+    desc: 'Rifiutare l\'importazione scarta i dati locali (ADR-0005), quindi serve una seconda conferma. Dopo, la Modalità locale è esaurita.',
+    steps: [['Continua senza account', 'CONTINUE_LOCAL'], ['Aggiungi un fumetto', 'ADD_COMIC'], ['Apri Impostazioni', 'TAB', { tab: 'settings' }],
+            ['Crea account o accedi', 'OPEN_AUTH'], ['Continua con Apple', 'PROVIDER', { provider: 'apple' }], ['Non importare', 'IMPORT_DECLINE'],
+            ['Conferma: elimina dati locali', 'IMPORT_DECLINE_CONFIRM']] },
+  { name: 'Import interrotto', variants: {},
+    desc: 'L\'app viene chiusa durante l\'importazione. Al riavvio c\'è una sessione ma drift ha ancora dati: il prompt si ripresenta e l\'importazione riprende da dove si era fermata.',
+    steps: [['Continua senza account', 'CONTINUE_LOCAL'], ['Aggiungi un fumetto', 'ADD_COMIC'], ['Aggiungi un fumetto', 'ADD_COMIC'], ['Apri Impostazioni', 'TAB', { tab: 'settings' }],
+            ['Crea account o accedi', 'OPEN_AUTH'], ['Continua con Google', 'PROVIDER', { provider: 'google' }], ['Importa nel mio account', 'IMPORT_ACCEPT'],
+            ['Chiudi l\'app a metà', 'KILL'], ['Riapri l\'app', 'LAUNCH']] },
+  { name: 'Logout e riavvio', variants: {},
+    desc: 'Dopo un\'autenticazione riuscita la Modalità locale è esaurita: dopo il logout il benvenuto mostra solo le opzioni di accesso (domanda 2).',
+    steps: [['Continua con Apple (dal benvenuto)', 'PROVIDER', { provider: 'apple' }], ['Apri Impostazioni', 'TAB', { tab: 'settings' }], ['Esci', 'LOGOUT'], ['Conferma', 'LOGOUT_CONFIRM'], ['Riavvia l\'app', 'RELAUNCH']] },
+  { name: 'Offline', variants: {},
+    desc: 'Profilo autenticato senza rete: nessuna cache locale (ADR-0005, online-only). Confronta le varianti Offline A e B, e prova anche Esci ed Elimina account da offline.',
+    steps: [['Continua con Google (dal benvenuto)', 'PROVIDER', { provider: 'google' }], ['Togli la rete', 'TOGGLE_NET'], ['Riavvia l\'app', 'RELAUNCH'], ['Apri Impostazioni', 'TAB', { tab: 'settings' }], ['Rimetti la rete', 'TOGGLE_NET']] },
+  { name: 'Elimina account', variants: {},
+    desc: 'Cancellazione dell\'account dall\'app (App Store 5.1.1(v)): conseguenze elencate, spunta di conferma, poi si torna al benvenuto.',
+    steps: [['Continua con Apple (dal benvenuto)', 'PROVIDER', { provider: 'apple' }], ['Aggiungi un fumetto', 'ADD_COMIC'], ['Apri Impostazioni', 'TAB', { tab: 'settings' }],
+            ['Elimina account', 'DELETE_OPEN'], ['Spunta "Ho capito"', 'DELETE_ACK'], ['Elimina definitivamente', 'DELETE_CONFIRM']] },
+];
+let walk = 0, walkStep = 0;
+
+function startWalk(i) {
+  walk = i; walkStep = 0;
+  state = AccountFlow.initial(config);
+  Object.assign(state.sim, WALKS[i].setup || {});
+  prevFlat = flatten(state); lastAction = 'RESET';
+  render();
+}
+function runStep(i) {
+  const [, type, extra] = WALKS[walk].steps[i];
+  walkStep = i + 1;
+  act(type, extra);
+}
+function act(type, extra) {
+  if (type === 'RELAUNCH') { dispatch('KILL'); dispatch('LAUNCH'); lastAction = 'RELAUNCH'; render(); return; }
+  if (type === 'SIM') { state = { ...state, sim: { ...state.sim, [extra.key]: !state.sim[extra.key] } }; render(); return; }
+  dispatch(type, extra);
+}
+
+/* ── state readout ── */
+function flatten(s) {
+  const d = s.device, ui = s.ui;
+  const acc = Object.entries(s.cloud.accounts).map(([e, a]) => `${e} (${a.provider}${a.confirmed ? '' : ', non confermato'}) · ${a.comics} fumetti`).join('\n') || '—';
+  return {
+    'Dispositivo|App': d.running ? 'aperta' : 'chiusa',
+    'Dispositivo|Rete': d.online ? 'online' : 'offline',
+    'Dispositivo|Benvenuto superato': d.firstLaunchDone ? 'sì' : 'no',
+    'Dispositivo|Modalità locale esaurita': d.localModeExhausted ? 'sì' : 'no',
+    'Dispositivo|Dati locali (drift)': `${d.local.comics} fumetti · ${d.local.scans} scansioni`,
+    'Dispositivo|Email in attesa di conferma': d.pendingEmail || '—',
+    'Sessione|Profilo': d.session ? `${d.session.email} (${d.session.provider})` : 'nessuno — Modalità locale',
+    'Sessione|Importazione': ui.importJob ? `${ui.importJob.phase} · ${ui.importJob.progress}%` : '—',
+    'Sessione|Schermata': ui.screen + (ui.screen === 'app' ? ' / ' + ui.tab : '') + (ui.overlay ? ' + ' + ui.overlay : ''),
+    'Supabase|Account': acc,
+    'Simulazione|Account già esistente altrove': s.sim.existingElsewhere ? 'sì (214 fumetti)' : 'no',
+    'Simulazione|Importazione fallirà': s.sim.importFails ? 'sì' : 'no',
+  };
+}
+function renderState() {
+  const f = flatten(state);
+  let html = '', group = '';
+  const changed = [];
+  for (const [k, v] of Object.entries(f)) {
+    const [g, name] = k.split('|');
+    if (g !== group) { html += `<div class="sub">${g}</div>`; group = g; }
+    const chg = prevFlat[k] !== v;
+    if (chg) changed.push(name);
+    html += `<div class="kv ${chg ? 'chg' : ''}" style="${g === 'Supabase' ? 'grid-column:1/-1' : ''}"><span class="k">${name}</span><span style="text-align:right;white-space:pre-line">${v}</span></div>`;
+  }
+  document.getElementById('state').innerHTML = html;
+  document.getElementById('changed').innerHTML = lastAction ? `Ultima azione: <code>${lastAction}</code>${changed.length ? ' · cambiato: ' + changed.join(', ') : ' · nessun cambiamento'}` : '';
+}
+
+/* ── panel controls ── */
+function renderPanel() {
+  let v = '';
+  for (const [k, def] of Object.entries(VARIANTS)) {
+    v += `<div><b>${def.label}</b></div><div class="btns">${Object.keys(def.opts).map(o => `<button class="pb ${config[k] === o ? 'on' : ''}" onclick="setVar('${k}','${o}')">${o}</button>`).join('')}</div><div class="desc">${def.opts[config[k]]}</div>`;
+  }
+  document.getElementById('vars').innerHTML = v;
+
+  document.getElementById('wtabs').innerHTML = WALKS.map((w, i) => `<span class="${i === walk ? 'on' : ''}" onclick="startWalk(${i})">${w.name}</span>`).join('');
+  document.getElementById('wdesc').textContent = WALKS[walk].desc;
+  document.getElementById('wsteps').innerHTML = WALKS[walk].steps.map((st, i) =>
+    `<button class="pb ${i < walkStep ? 'done' : ''}" ${i === walkStep ? '' : 'disabled'} onclick="runStep(${i})">${i + 1}. ${st[0]}</button>`).join('')
+    + `<button class="pb" onclick="startWalk(${walk})" style="margin-top:6px">↺ Ricomincia questo percorso</button>`;
+
+  const s = state;
+  const free = [
+    ['↻ Riavvia app', "act('RELAUNCH')"],
+    [s.device.running ? '⏻ Chiudi app' : '⏻ Apri app', s.device.running ? "act('KILL')" : "act('LAUNCH')"],
+    [s.device.online ? '📶 Togli la rete' : '📶 Rimetti la rete', "act('TOGGLE_NET')"],
+    ['＋ Aggiungi un fumetto', "act('ADD_COMIC')"],
+    ['✉︎ Tocca il link nella mail', "act('EMAIL_LINK')", !s.device.pendingEmail],
+    [`${s.sim.existingElsewhere ? '☑' : '☐'} Account già esistente altrove`, "act('SIM',{key:'existingElsewhere'})"],
+    [`${s.sim.importFails ? '☑' : '☐'} Importazione fallirà`, "act('SIM',{key:'importFails'})"],
+    ['⟲ Reset (primo avvio)', `startWalk(${walk})`],
+  ];
+  document.getElementById('free').innerHTML = free.map(([l, fn, dis]) => `<button class="pb" ${dis ? 'disabled' : ''} onclick="${fn}">${l}</button>`).join('');
+}
+function setVar(k, o) {
+  config[k] = o; state.config = { ...config };
+  const p = new URLSearchParams(location.search); p.set(k, o);
+  history.replaceState(null, '', '?' + p.toString());
+  render();
+}
+
+/* ── phone screens ── */
+const B = (label, type, cls = 'pri', extra, dis) => `<button class="btn ${cls}" ${dis ? 'disabled' : ''} onclick='act(${JSON.stringify(type)}${extra ? ',' + JSON.stringify(extra) : ''})'>${label}</button>`;
+const APPLE = (t = 'Continua con Apple') => B(` ${t}`, 'PROVIDER', 'white', { provider: 'apple' });
+const GOOGLE = (t = 'Continua con Google') => B(`<b style="color:#4285F4">G</b> ${t}`, 'PROVIDER', 'out', { provider: 'google' });
+const err = () => state.ui.error ? `<div class="banner off" style="margin:0 0 12px">${state.ui.error}</div>` : '';
+const logo = `<div class="logo"><i>M</i><b>MyComicBrain</b></div>`;
+const hero = `${logo}<div class="h">Fotografa la<br>copertina.<br>Al resto pensa l'app.</div><p class="p">Riconoscimento della cover, metadati dai database, copie fisiche e numeri mancanti — in un unico posto.</p>`;
+
+function welcome() {
+  const exhausted = state.device.localModeExhausted;
+  const v = state.config.ingresso;
+  const note = exhausted ? `<div class="card" style="margin-top:18px"><p class="p" style="font-size:12.5px">Su questo dispositivo la collezione è già passata a un account. Accedi per ritrovarla.</p></div>` : '';
+  let bottom;
+  if (exhausted) {
+    bottom = `<div class="stack">${err()}${APPLE()}${GOOGLE()}${B('Accedi con email', 'OPEN_AUTH', 'out', { mode: 'login' })}${B('Crea un account', 'OPEN_AUTH', 'ghost', { mode: 'signup' })}</div>`;
+  } else if (v === 'A') {
+    bottom = `<div class="stack">${err()}${APPLE()}${GOOGLE()}${B('Continua con email', 'OPEN_AUTH', 'out', { mode: 'signup' })}
+      <div class="div">oppure</div>${B('Continua senza account', 'CONTINUE_LOCAL', 'ghost')}
+      <div class="small">Senza account i fumetti restano solo su questo dispositivo. Puoi creare un account quando vuoi, da Impostazioni.</div></div>`;
+  } else if (v === 'B') {
+    bottom = `<div class="stack">${B('Inizia', 'CONTINUE_LOCAL')}${B('Ho già un account', 'OPEN_AUTH', 'ghost', { mode: 'login' })}
+      <div class="small">Nessuna registrazione necessaria. La collezione resta su questo dispositivo finché non crei un account.</div></div>`;
+  } else {
+    bottom = `<div class="stack">${B('Crea un account', 'OPEN_AUTH', 'pri', { mode: 'signup' })}${B('Accedi', 'OPEN_AUTH', 'out', { mode: 'login' })}
+      ${B('Usa senza account', 'ASK_LOCAL_INFO', 'link')}</div>`;
+  }
+  return `<div class="sc between"><div>${hero}${note}</div>${bottom}</div>`;
+}
+
+function authScreen() {
+  const m = state.ui.authMode;
+  return `<div class="sc">
+    <div class="back" onclick="act('AUTH_BACK')">‹ Indietro</div>
+    <div class="h2">${m === 'signup' ? 'Crea il tuo account' : 'Accedi'}</div>
+    <p class="p" style="margin-bottom:20px">${m === 'signup' ? 'La collezione sarà salvata nel tuo account e la ritroverai su ogni dispositivo.' : 'Ritrova la tua collezione.'}</p>
+    ${err()}
+    <div class="stack">${APPLE()}${GOOGLE()}</div>
+    <div class="div" style="margin:18px 0">oppure con email</div>
+    <div class="seg" style="margin-bottom:12px"><span class="${m === 'signup' ? 'on' : ''}" onclick="act('SET_AUTH_MODE',{mode:'signup'})">Crea account</span><span class="${m === 'login' ? 'on' : ''}" onclick="act('SET_AUTH_MODE',{mode:'login'})">Accedi</span></div>
+    <div class="stack"><div class="field">${AccountFlow.EMAIL}</div><div class="field">••••••••••</div>
+    ${B(m === 'signup' ? 'Crea account' : 'Accedi', 'EMAIL_SUBMIT')}
+    ${m === 'login' ? '<div class="small" style="color:var(--accent)">Password dimenticata?</div>' : ''}</div>
+  </div>`;
+}
+
+function emailPending() {
+  return `<div class="sc between"><div>
+    <div class="bigic">✉︎</div>
+    <div class="h2">Controlla la tua email</div>
+    <p class="p">Abbiamo inviato un link di conferma a <b style="color:var(--t)">${state.device.pendingEmail}</b>. Aprilo da questo dispositivo per completare la registrazione.</p>
+    </div><div class="stack">
+    ${B('Apri Mail', 'EMAIL_RESEND', 'pri')}
+    ${B('Reinvia il link', 'EMAIL_RESEND', 'out')}
+    ${B('Cambia email', 'EMAIL_CHANGE', 'ghost')}
+    ${B('Usa l\'app nel frattempo', 'EMAIL_PENDING_LOCAL', 'link')}
+    </div></div>`;
+}
+
+function importContent() {
+  const d = state.device, acc = state.cloud.accounts[d.session.email];
+  const merge = acc.comics > 0;
+  const what = `${d.local.comics} fumetti${d.local.scans ? ` e ${d.local.scans} scansioni da completare` : ''}`;
+  const j = state.ui.importJob;
+  if (j && j.phase === 'interrupted') return `<div class="bigic amb">⇪</div>
+    <div class="h2">L'importazione non è finita</div>
+    <p class="p">L'app si è chiusa al ${j.progress}%. I tuoi ${what} sono ancora su questo dispositivo: riprendiamo da dove si era fermata.</p>`;
+  return `<div class="bigic">⇪</div>
+    <div class="h2">Abbiamo trovato ${what} su questo dispositivo</div>
+    <p class="p">${merge ? `Il tuo account ha già <b style="color:var(--t)">${acc.comics} fumetti</b>. Quelli di questo dispositivo verranno aggiunti alla stessa collezione.` : 'Importali nel tuo account per ritrovarli su ogni dispositivo.'}</p>
+    <p class="p" style="margin-top:10px;font-size:12px;color:var(--t4)">La conversazione con l'Assistente non viene importata.</p>`;
+}
+function importButtons() {
+  const resume = state.ui.importJob && state.ui.importJob.phase === 'interrupted';
+  return `<div class="stack">${B(resume ? 'Riprendi l\'importazione' : 'Importa nel mio account', 'IMPORT_ACCEPT')}${B('Non importare', 'IMPORT_DECLINE', 'ghost')}</div>`;
+}
+function importPrompt() {
+  if (state.config.import === 'A') return `<div class="sc between"><div>${logo}<div style="height:34px"></div>${importContent()}</div>${importButtons()}</div>`;
+  return appShell() + `<div class="scrim"><div class="sheet"><div class="grab"></div>${importContent()}<div style="height:22px"></div>${importButtons()}</div></div>`;
+}
+function declineConfirm() {
+  const n = state.device.local.comics;
+  return `<div class="scrim center"><div class="dialog"><div class="h2" style="font-size:18px">Eliminare i dati locali?</div>
+    <p class="p">I ${n} fumetti e le scansioni su questo dispositivo verranno eliminati definitivamente. L'operazione non si può annullare.</p>
+    <div class="stack" style="margin-top:18px">${B('Elimina dati locali', 'IMPORT_DECLINE_CONFIRM', 'danger')}${B('Annulla', 'IMPORT_DECLINE_CANCEL', 'ghost')}</div></div></div>`;
+}
+function importing() {
+  const j = state.ui.importJob, p = j.progress;
+  const st = (label, from, to) => `<div class="${p >= to ? 'done' : p >= from ? 'now' : ''}">${p >= to ? '✓' : p >= from ? '◌' : '○'} ${label}</div>`;
+  return `<div class="sc between"><div>${logo}<div style="height:34px"></div>
+    <div class="h2">Importazione in corso…</div>
+    <p class="p">Tieni l'app aperta e connessa. Ci vorrà qualche minuto.</p>
+    <div class="bar"><i style="width:${p}%"></i></div><div class="small" style="text-align:left">${p}%</div>
+    <div class="steps">${st('Catalogo (opere, edizioni, copie, serie)', 0, 30)}${st('Scansioni da completare', 30, 50)}${st(`Immagini delle cover`, 50, 100)}</div>
+    </div><div class="small">Se l'app si chiude, l'importazione riprende alla prossima apertura.</div></div>`;
+}
+function importFailed() {
+  return `<div class="sc between"><div>${logo}<div style="height:34px"></div>
+    <div class="bigic amb">!</div>
+    <div class="h2">Importazione interrotta</div>
+    <p class="p">Non siamo riusciti a completare l'importazione${state.device.online ? '' : ' perché sei offline'}. Non è andato perso nulla: i tuoi fumetti sono ancora su questo dispositivo.</p>
+    <div class="bar"><i style="width:${state.ui.importJob.progress}%;background:var(--amber)"></i></div>
+    </div><div class="stack">${err()}${B('Riprova', 'IMPORT_RETRY')}${B('Esci e riprova più tardi', 'IMPORT_LATER', 'ghost')}</div></div>`;
+}
+function importDone() {
+  const acc = state.cloud.accounts[state.device.session.email];
+  return `<div class="sc between"><div>${logo}<div style="height:34px"></div>
+    <div class="bigic">✓</div><div class="h2">Fatto!</div>
+    <p class="p">La collezione ora è nel tuo account: ${acc.comics} fumetti in totale.</p></div>
+    ${B('Vai alla collezione', 'IMPORT_DONE_CONTINUE')}</div>`;
+}
+
+function offlineBlock() {
+  return `<div class="sc between"><div>${logo}<div style="height:34px"></div>
+    <div class="bigic amb">⌁</div><div class="h2">Sei offline</div>
+    <p class="p">La tua collezione è salvata nel tuo account: serve una connessione a Internet per vederla e modificarla.</p></div>
+    <div class="stack">${B('Riprova', 'LAUNCH')}</div></div>`;
+}
+
+function appShell() {
+  const s = state, d = s.device, auth = !!d.session;
+  const offline = auth && !d.online;
+  if (offline && s.config.offline === 'A') return offlineBlock();
+  const nav = [['home', 'Home'], ['coll', 'Collezione'], ['scan', 'Scansiona'], ['search', 'Cerca'], ['settings', 'Impostazioni']]
+    .map(([k, l]) => `<div class="${s.ui.tab === k ? 'on' : ''}" onclick="act('TAB',{tab:'${k}'})"><span class="ic"></span>${l}</div>`).join('');
+  let body = '';
+  if (offline) body += `<div class="banner off">⌁ Offline — la collezione non è raggiungibile. Le modifiche sono disattivate.</div>`;
+  if (!auth && d.pendingEmail) body += `<div class="banner acc" style="cursor:pointer" onclick="act('TAB',{tab:'settings'})">✉︎ Conferma la tua email per attivare l'account ›</div>`;
+  body += s.ui.tab === 'settings' ? settings(offline) : home(offline);
+  return `<div class="appbody">${body}</div><div class="nav">${nav}</div>`;
+}
+
+function home(offline) {
+  const s = state, d = s.device, auth = !!d.session;
+  const n = auth ? s.cloud.accounts[d.session.email].comics : d.local.comics;
+  let card = '';
+  if (!auth && s.config.ingresso === 'B' && !s.ui.ingressoBDismissed && !d.pendingEmail && d.local.comics >= 1) {
+    card = `<div class="card acc" style="margin-top:14px"><b style="font-size:14px">Salva la collezione in un account</b>
+      <p class="p" style="font-size:12.5px;margin:4px 0 10px">Oggi i tuoi ${d.local.comics} fumetti sono solo su questo telefono. Con un account li ritrovi ovunque.</p>
+      <div style="display:flex;gap:8px">${B('Crea account', 'OPEN_AUTH', 'pri', { mode: 'signup' }).replace('class="btn pri"', 'class="btn pri" style="height:38px;font-size:13px"')}${B('Più tardi', 'DISMISS_B_CARD', 'ghost').replace('class="btn ghost"', 'class="btn ghost" style="height:38px;font-size:13px"')}</div></div>`;
+  }
+  const kpis = offline
+    ? `<div class="card" style="margin-top:14px;text-align:center"><p class="p">Impossibile caricare la collezione.</p>${B('Riprova', 'LAUNCH', 'link')}</div>`
+    : `<div class="kpi"><div class="card"><b>${n}</b><span>fumetti</span></div><div class="card"><b>${n ? Math.max(1, Math.round(n / 4)) : '—'}</b><span>serie</span></div></div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center"><div class="h2" style="margin:0">Dashboard</div>
+    <span class="pill"><span class="dot ${auth ? (offline ? 'off' : 'on') : ''}"></span>${auth ? (offline ? 'Offline' : 'Account') : 'Modalità locale'}</span></div>
+    ${card}${kpis}`;
+}
+
+function settings(offline) {
+  const s = state, d = s.device, auth = !!d.session;
+  let acct;
+  if (auth) {
+    const acc = s.cloud.accounts[d.session.email];
+    const prov = { apple: 'Apple', google: 'Google', email: 'email e password' }[d.session.provider];
+    acct = `<div class="group"><div class="row"><div style="display:flex;gap:12px;align-items:center"><div class="avatar">${d.session.email[0].toUpperCase()}</div>
+      <div><div style="font-size:14px">${d.session.email}</div><div class="v">Accesso con ${prov} · ${offline ? 'offline' : acc.comics + ' fumetti'}</div></div></div></div>
+      <div class="row click" onclick="act('LOGOUT')"><span>Esci</span><span class="v">›</span></div>
+      <div class="row click" onclick="act('DELETE_OPEN')"><span style="color:var(--red)">Elimina account</span><span class="v">›</span></div></div>`;
+  } else if (d.pendingEmail) {
+    acct = `<div class="card acc"><b style="font-size:14px">Conferma la tua email</b>
+      <p class="p" style="font-size:12.5px;margin:4px 0 10px">Abbiamo inviato un link a ${d.pendingEmail}. Nel frattempo continui in Modalità locale.</p>
+      <div style="display:flex;gap:8px">${B('Reinvia', 'EMAIL_RESEND', 'out')}${B('Cambia email', 'EMAIL_CHANGE', 'ghost')}</div></div>`;
+  } else {
+    acct = `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:14px">Modalità locale</b><span class="pill"><span class="dot"></span>solo su questo dispositivo</span></div>
+      <p class="p" style="font-size:12.5px;margin:6px 0 12px">I tuoi ${d.local.comics} fumetti sono salvati solo su questo telefono. Crea un account per ritrovarli ovunque: al primo accesso ti chiederemo se importarli.</p>
+      ${B('Crea account o accedi', 'OPEN_AUTH', 'pri', { mode: 'signup' })}</div>`;
+  }
+  const rows = ['Provider AI Visivo|Claude', 'Provider AI Testuale|Claude', 'API database fumetti|Configurata', 'Esporta collezione|›', 'Importa collezione|›']
+    .map(r => { const [a, b] = r.split('|'); return `<div class="row"><span>${a}</span><span class="v">${b}</span></div>`; }).join('');
+  return `<div class="h2">Impostazioni</div><div class="gl">Account</div>${acct}<div class="gl">Generali</div><div class="group">${rows}</div>`;
+}
+
+function deleteScreen() {
+  const s = state, d = s.device, acc = s.cloud.accounts[d.session.email];
+  const offline = !d.online;
+  return `<div class="sc between"><div>
+    <div class="back" onclick="act('DELETE_BACK')">‹ Impostazioni</div>
+    <div class="bigic red">⌫</div><div class="h2">Elimina account</div>
+    <p class="p">Stai per eliminare l'account <b style="color:var(--t)">${d.session.email}</b>.</p>
+    <ul class="cons"><li>La collezione (${acc.comics} fumetti), le scansioni e le immagini delle cover verranno eliminate.</li>
+    <li>La conversazione con l'Assistente verrà eliminata.</li>
+    ${d.session.provider === 'apple' ? '<li>Revocheremo anche l\'accesso con Apple.</li>' : ''}
+    <li>L'operazione non si può annullare.</li></ul>
+    <div class="check" onclick="act('DELETE_ACK')"><i class="${s.ui.deleteAck ? 'on' : ''}">${s.ui.deleteAck ? '✓' : ''}</i>Ho capito che la collezione verrà eliminata definitivamente.</div>
+    </div><div class="stack">${err()}${offline ? '<div class="small">Serve una connessione per eliminare l\'account.</div>' : ''}
+    ${B('Elimina definitivamente', 'DELETE_CONFIRM', 'danger', null, !s.ui.deleteAck || offline)}${B('Annulla', 'DELETE_BACK', 'ghost')}</div></div>`;
+}
+
+function overlays() {
+  const o = state.ui.overlay;
+  if (o === 'decline-confirm') return declineConfirm();
+  if (o === 'logout-confirm') return `<div class="scrim center"><div class="dialog"><div class="h2" style="font-size:18px">Uscire dall'account?</div>
+    <p class="p">La collezione resta nel tuo account: la ritrovi quando accedi di nuovo.</p>
+    <div class="stack" style="margin-top:18px">${B('Esci', 'LOGOUT_CONFIRM', 'pri')}${B('Annulla', 'LOGOUT_CANCEL', 'ghost')}</div></div></div>`;
+  if (o === 'local-info') return `<div class="scrim"><div class="sheet"><div class="grab"></div><div class="h2">Usare l'app senza account?</div>
+    <ul class="cons"><li>Puoi fare tutto: scansionare, catalogare, cercare.</li><li>I fumetti restano solo su questo dispositivo: se lo perdi, li perdi.</li><li>Puoi creare un account quando vuoi, da Impostazioni, e importarli.</li></ul>
+    <div class="stack" style="margin-top:18px">${B('Continua senza account', 'CONTINUE_LOCAL')}${B('Indietro', 'CLOSE_OVERLAY', 'ghost')}</div></div></div>`;
+  return '';
+}
+
+function renderPhone() {
+  const s = state;
+  let html;
+  if (!s.device.running) {
+    html = `<div class="off-screen"><div style="font-size:30px">⏻</div>App chiusa<button class="pb" onclick="act('LAUNCH')">Apri l'app</button></div>`;
+  } else {
+    switch (s.ui.screen) {
+      case 'welcome': html = welcome(); break;
+      case 'auth': html = authScreen(); break;
+      case 'email-pending': html = emailPending(); break;
+      case 'import-prompt': html = importPrompt(); break;
+      case 'importing': html = importing(); break;
+      case 'import-failed': html = importFailed(); break;
+      case 'import-done': html = importDone(); break;
+      case 'delete': html = deleteScreen(); break;
+      default: html = appShell();
+    }
+    html += overlays();
+    if (s.ui.toast) html += `<div class="toast">${s.ui.toast}</div>`;
+  }
+  const net = s.device.online ? '5G' : '✈︎';
+  document.getElementById('phone').innerHTML = `<div class="island"></div><div class="status"><span>9:41</span><span>${net} ▮</span></div>${html}`;
+}
+
+function render() { renderPhone(); renderState(); renderPanel(); }
+
+// L'importazione avanza da sola mentre è sulla schermata "in corso".
+setInterval(() => {
+  if (state.device.running && state.ui.screen === 'importing') {
+    const before = flatten(state);
+    state = AccountFlow.reduce(state, { type: 'IMPORT_TICK' });
+    prevFlat = before; lastAction = 'IMPORT_TICK';
+    render();
+  }
+}, 450);
+
+render();
+</script>
+</body>
+</html>
