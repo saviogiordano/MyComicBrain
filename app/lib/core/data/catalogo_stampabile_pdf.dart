@@ -1,19 +1,11 @@
-import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
+import 'package:mycomicbrain/core/data/copertina_bytes.dart' as copertina_bytes;
 import 'package:mycomicbrain/core/domain/catalogo_stampabile.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-
-/// Timeout per il download di una cover remota durante la generazione del
-/// PDF — stesso valore di `copertinaDownloadTimeout`
-/// (`copertina_downloader.dart`): una copia irraggiungibile non deve
-/// bloccare a tempo indeterminato l'intero catalogo, ricade sulla copertina
-/// procedurale.
-const catalogoStampabileCoverTimeout = Duration(seconds: 45);
 
 final _colInk = PdfColor.fromHex('#1b1d1f');
 final _colInkSoft = PdfColor.fromHex('#5b6166');
@@ -56,7 +48,7 @@ Future<Uint8List> generaPdfCatalogoStampabile(
   required pw.Font fontMono,
   Future<Uint8List?> Function(String coverImage)? caricaBytesCopertina,
 }) async {
-  final carica = caricaBytesCopertina ?? _caricaBytesCopertinaDefault;
+  final carica = caricaBytesCopertina ?? copertina_bytes.caricaBytesCopertina;
 
   final copertine = <int, Uint8List>{};
   for (final riga in righe) {
@@ -90,24 +82,6 @@ Future<Uint8List> generaPdfCatalogoStampabile(
   );
 
   return documento.save();
-}
-
-Future<Uint8List?> _caricaBytesCopertinaDefault(String coverImage) async {
-  try {
-    if (coverImage.startsWith('http://') ||
-        coverImage.startsWith('https://')) {
-      final response = await http
-          .get(Uri.parse(coverImage))
-          .timeout(catalogoStampabileCoverTimeout);
-      if (response.statusCode != 200) return null;
-      return response.bodyBytes;
-    }
-    final file = File(coverImage);
-    if (!file.existsSync()) return null;
-    return await file.readAsBytes();
-  } on Object {
-    return null;
-  }
 }
 
 class _GruppoOpera {

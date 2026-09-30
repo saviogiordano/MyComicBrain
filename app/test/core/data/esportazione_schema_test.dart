@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:archive/archive.dart' as archive_pkg;
 import 'package:excel/excel.dart' as excel_pkg;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/esportazione_schema.dart';
@@ -44,6 +46,7 @@ void main() {
     location: 'Scaffale A',
     notes: 'Prima edizione',
     createdAt: DateTime(2024, 1, 2),
+    coverImage: '/covers/dylan1.jpg',
   );
 
   RigaEsportazioneCopia rigaMinima() => RigaEsportazioneCopia(
@@ -60,16 +63,9 @@ void main() {
       expect(etichette.toSet(), hasLength(etichette.length));
     });
 
-    test('niente colonna immagine/cover (decisione mappa #139)', () {
+    test('"Copertina" non è fra le colonne base (è aggiunta in coda)', () {
       final etichette = [for (final c in colonneEsportazione) c.etichetta];
-      expect(
-        etichette.any((e) => e.toLowerCase().contains('cover')),
-        isFalse,
-      );
-      expect(
-        etichette.any((e) => e.toLowerCase().contains('immagine')),
-        isFalse,
-      );
+      expect(etichette, isNot(contains(etichettaColonnaCopertina)));
     });
   });
 
@@ -88,6 +84,19 @@ void main() {
       expect(righe[2], contains('Volume unico'));
       // Stato di una Copia persa: la voce "Mancante" (§8.3, `voceStatoDi`).
       expect(righe[2], contains('Mancante'));
+    });
+
+    test('ultima colonna "Copertina" col nome del file nello zip', () {
+      final csv = generaCsvEsportazione(
+        [rigaCompleta(), rigaMinima()],
+        fileCopertine: {10: 'copertine/edizione_10.jpg'},
+      );
+      final righe = csv.split('\r\n')..removeWhere((r) => r.isEmpty);
+
+      expect(righe[0], endsWith(',Copertina'));
+      expect(righe[1], endsWith(',copertine/edizione_10.jpg'));
+      // Nessuna cover per l'Edizione 20: cella vuota.
+      expect(righe[2], endsWith(','));
     });
 
     test('campi vuoti per una riga minima, nessuna eccezione', () {
@@ -120,6 +129,7 @@ void main() {
       final riga = righe.single as Map<String, dynamic>;
       expect(riga.keys.toSet(), {
         for (final c in colonneEsportazione) c.etichetta,
+        etichettaColonnaCopertina,
       });
       expect(riga['Opera'], 'Dylan Dog');
       expect(riga['Autori'], 'Tiziano Sclavi (sceneggiatore)');
@@ -139,6 +149,7 @@ void main() {
       final intestazione = righe.first.map(testo).toList();
       expect(intestazione, [
         for (final c in colonneEsportazione) c.etichetta,
+        etichettaColonnaCopertina,
       ]);
 
       final indiceOpera = intestazione.indexOf('Opera');
@@ -155,6 +166,75 @@ void main() {
 
     test('campi vuoti per una riga minima, nessuna eccezione', () {
       expect(() => generaExcelEsportazione([rigaMinima()]), returnsNormally);
+    });
+  });
+
+  group('raccogliCopertineEsportazione', () {
+    final jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 1, 2]);
+    final png = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2]);
+
+    RigaEsportazioneCopia riga(int copiaId, int edizioneId, String? cover) =>
+        RigaEsportazioneCopia(
+          copiaId: copiaId,
+          edizioneId: edizioneId,
+          operaTitolo: 'Opera $edizioneId',
+          status: StatoCopia.posseduta,
+          createdAt: DateTime(2024),
+          coverImage: cover,
+        );
+
+    test('un file per Edizione, estensione dai byte, cover illeggibili '
+        'saltate', () async {
+      final caricate = <String>[];
+      final copertine = await raccogliCopertineEsportazione(
+        [
+          riga(1, 10, '/a.jpg'),
+          // Seconda Copia della stessa Edizione: nessun secondo caricamento.
+          riga(2, 10, '/a.jpg'),
+          riga(3, 20, 'https://example.com/b'),
+          riga(4, 30, '/mancante.jpg'),
+          riga(5, 40, null),
+        ],
+        caricaBytesCopertina: (cover) async {
+          caricate.add(cover);
+          return switch (cover) {
+            '/a.jpg' => jpeg,
+            'https://example.com/b' => png,
+            _ => null,
+          };
+        },
+      );
+
+      expect(caricate, ['/a.jpg', 'https://example.com/b', '/mancante.jpg']);
+      expect(copertine.fileCopertine, {
+        10: 'copertine/edizione_10.jpg',
+        20: 'copertine/edizione_20.png',
+      });
+      expect(copertine.bytesPerFile, {
+        'copertine/edizione_10.jpg': jpeg,
+        'copertine/edizione_20.png': png,
+      });
+    });
+  });
+
+  group('generaZipEsportazione', () {
+    test('file dati alla radice più le cover in copertine/', () {
+      final dati = utf8.encode('Opera,Copertina\r\n');
+      final cover = Uint8List.fromList([0xFF, 0xD8, 0xFF]);
+
+      final zip = generaZipEsportazione(
+        nomeFileDati: 'collezione.csv',
+        bytesDati: dati,
+        copertine: {'copertine/edizione_10.jpg': cover},
+      );
+      final archivio = archive_pkg.ZipDecoder().decodeBytes(zip);
+
+      expect(archivio.files.map((f) => f.name), [
+        'collezione.csv',
+        'copertine/edizione_10.jpg',
+      ]);
+      expect(archivio.findFile('collezione.csv')!.content, dati);
+      expect(archivio.findFile('copertine/edizione_10.jpg')!.content, cover);
     });
   });
 }

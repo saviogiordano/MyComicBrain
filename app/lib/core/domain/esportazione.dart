@@ -5,8 +5,9 @@ import 'package:mycomicbrain/core/domain/formato.dart';
 /// Una riga dell'export della collezione (§16, deciso su
 /// [Mappa — Importazione ed esportazione](https://github.com/saviogiordano/MyComicBrain/issues/139)):
 /// una Copia con tutti i campi bibliografici di Edizione/Opera/Serie
-/// collegati (§8.1) e i campi personali della Copia (§8.2) — niente
-/// immagini. Proiezione di sola lettura condivisa da CSV/JSON (deciso su
+/// collegati (§8.1), i campi personali della Copia (§8.2) e la cover
+/// risolta dell'Edizione ([coverImage]), che l'export CSV/JSON/Excel
+/// impacchetta come file nello zip accanto ai dati. Proiezione di sola lettura condivisa da CSV/JSON (deciso su
 /// [#140](https://github.com/saviogiordano/MyComicBrain/issues/140)) e
 /// riusabile dai ticket successivi (Excel, import).
 class RigaEsportazioneCopia {
@@ -40,6 +41,7 @@ class RigaEsportazioneCopia {
     this.seller,
     this.location,
     this.notes,
+    this.coverImage,
   });
 
   final int copiaId;
@@ -71,4 +73,10 @@ class RigaEsportazioneCopia {
   final String? location;
   final String? notes;
   final DateTime createdAt;
+
+  /// Percorso locale o URL remoto della cover dell'Edizione, già risolto
+  /// (vedi `ComicsRepository.risolviCoverImage`) — `null` se assente. Non
+  /// è una colonna: l'export ne scarica i byte e scrive nella colonna
+  /// "Copertina" il nome del file dentro lo zip.
+  final String? coverImage;
 }

@@ -25,6 +25,7 @@ import 'package:mycomicbrain/core/domain/ricerca_assistente.dart';
 import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/serie_lista.dart';
 import 'package:mycomicbrain/core/domain/valore_stimato.dart';
+import 'package:path/path.dart' as p;
 
 /// Espone il dominio del catalogo (opera/edizione/copia, §36) all'UI senza
 /// farle vedere Drift: prende e restituisce tipi di dominio, mai i tipi
@@ -2681,7 +2682,7 @@ ORDER BY o.title, e.issue_number
 
     return [
       for (final riga in righe)
-        _rigaEsportazioneDaJoin(
+        await _rigaEsportazioneDaJoin(
           riga,
           autori:
               autoriPerEdizione[riga.readTable(_db.edizioni).id] ?? const [],
@@ -2718,10 +2719,10 @@ ORDER BY o.title, e.issue_number
     return risultato;
   }
 
-  RigaEsportazioneCopia _rigaEsportazioneDaJoin(
+  Future<RigaEsportazioneCopia> _rigaEsportazioneDaJoin(
     TypedResult riga, {
     required List<CreatorConRuolo> autori,
-  }) {
+  }) async {
     final copia = riga.readTable(_db.copie);
     final edizione = riga.readTable(_db.edizioni);
     final opera = riga.readTable(_db.opere);
@@ -2756,6 +2757,7 @@ ORDER BY o.title, e.issue_number
       location: copia.location,
       notes: copia.notes,
       createdAt: copia.createdAt,
+      coverImage: await risolviCoverImage(edizione.coverImage),
     );
   }
 
@@ -2764,8 +2766,7 @@ ORDER BY o.title, e.issue_number
   /// [#141](https://github.com/saviogiordano/MyComicBrain/issues/141)):
   /// stessa base non filtrata di [tutteLeCopiePerEsportazione] (istantanea
   /// completa, anche Copie vendute/perse), ma proiettata sui campi della
-  /// variante C scelta — cover risolta inclusa, a differenza dell'export
-  /// dati che non la porta con sé.
+  /// variante C scelta — cover risolta inclusa.
   Future<List<RigaCatalogoStampabile>>
   tutteLeCopiePerCatalogoStampabile() async {
     final query = _db.select(_db.copie).join([
@@ -2838,7 +2839,34 @@ ORDER BY o.title, e.issue_number
   /// più rows sono già validate a monte, quindi un errore qui è un guasto
   /// del DB, non un dato scorretto — meglio annullare tutto che lasciare
   /// Opere/Edizioni orfane senza Copia.
-  Future<void> importaRighe(List<RigaImportazioneParsata> righe) {
+  ///
+  /// [copertine] (import da zip, vedi `analizzaZipImportazione`): immagini
+  /// indicizzate col valore della colonna "Copertina". Salvate in
+  /// `copertine/` prima della transazione (una volta per file, anche se più
+  /// righe la condividono) e collegate all'Edizione col percorso relativo,
+  /// come ogni altra cover locale. Una riga che punta a un file assente
+  /// nello zip resta senza cover, non viene scartata.
+  Future<void> importaRighe(
+    List<RigaImportazioneParsata> righe, {
+    Map<String, Uint8List> copertine = const {},
+  }) async {
+    final coverPerFile = <String, String>{};
+    if (copertine.isNotEmpty) {
+      final base = await _copertinaDownloader.baseDirectory();
+      for (final riga in righe) {
+        final nomeFile = riga.fileCopertina;
+        if (nomeFile == null || coverPerFile.containsKey(nomeFile)) continue;
+        final bytes = copertine[nomeFile];
+        if (bytes == null || bytes.isEmpty) continue;
+        final estensione = p.extension(nomeFile).replaceFirst('.', '');
+        final locale = await _copertinaDownloader.salvaBytes(
+          bytes,
+          estensione: estensione.isEmpty ? 'jpg' : estensione.toLowerCase(),
+        );
+        coverPerFile[nomeFile] = percorso_locale.relativizza(locale, base);
+      }
+    }
+
     return _db.transaction(() async {
       for (final riga in righe) {
         final operaId = await aggiungiOpera(
@@ -2869,6 +2897,7 @@ ORDER BY o.title, e.issue_number
           classificazione: riga.classificazione,
           year: riga.year,
           format: riga.format,
+          coverImage: coverPerFile[riga.fileCopertina],
           createdAt: riga.createdAt,
         );
 

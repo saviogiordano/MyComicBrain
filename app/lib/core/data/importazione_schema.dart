@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart' as archive_pkg;
 import 'package:csv/csv.dart' as csv_pkg;
 import 'package:excel/excel.dart' as excel_pkg;
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
 import 'package:mycomicbrain/core/domain/voce_stato.dart';
+import 'package:path/path.dart' as p;
 
 /// Un autore da collegare a un'Edizione importata — a differenza di
 /// [CreatorConRuolo] non ha ancora id: il Creator viene creato in scrittura
@@ -49,6 +51,7 @@ class RigaImportazioneParsata {
     this.location,
     this.notes,
     this.createdAt,
+    this.fileCopertina,
   });
 
   final String operaTitolo;
@@ -83,6 +86,12 @@ class RigaImportazioneParsata {
   /// scritture (`ComicsRepository.aggiungiOpera`/...) usano `DateTime.now()`
   /// di default.
   final DateTime? createdAt;
+
+  /// Valore della colonna "Copertina": percorso dell'immagine dentro lo zip
+  /// dell'export (es. `copertine/edizione_10.jpg`). Usato solo da un import
+  /// da zip ([analizzaZipImportazione]); da un CSV/JSON/Excel sciolto non
+  /// c'è un'immagine da collegare e resta ignorato.
+  final String? fileCopertina;
 }
 
 /// Una riga scartata durante l'analisi (§16, deciso su #142): campo
@@ -223,6 +232,73 @@ RisultatoAnalisiImportazione analizzaExcelImportazione(Uint8List bytes) {
   return RisultatoAnalisiImportazione(valide: valide, scartate: scartate);
 }
 
+/// Esito dell'analisi di uno zip d'import (§16): le righe del file dati più
+/// le immagini trovate nello zip, indicizzate col percorso relativo al file
+/// dati — la stessa forma della colonna "Copertina"
+/// ([RigaImportazioneParsata.fileCopertina]).
+class ContenutoZipImportazione {
+  const ContenutoZipImportazione({
+    required this.analisi,
+    required this.copertine,
+  });
+
+  final RisultatoAnalisiImportazione analisi;
+  final Map<String, Uint8List> copertine;
+}
+
+const _estensioniDati = {'.csv', '.json', '.xlsx'};
+
+/// Analizza uno zip generato dall'export (file dati + `copertine/`). Il
+/// file dati è il CSV/JSON/Excel meno annidato: uno zip ricompresso a mano
+/// dopo averlo estratto ha spesso una cartella radice in più, quindi i
+/// percorsi delle cover sono risolti relativamente alla cartella del file
+/// dati, non alla radice dello zip. Ignora i metadati di macOS
+/// (`__MACOSX/`, `._*`). Lancia [FormatException] se lo zip non contiene un
+/// file dati.
+ContenutoZipImportazione analizzaZipImportazione(Uint8List bytes) {
+  final archivio = archive_pkg.ZipDecoder().decodeBytes(bytes);
+  final file = <String, archive_pkg.ArchiveFile>{
+    for (final f in archivio.files)
+      if (f.isFile && !_eMetadatoMacOs(f.name))
+        f.name.replaceAll(r'\', '/'): f,
+  };
+
+  final candidatiDati =
+      file.keys
+          .where((n) => _estensioniDati.contains(p.extension(n).toLowerCase()))
+          .toList()
+        ..sort(
+          (a, b) => p.posix.split(a).length.compareTo(p.posix.split(b).length),
+        );
+  if (candidatiDati.isEmpty) {
+    throw const FormatException(
+      'Lo zip non contiene un file CSV, JSON o Excel',
+    );
+  }
+
+  final nomeDati = candidatiDati.first;
+  final contenutoDati = Uint8List.fromList(file[nomeDati]!.content as List<int>);
+  final analisi = switch (p.extension(nomeDati).toLowerCase()) {
+    '.xlsx' => analizzaExcelImportazione(contenutoDati),
+    '.json' => analizzaJsonImportazione(utf8.decode(contenutoDati)),
+    _ => analizzaCsvImportazione(utf8.decode(contenutoDati)),
+  };
+
+  final cartellaDati = p.posix.dirname(nomeDati);
+  final copertine = <String, Uint8List>{
+    for (final MapEntry(key: nome, value: f) in file.entries)
+      if (nome != nomeDati)
+        p.posix.relative(nome, from: cartellaDati): Uint8List.fromList(
+          f.content as List<int>,
+        ),
+  };
+
+  return ContenutoZipImportazione(analisi: analisi, copertine: copertine);
+}
+
+bool _eMetadatoMacOs(String nome) =>
+    nome.startsWith('__MACOSX/') || p.posix.basename(nome).startsWith('._');
+
 /// Analizza una riga già ridotta a mappa etichetta->valore (stesse
 /// etichette di `colonneEsportazione`, condivise fra CSV e JSON) e la
 /// smista fra [valide] e [scartate] — unica logica di validazione
@@ -306,6 +382,7 @@ void _smistaRiga(
       location: _nonVuoto(valori['Posizione']),
       notes: _nonVuoto(valori['Note']),
       createdAt: _parseData(valori['Aggiunta il']),
+      fileCopertina: _nonVuoto(valori['Copertina']),
     ),
   );
 }

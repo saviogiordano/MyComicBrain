@@ -6,10 +6,8 @@ import 'package:mycomicbrain/core/domain/formato.dart';
 /// [#141](https://github.com/saviogiordano/MyComicBrain/issues/141) —
 /// variante C, schede ibride raggruppate Serie → Opera). Sottoinsieme dei
 /// campi di `RigaEsportazioneCopia` scelto per un catalogo leggibile (non un
-/// dump dati per data-interchange) più la cover risolta — assente
-/// nell'export dati per decisione della mappa
-/// [#139](https://github.com/saviogiordano/MyComicBrain/issues/139), qui
-/// necessaria per le schede.
+/// dump dati per data-interchange) più la cover risolta, qui necessaria
+/// per le schede.
 class RigaCatalogoStampabile {
   const RigaCatalogoStampabile({
     required this.copiaId,

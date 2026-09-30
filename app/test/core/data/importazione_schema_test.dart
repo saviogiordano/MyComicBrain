@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:archive/archive.dart' as archive_pkg;
 import 'package:csv/csv.dart' as csv_pkg;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/esportazione_schema.dart';
@@ -210,6 +212,101 @@ void main() {
       expect(risultato.valide, isEmpty);
       expect(risultato.scartate, hasLength(1));
       expect(risultato.scartate.single.motivo, contains('Opera'));
+    });
+  });
+
+  group('analizzaZipImportazione', () {
+    final jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 1]);
+
+    Uint8List zipCon(Map<String, List<int>> file) {
+      final archivio = archive_pkg.Archive();
+      for (final MapEntry(key: nome, value: bytes) in file.entries) {
+        archivio.addFile(archive_pkg.ArchiveFile(nome, bytes.length, bytes));
+      }
+      return Uint8List.fromList(archive_pkg.ZipEncoder().encode(archivio)!);
+    }
+
+    test("roundtrip con lo zip dell'export: righe più cover collegate", () {
+      final riga = rigaCompleta();
+      const fileCopertina = 'copertine/edizione_10.jpg';
+      final zip = generaZipEsportazione(
+        nomeFileDati: 'collezione.csv',
+        bytesDati: utf8.encode(
+          generaCsvEsportazione(
+            [riga],
+            fileCopertine: {riga.edizioneId: fileCopertina},
+          ),
+        ),
+        copertine: {fileCopertina: jpeg},
+      );
+
+      final contenuto = analizzaZipImportazione(zip);
+
+      expect(contenuto.analisi.scartate, isEmpty);
+      final valida = contenuto.analisi.valide.single;
+      expect(valida.operaTitolo, 'Dylan Dog');
+      expect(valida.fileCopertina, fileCopertina);
+      expect(contenuto.copertine, {fileCopertina: jpeg});
+    });
+
+    for (final (formato, genera) in <(String, List<int> Function())>[
+      (
+        'json',
+        () => utf8.encode(
+          generaJsonEsportazione(
+            [rigaCompleta()],
+            fileCopertine: {10: 'copertine/edizione_10.jpg'},
+          ),
+        ),
+      ),
+      (
+        'xlsx',
+        () => generaExcelEsportazione(
+          [rigaCompleta()],
+          fileCopertine: {10: 'copertine/edizione_10.jpg'},
+        ),
+      ),
+    ]) {
+      test('legge la colonna Copertina anche da un file $formato', () {
+        final contenuto = analizzaZipImportazione(
+          zipCon({
+            'collezione.$formato': genera(),
+            'copertine/edizione_10.jpg': jpeg,
+          }),
+        );
+
+        expect(
+          contenuto.analisi.valide.single.fileCopertina,
+          'copertine/edizione_10.jpg',
+        );
+      });
+    }
+
+    test('zip ricompresso con una cartella radice e metadati macOS', () {
+      final csv = generaCsvEsportazione(
+        [rigaCompleta()],
+        fileCopertine: {10: 'copertine/edizione_10.jpg'},
+      );
+      final contenuto = analizzaZipImportazione(
+        zipCon({
+          'export/collezione.csv': utf8.encode(csv),
+          'export/copertine/edizione_10.jpg': jpeg,
+          '__MACOSX/export/._collezione.csv': [0, 1],
+          'export/copertine/._edizione_10.jpg': [0, 1],
+        }),
+      );
+
+      expect(contenuto.analisi.valide, hasLength(1));
+      expect(contenuto.copertine, {'copertine/edizione_10.jpg': jpeg});
+    });
+
+    test('zip senza file dati: FormatException', () {
+      expect(
+        () => analizzaZipImportazione(
+          zipCon({'copertine/edizione_10.jpg': jpeg}),
+        ),
+        throwsFormatException,
+      );
     });
   });
 }

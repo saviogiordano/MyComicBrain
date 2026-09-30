@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/data/importazione_schema.dart';
@@ -197,19 +199,41 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
   /// #139/#140) nel [formato] scelto e la consegna tramite lo share sheet
   /// di sistema (`EsportazioneService`) — un solo export alla volta
   /// ([_esportazioneInCorso]), errori riusano lo stesso popup esteso di
-  /// "Verifica connessione" ([_mostraErroreVerifica]).
+  /// "Verifica connessione" ([_mostraErroreVerifica]). Durante la
+  /// generazione (che può scaricare molte cover) una dialog modale di attesa
+  /// indica il formato scelto; si chiude prima dello share sheet.
   Future<void> _esporta(FormatoEsportazione formato) async {
     if (_esportazioneInCorso) return;
     setState(() => _esportazioneInCorso = true);
+    final servizio = ref.read(esportazioneServiceProvider);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var attesaAperta = true;
+    void chiudiAttesa() {
+      if (!attesaAperta) return;
+      attesaAperta = false;
+      navigator.pop();
+    }
+
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _DialogAttesaEsportazione(formato: formato),
+      ),
+    );
     try {
-      await ref.read(esportazioneServiceProvider).esporta(formato);
+      final pronta = await servizio.prepara(formato);
+      chiudiAttesa();
+      await servizio.condividi(pronta);
     } on Object catch (e) {
+      chiudiAttesa();
       if (!mounted) return;
       await _mostraErroreVerifica(
         'Esportazione',
         'Esportazione non riuscita: $e',
       );
     } finally {
+      chiudiAttesa();
       if (mounted) setState(() => _esportazioneInCorso = false);
     }
   }
@@ -921,6 +945,43 @@ class _Divisore extends StatelessWidget {
       color: AppColors.borderSubtle,
       indent: AppSpacing.md,
       endIndent: AppSpacing.md,
+    );
+  }
+}
+
+/// Dialog modale di attesa dell'export (§16): non chiudibile dall'utente,
+/// indica il formato scelto finché `EsportazioneService.prepara` non ha
+/// finito.
+class _DialogAttesaEsportazione extends StatelessWidget {
+  const _DialogAttesaEsportazione({required this.formato});
+
+  final FormatoEsportazione formato;
+
+  @override
+  Widget build(BuildContext context) {
+    final dettaglio = formato == FormatoEsportazione.pdf
+        ? 'Generazione del catalogo stampabile con le copertine…'
+        : 'Preparazione dello zip con i dati e le copertine…';
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        backgroundColor: AppColors.surfaceRaised,
+        title: Text('Esportazione in ${formato.label}'),
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                color: AppColors.accent,
+                strokeWidth: 2.5,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: Text(dettaglio)),
+          ],
+        ),
+      ),
     );
   }
 }

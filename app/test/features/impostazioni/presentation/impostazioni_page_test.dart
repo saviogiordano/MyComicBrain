@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -20,14 +22,34 @@ import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_pag
 /// verifica il percorso di errore di "Importa/Esporta dati" senza dipendere
 /// dai plugin di piattaforma `path_provider`/`share_plus`, non mockati nei
 /// widget test. Il `ComicsRepository` passato al costruttore non è mai
-/// letto — [esporta] è sovrascritto per non chiamarlo.
+/// letto — [prepara] è sovrascritto per non chiamarlo.
 class _EsportazioneServiceCheFallisce extends EsportazioneService {
   _EsportazioneServiceCheFallisce(ComicsRepository repository)
     : super(repository);
 
   @override
-  Future<void> esporta(FormatoEsportazione formato) {
+  Future<EsportazionePronta> prepara(FormatoEsportazione formato) {
     throw Exception('errore finto');
+  }
+}
+
+/// [EsportazioneService] finto la cui generazione resta in sospeso finché
+/// il test non completa [completer] — per verificare la dialog di attesa.
+/// [condividi] non chiama `share_plus` (plugin non mockato nei widget test).
+class _EsportazioneServiceInSospeso extends EsportazioneService {
+  _EsportazioneServiceInSospeso(ComicsRepository repository)
+    : super(repository);
+
+  final completer = Completer<EsportazionePronta>();
+  EsportazionePronta? condivisa;
+
+  @override
+  Future<EsportazionePronta> prepara(FormatoEsportazione formato) =>
+      completer.future;
+
+  @override
+  Future<void> condividi(EsportazionePronta esportazione) async {
+    condivisa = esportazione;
   }
 }
 
@@ -588,5 +610,60 @@ void main() {
         expect(find.text('Esporta in CSV'), findsOneWidget);
       },
     );
+
+    for (final formato in FormatoEsportazione.values) {
+      testWidgets(
+        "durante l'export in ${formato.label} mostra una dialog di attesa "
+        'col formato scelto, chiusa prima della condivisione',
+        (tester) async {
+          final db = AppDatabase(
+            DatabaseConnection(
+              NativeDatabase.memory(),
+              closeStreamsSynchronously: true,
+            ),
+          );
+          addTearDown(db.close);
+          final servizio = _EsportazioneServiceInSospeso(ComicsRepository(db));
+
+          await pumpImpostazioni(tester, esportazioneService: servizio);
+          final riga = switch (formato) {
+            FormatoEsportazione.csv => 'Esporta in CSV',
+            FormatoEsportazione.json => 'Esporta in JSON',
+            FormatoEsportazione.excel => 'Esporta in Excel',
+            FormatoEsportazione.pdf => 'Esporta in PDF (catalogo stampabile)',
+          };
+          await tester.scrollUntilVisible(find.text(riga), 200);
+
+          await tester.tap(find.text(riga));
+          await tester.pump();
+
+          final titolo = find.text('Esportazione in ${formato.label}');
+          expect(titolo, findsOneWidget);
+          expect(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.byType(CircularProgressIndicator),
+            ),
+            findsOneWidget,
+          );
+
+          // Non chiudibile toccando fuori.
+          await tester.tapAt(const Offset(5, 5));
+          await tester.pump();
+          expect(titolo, findsOneWidget);
+
+          final pronta = EsportazionePronta(
+            formato: formato,
+            bytes: Uint8List(0),
+            nomeFile: 'finto',
+          );
+          servizio.completer.complete(pronta);
+          await tester.pumpAndSettle();
+
+          expect(find.byType(AlertDialog), findsNothing);
+          expect(servizio.condivisa, same(pronta));
+        },
+      );
+    }
   });
 }

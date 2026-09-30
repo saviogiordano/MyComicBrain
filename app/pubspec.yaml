@@ -30,6 +30,9 @@ environment:
 dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
+  # Zip dell'export (dati + cover). Fissato a ^3.6.1: `excel` ^4.0.6
+  # richiede `archive` 3.x (vedi la nota su `image` più sotto).
+  archive: ^3.6.1
   csv: ^8.0.0
   cunning_document_scanner: ^3.0.1
   cupertino_icons: ^1.0.8

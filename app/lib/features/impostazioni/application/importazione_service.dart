@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +17,9 @@ final importazioneServiceProvider = Provider<ImportazioneService>(
   (ref) => ImportazioneService(ref.watch(comicsRepositoryProvider)),
 );
 
-/// Importa CSV/JSON/Excel nello stesso schema dell'export (§16, deciso su
+/// Importa lo zip dell'export (file dati + cover in `copertine/`) oppure un
+/// CSV/JSON/Excel sciolto (senza cover), nello stesso schema dell'export
+/// (§16, deciso su
 /// #139/#142/[#144](https://github.com/saviogiordano/MyComicBrain/issues/144),
 /// sezione "Importa/Esporta dati" di Impostazioni): selezione del file
 /// tramite `file_picker`, formato riconosciuto dall'estensione (a
@@ -33,14 +36,21 @@ class ImportazioneService {
   Future<RisultatoAnalisiImportazione?> importa() async {
     final file = await FilePicker.pickFile(
       type: FileType.custom,
-      allowedExtensions: ['csv', 'json', 'xlsx'],
+      allowedExtensions: ['zip', 'csv', 'json', 'xlsx'],
     );
     final percorso = file?.path;
     if (percorso == null) return null;
 
     final estensione = p.extension(percorso).toLowerCase();
     final RisultatoAnalisiImportazione analisi;
-    if (estensione == '.xlsx') {
+    var copertine = const <String, Uint8List>{};
+    if (estensione == '.zip') {
+      final contenuto = analizzaZipImportazione(
+        await File(percorso).readAsBytes(),
+      );
+      analisi = contenuto.analisi;
+      copertine = contenuto.copertine;
+    } else if (estensione == '.xlsx') {
       analisi = analizzaExcelImportazione(await File(percorso).readAsBytes());
     } else if (estensione == '.json') {
       analisi = analizzaJsonImportazione(await File(percorso).readAsString());
@@ -49,7 +59,7 @@ class ImportazioneService {
     }
 
     if (analisi.valide.isNotEmpty) {
-      await _repository.importaRighe(analisi.valide);
+      await _repository.importaRighe(analisi.valide, copertine: copertine);
     }
 
     return analisi;

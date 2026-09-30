@@ -2054,6 +2054,23 @@ void main() {
       final riga = (await repo.tutteLeCopiePerEsportazione()).single;
 
       expect(riga.serieName, isNull);
+      expect(riga.coverImage, isNull);
+    });
+
+    test("porta la cover risolta dell'Edizione (per lo zip)", () async {
+      final operaId = await repo.aggiungiOpera(title: 'Dylan Dog');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        coverImage: 'https://example.com/cover.jpg',
+      );
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+
+      final riga = (await repo.tutteLeCopiePerEsportazione()).single;
+
+      expect(riga.coverImage, 'https://example.com/cover.jpg');
     });
   });
 
@@ -2147,6 +2164,66 @@ void main() {
   );
 
   group('importaRighe (§16, deciso su #142)', () {
+    test(
+      'import da zip: salva le cover in copertine/ (una per file) e le '
+      "collega all'Edizione col percorso relativo",
+      () async {
+        final tempBase = await Directory.systemTemp.createTemp(
+          'importaRighe_copertine_test_',
+        );
+        addTearDown(() => tempBase.delete(recursive: true));
+        final repoConBase = ComicsRepository(
+          db,
+          copertinaDownloader: CopertinaDownloader(
+            baseDirectory: () async => tempBase,
+          ),
+        );
+        final jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 1]);
+
+        await repoConBase.importaRighe(
+          [
+            const RigaImportazioneParsata(
+              operaTitolo: 'Dylan Dog #1',
+              status: StatoCopia.posseduta,
+              fileCopertina: 'copertine/edizione_10.jpg',
+            ),
+            // Seconda Copia della stessa Edizione esportata: stesso file.
+            const RigaImportazioneParsata(
+              operaTitolo: 'Dylan Dog #1',
+              status: StatoCopia.venduta,
+              fileCopertina: 'copertine/edizione_10.jpg',
+            ),
+            // File assente nello zip: nessuna cover, riga comunque importata.
+            const RigaImportazioneParsata(
+              operaTitolo: 'Martin Mystère #1',
+              status: StatoCopia.posseduta,
+              fileCopertina: 'copertine/edizione_99.jpg',
+            ),
+          ],
+          copertine: {'copertine/edizione_10.jpg': jpeg},
+        );
+
+        final edizioni = await (db.select(
+          db.edizioni,
+        )..orderBy([(e) => OrderingTerm.asc(e.id)])).get();
+        expect(edizioni, hasLength(3));
+        final cover = edizioni[0].coverImage!;
+        expect(p.isRelative(cover), isTrue);
+        expect(p.split(cover).first, 'copertine');
+        expect(edizioni[1].coverImage, cover);
+        expect(edizioni[2].coverImage, isNull);
+
+        final salvate = Directory(
+          p.join(tempBase.path, 'copertine'),
+        ).listSync();
+        expect(salvate, hasLength(1));
+        expect(
+          File(p.join(tempBase.path, cover)).readAsBytesSync(),
+          jpeg,
+        );
+      },
+    );
+
     test(
       'scrive Opera/Edizione/Copia/Autori a partire dalla riga parsata',
       () async {
