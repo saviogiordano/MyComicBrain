@@ -13,6 +13,11 @@ Decisione, in sintesi:
 - **Immagini** delle cover caricate su Supabase Storage durante la stessa operazione.
 - **Dopo una migrazione riuscita, drift viene svuotato**: Supabase diventa l'unica fonte autorevole per quell'account, l'app opera online-only per i profili autenticati (nessuna cache locale di lettura) finché una mappa futura non riprogetta sincronizzazione/offline (§18/§19, fuori scope qui).
 - **Gestione errori**: operazione bloccante e riprovabile in primo piano ("importazione in corso/fallita, riprova"), non best-effort silenzioso in background — evita stati ambigui su una collezione intera di dati non duplicabili facilmente (foto, catalogazione manuale).
+- **Quando la Modalità locale si esaurisce** (precisato sul prototipo [#170](https://github.com/saviogiordano/MyComicBrain/issues/170)): non all'autenticazione in sé, ma solo quando l'importazione **riesce** o viene **rifiutata** (rifiuto con doppia conferma, perché scarta drift). Se all'autenticazione drift è vuoto, si esaurisce subito. Finché nessuna delle due cose accade, drift resta intatto:
+  - se l'importazione fallisce, oltre a "Riprova" l'utente può scegliere "Esci e riprova più tardi": logout, drift intatto, ritorno alla Modalità locale;
+  - se l'app si chiude durante l'importazione, al riavvio (sessione presente, drift con dati, Modalità locale non esaurita) il prompt si ripresenta e l'importazione riprende da dove si era fermata.
+
+  Una volta esaurita, la Modalità locale non torna più disponibile su quel device, nemmeno dopo logout o eliminazione dell'account: il benvenuto offre solo le opzioni di accesso.
 
 ## Considered Options
 
@@ -25,5 +30,6 @@ Decisione, in sintesi:
 ## Consequences
 
 - L'implementazione di questa migrazione (probabile prossimo passo esecutivo dopo questa mappa) deve, per ogni riga migrata, popolare `collection_id`/`created_by` come definiti in ADR-0004, e caricare le immagini locali su Supabase Storage prima di considerare la riga migrata.
-- Il flusso di registrazione/login deve controllare la presenza di dati in Modalità locale sul device *prima* di completare l'autenticazione, per poter mostrare il prompt di conferma.
+- Il flusso di registrazione/login deve controllare la presenza di dati in Modalità locale sul device subito dopo l'autenticazione e prima di entrare nell'app, per poter mostrare il prompt di conferma a schermo intero. Serve la sessione per sapere se la Collezione di destinazione è vuota o già popolata, e il testo del prompt cambia di conseguenza (dettagli UX in [#170](https://github.com/saviogiordano/MyComicBrain/issues/170)).
+- L'importazione deve essere idempotente e riprendibile (dopo un errore o una chiusura dell'app), e lo stato "Modalità locale esaurita" va persistito sul device separatamente dalla sessione, perché logout ed eliminazione dell'account non lo azzerano.
 - Un futuro lavoro su §18/§19 (sincronizzazione/offline per profili già autenticati) non riguarda questa decisione: la Modalità locale qui descritta esiste solo *prima* dell'autenticazione, non come cache parallela dopo.
