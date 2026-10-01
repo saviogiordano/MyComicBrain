@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
@@ -40,11 +41,22 @@ class DashboardPage extends ConsumerWidget {
     // stato "collezione popolata" (segnalato da utente).
     final inSospeso =
         ref.watch(scansioniNonConfermateProvider).valueOrNull ?? const [];
+    final emailInAttesa = ref.watch(statoAccountProvider)?.emailInAttesa;
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
+            if (emailInAttesa != null)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  0,
+                ),
+                child: _ConfermaEmailBanner(),
+              ),
             if (inSospeso.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(
@@ -77,6 +89,39 @@ class DashboardPage extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Conferma email non bloccante (variante B del prototipo #170): l'utente
+/// è in Modalità locale finché non tocca il link; il banner porta alla card
+/// di Impostazioni con Reinvia / Cambia email.
+class _ConfermaEmailBanner extends StatelessWidget {
+  const _ConfermaEmailBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      onTap: () => context.go('/impostazioni'),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.mark_email_unread_outlined,
+            color: AppColors.amber,
+            size: 20,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              "Conferma la tua email per attivare l'account",
+              style: AppTypography.titleMedium.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Icon(Icons.chevron_right, color: AppColors.textMuted),
+        ],
       ),
     );
   }
@@ -244,18 +289,30 @@ class _EmptyCollection extends StatelessWidget {
 }
 
 /// Etichetta "LA TUA COLLEZIONE" + [content] (totale o messaggio a
-/// seconda dello stato).
-class _Header extends StatelessWidget {
+/// seconda dello stato), con la pillola "Modalità locale" / "Account" a
+/// destra quando il login reale è attivo (#171, prototipo #170).
+class _Header extends ConsumerWidget {
   const _Header({required this.content});
 
   final Widget content;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final account = ref.watch(statoAccountProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(label: 'la tua collezione'),
+        Row(
+          children: [
+            const Expanded(child: SectionHeader(label: 'la tua collezione')),
+            if (account != null)
+              AppChip(
+                label: account.profilo != null ? 'Account' : 'Modalità locale',
+                selected: account.profilo != null,
+                onTap: () => context.go('/impostazioni'),
+              ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.xs),
         content,
       ],

@@ -63,6 +63,29 @@ class ComicsRepository {
     return tasso;
   }
 
+  /// Ci sono dati in Modalità locale da importare (ADR-0005)? Catalogo
+  /// (Opere, Serie, Creator, Personaggi, Tag) o Scansioni — non la
+  /// Conversazione, che non migra. Usato dal login (#171) per decidere se la
+  /// Modalità locale si esaurisce subito.
+  Future<bool> haDatiDaImportare() async {
+    for (final tabella in <TableInfo<Table, Object?>>[
+      _db.opere,
+      _db.serieTable,
+      _db.scansioni,
+      _db.creator,
+      _db.character,
+      _db.tagTable,
+    ]) {
+      final riga =
+          await (_db.selectOnly(tabella)
+                ..addColumns([const CustomExpression<int>('1')])
+                ..limit(1))
+              .getSingleOrNull();
+      if (riga != null) return true;
+    }
+    return false;
+  }
+
   // --- Scrittura (usata dai test per costruire fixture; superficie minima
   // per il catalogo — nessuna schermata di questa mappa scrive dati). ---
 

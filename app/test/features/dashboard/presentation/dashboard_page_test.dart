@@ -6,6 +6,8 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mycomicbrain/core/auth/auth_gateway.dart';
+import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
@@ -29,10 +31,16 @@ void main() {
 
   tearDown(() => db.close());
 
-  Future<void> pumpDashboard(WidgetTester tester) async {
+  Future<void> pumpDashboard(
+    WidgetTester tester, {
+    SessionState? account,
+  }) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          if (account != null) statoAccountProvider.overrideWithValue(account),
+        ],
         child: MaterialApp(theme: AppTheme.dark, home: const DashboardPage()),
       ),
     );
@@ -301,5 +309,60 @@ void main() {
         expect(find.textContaining('in sospeso'), findsNothing);
       },
     );
+  });
+
+  group('account (login reale dietro flag, #171)', () {
+    SessionState stato({Profilo? profilo, String? emailInAttesa}) =>
+        SessionState(
+          profilo: profilo,
+          benvenutoSuperato: true,
+          modalitaLocaleEsaurita: profilo != null,
+          emailInAttesa: emailInAttesa,
+        );
+
+    testWidgets('senza flag niente pillola né banner', (tester) async {
+      await pumpDashboard(tester);
+
+      expect(find.text('Modalità locale'), findsNothing);
+      expect(find.text('Account'), findsNothing);
+    });
+
+    testWidgets('in Modalità locale mostra la pillola "Modalità locale"', (
+      tester,
+    ) async {
+      await pumpDashboard(tester, account: stato());
+
+      expect(find.text('Modalità locale'), findsOneWidget);
+    });
+
+    testWidgets('con un Profilo autenticato mostra la pillola "Account"', (
+      tester,
+    ) async {
+      await pumpDashboard(
+        tester,
+        account: stato(
+          profilo: const Profilo(
+            email: 'mario@example.com',
+            metodo: MetodoAccesso.google,
+          ),
+        ),
+      );
+
+      expect(find.text('Account'), findsOneWidget);
+    });
+
+    testWidgets("con l'email in attesa mostra il banner di conferma", (
+      tester,
+    ) async {
+      await pumpDashboard(
+        tester,
+        account: stato(emailInAttesa: 'mario@example.com'),
+      );
+
+      expect(
+        find.text("Conferma la tua email per attivare l'account"),
+        findsOneWidget,
+      );
+    });
   });
 }
