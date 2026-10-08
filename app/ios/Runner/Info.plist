@@ -74,6 +74,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<!-- Deep link di ritorno per conferma email e Apple su Android (#171, ricerca #168 §3). -->

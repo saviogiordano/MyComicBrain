@@ -14,6 +14,10 @@ abstract interface class AuthGateway {
 
   Stream<Profilo?> get cambiamenti;
 
+  /// Link della mail (conferma, Apple via browser su Android) arrivati con
+  /// un errore — tipicamente scaduti o già usati. Non cambiano la sessione.
+  Stream<AuthErrore> get erroriLink;
+
   Future<void> accediConApple();
   Future<void> accediConGoogle();
   Future<void> accediConEmail(String email, String password);
@@ -49,6 +53,9 @@ enum AuthErrore {
   emailNonConfermata,
   emailGiaRegistrata,
   passwordDebole,
+
+  /// Link della mail scaduto o già usato (`otp_expired`).
+  linkNonValido,
   rete,
   sconosciuto,
 }

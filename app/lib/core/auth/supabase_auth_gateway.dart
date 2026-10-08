@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -27,10 +28,26 @@ class SupabaseAuthGateway implements AuthGateway {
   @override
   Profilo? get profiloCorrente => _profilo(_auth.currentUser);
 
+  // Gli errori dei deep link arrivano su `onAuthStateChange`
+  // (`GoTrueClient.notifyException`): qui li si scarta, li espone
+  // [erroriLink].
   @override
   Stream<Profilo?> get cambiamenti => _auth.onAuthStateChange
+      .handleError((Object _) {})
       .map((evento) => _profilo(evento.session?.user))
       .distinct((a, b) => a?.email == b?.email && a?.metodo == b?.metodo);
+
+  @override
+  Stream<AuthErrore> get erroriLink => _auth.onAuthStateChange.transform(
+    StreamTransformer<sb.AuthState, AuthErrore>.fromHandlers(
+      handleData: (_, _) {},
+      handleError: (errore, _, sink) => sink.add(
+        errore is sb.AuthException && errore.statusCode == 'otp_expired'
+            ? AuthErrore.linkNonValido
+            : AuthErrore.sconosciuto,
+      ),
+    ),
+  );
 
   static Profilo? _profilo(sb.User? utente) {
     if (utente == null) return null;

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/auth/auth_gateway.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
+import 'package:mycomicbrain/features/login/presentation/accesso_ui.dart';
 import 'package:mycomicbrain/features/login/presentation/avviso_accesso.dart';
 
 import '../../../core/auth/fake_auth_gateway.dart';
@@ -103,5 +104,20 @@ void main() {
 
     expect(ritorniInDashboard, 0);
     expect(find.byType(SnackBar), findsNothing);
+  });
+
+  testWidgets('un link di conferma scaduto o già usato mostra un errore', (
+    tester,
+  ) async {
+    await mostra(tester);
+
+    gateway.linkNonValido();
+    await tester.pumpAndSettle();
+
+    expect(ritorniInDashboard, 0);
+    expect(
+      find.text(messaggioErroreAccesso(AuthErrore.linkNonValido)),
+      findsOneWidget,
+    );
   });
 }

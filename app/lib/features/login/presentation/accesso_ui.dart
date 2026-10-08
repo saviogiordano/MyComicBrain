@@ -13,6 +13,9 @@ String messaggioErroreAccesso(AuthErrore errore) => switch (errore) {
   AuthErrore.passwordDebole =>
     'Password troppo debole: usa almeno 8 caratteri, con maiuscole, '
         'minuscole e numeri.',
+  AuthErrore.linkNonValido =>
+    'Il link di conferma è scaduto o è già stato usato. Prova ad accedere; '
+        'se la tua email non è ancora confermata, chiedi un nuovo link.',
   AuthErrore.rete => 'Serve una connessione a Internet.',
   AuthErrore.sconosciuto => 'Accesso non riuscito. Riprova.',
 };

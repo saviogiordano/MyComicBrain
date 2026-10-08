@@ -24,6 +24,11 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- I deep link li gestisce solo supabase_flutter (app_links), non
+                 go_router, che non ha rotte per login-callback (#171). -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false" />
             <!-- Deep link di ritorno per conferma email e Apple via browser
                  (#171, ricerca #168 §3). -->
             <intent-filter>

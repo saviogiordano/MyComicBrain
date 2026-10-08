@@ -33,6 +33,14 @@ class FakeAuthGateway implements AuthGateway {
     if (errore != null) throw errore;
   }
 
+  final _erroriLink = StreamController<AuthErrore>.broadcast(sync: true);
+
+  /// L'utente tocca un link di conferma scaduto o già usato.
+  void linkNonValido() => _erroriLink.add(AuthErrore.linkNonValido);
+
+  @override
+  Stream<AuthErrore> get erroriLink => _erroriLink.stream;
+
   /// L'utente tocca il link di conferma nella mail (deep link PKCE).
   void confermaEmailDaLink(String email) {
     account[email] = (password: account[email]!.password, confermato: true);
