@@ -9,6 +9,7 @@ import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
 import 'package:mycomicbrain/core/design_system/app_theme.dart';
 import 'package:mycomicbrain/core/routing/router.dart';
+import 'package:mycomicbrain/features/login/presentation/avviso_accesso.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -65,12 +66,19 @@ class MyComicBrainApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: 'MyComicBrain',
       theme: AppTheme.dark,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
-      routerConfig: ref.watch(routerProvider),
+      routerConfig: router,
+      builder: AuthConfig.loginAbilitato
+          ? (context, child) => AvvisoAccesso(
+              vaiAllaDashboard: () => router.go('/dashboard'),
+              child: child!,
+            )
+          : null,
     );
   }
 }

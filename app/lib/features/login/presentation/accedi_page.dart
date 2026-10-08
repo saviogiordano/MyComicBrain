@@ -9,8 +9,9 @@ enum ModoAccesso { registrati, accedi }
 
 /// Schermata unica "Crea il tuo account" / "Accedi" (#171, prototipo #170):
 /// Apple e Google in alto, sotto email+password. Raggiunta dal benvenuto e
-/// da Impostazioni (Modalità locale). Su accesso riuscito si chiude: il
-/// router porta comunque dentro l'app quando nasce la sessione.
+/// da Impostazioni (Modalità locale). Su accesso riuscito `AvvisoAccesso`
+/// porta alla Dashboard; dopo una registrazione in attesa di conferma si
+/// chiude.
 class AccediPage extends ConsumerStatefulWidget {
   const AccediPage({required this.modo, super.key});
 
@@ -52,7 +53,11 @@ class _AccediPageState extends ConsumerState<AccediPage> {
     final riuscito = await eseguiAccesso(context, azione);
     if (!mounted) return;
     setState(() => _inCorso = false);
-    if (riuscito) await Navigator.of(context).maybePop();
+    // Con un accesso riuscito ci pensa AvvisoAccesso (Dashboard + avviso);
+    // qui resta solo la registrazione in attesa di conferma.
+    if (riuscito && ref.read(sessionControllerProvider).profilo == null) {
+      await Navigator.of(context).maybePop();
+    }
   }
 
   Future<void> _inviaEmail() async {
