@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mycomicbrain/core/auth/requisiti_password.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/login/presentation/accesso_ui.dart';
@@ -24,6 +25,14 @@ class _AccediPageState extends ConsumerState<AccediPage> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _inCorso = false;
+  bool _passwordVisibile = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ricostruisce la checklist dei requisiti mentre si scrive.
+    _password.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -33,6 +42,10 @@ class _AccediPageState extends ConsumerState<AccediPage> {
   }
 
   bool get _registrazione => _modo == ModoAccesso.registrati;
+
+  bool get _puoInviare =>
+      !_inCorso &&
+      (!_registrazione || requisitiMancanti(_password.text).isEmpty);
 
   Future<void> _esegui(Future<void> Function() azione) async {
     setState(() => _inCorso = true);
@@ -126,19 +139,38 @@ class _AccediPageState extends ConsumerState<AccediPage> {
             const SizedBox(height: AppSpacing.sm),
             TextField(
               controller: _password,
-              obscureText: true,
+              obscureText: !_passwordVisibile,
               autofillHints: [
                 if (_registrazione)
                   AutofillHints.newPassword
                 else
                   AutofillHints.password,
               ],
-              decoration: const InputDecoration(labelText: 'Password'),
+              decoration: InputDecoration(
+                labelText: 'Password',
+                suffixIcon: IconButton(
+                  tooltip: _passwordVisibile
+                      ? 'Nascondi password'
+                      : 'Mostra password',
+                  icon: Icon(
+                    _passwordVisibile
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                  onPressed: () => setState(
+                    () => _passwordVisibile = !_passwordVisibile,
+                  ),
+                ),
+              ),
             ),
+            if (_registrazione) ...[
+              const SizedBox(height: AppSpacing.xs),
+              _RequisitiPassword(mancanti: requisitiMancanti(_password.text)),
+            ],
             const SizedBox(height: AppSpacing.md),
             PulsanteIngresso(
               etichetta: _registrazione ? 'Crea account' : 'Accedi',
-              onPressed: _inCorso ? null : _inviaEmail,
+              onPressed: _puoInviare ? _inviaEmail : null,
             ),
             TextButton(
               onPressed: () => setState(
@@ -155,6 +187,49 @@ class _AccediPageState extends ConsumerState<AccediPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Checklist dei requisiti della password in registrazione: ogni voce si
+/// spunta quando è soddisfatta.
+class _RequisitiPassword extends StatelessWidget {
+  const _RequisitiPassword({required this.mancanti});
+
+  final Set<RequisitoPassword> mancanti;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final requisito in RequisitoPassword.values)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs / 2),
+            child: Row(
+              children: [
+                Icon(
+                  mancanti.contains(requisito)
+                      ? Icons.radio_button_unchecked
+                      : Icons.check_circle,
+                  size: 16,
+                  color: mancanti.contains(requisito)
+                      ? AppColors.textDisabled
+                      : AppColors.accent,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  requisito.descrizione,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: mancanti.contains(requisito)
+                        ? AppColors.textTertiary
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

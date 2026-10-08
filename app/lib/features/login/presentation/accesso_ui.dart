@@ -11,7 +11,8 @@ String messaggioErroreAccesso(AuthErrore errore) => switch (errore) {
   AuthErrore.emailGiaRegistrata =>
     'Esiste già un account con questa email. Accedi.',
   AuthErrore.passwordDebole =>
-    'Password troppo debole: usa almeno 8 caratteri.',
+    'Password troppo debole: usa almeno 8 caratteri, con maiuscole, '
+        'minuscole e numeri.',
   AuthErrore.rete => 'Serve una connessione a Internet.',
   AuthErrore.sconosciuto => 'Accesso non riuscito. Riprova.',
 };

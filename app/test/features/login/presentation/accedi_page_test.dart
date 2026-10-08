@@ -43,8 +43,9 @@ void main() {
     );
     await tester.enterText(
       find.widgetWithText(TextField, 'Password'),
-      'segreta123',
+      'Segreta123',
     );
+    await tester.pump();
     await tester.ensureVisible(find.widgetWithText(FilledButton, pulsante));
     await tester.tap(find.widgetWithText(FilledButton, pulsante));
     await tester.pumpAndSettle();
@@ -72,6 +73,11 @@ void main() {
       'credenziali errate mostra l\'errore', (tester) async {
     await mostra(tester, modo: ModoAccesso.registrati);
 
+    await tester.scrollUntilVisible(
+      find.text('Ho già un account'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Ho già un account'));
     await tester.pumpAndSettle();
     await compilaEInvia(tester, 'Accedi');
@@ -89,5 +95,67 @@ void main() {
       container.read(sessionControllerProvider).profilo?.metodo,
       MetodoAccesso.google,
     );
+  });
+
+  testWidgets('in registrazione "Crea account" resta disattivo finché la '
+      'password non rispetta i requisiti mostrati', (tester) async {
+    await mostra(tester, modo: ModoAccesso.registrati);
+    final crea = find.widgetWithText(FilledButton, 'Crea account');
+    final campoPassword = find.widgetWithText(TextField, 'Password');
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'mario@example.com',
+    );
+    await tester.enterText(campoPassword, 'segreta');
+    await tester.pump();
+
+    expect(find.text('Almeno 8 caratteri'), findsOneWidget);
+    expect(find.text('Una lettera maiuscola'), findsOneWidget);
+    expect(find.text('Una lettera minuscola'), findsOneWidget);
+    expect(find.text('Un numero'), findsOneWidget);
+    expect(tester.widget<FilledButton>(crea).onPressed, isNull);
+
+    await tester.enterText(campoPassword, 'Segreta123');
+    await tester.pump();
+
+    expect(tester.widget<FilledButton>(crea).onPressed, isNotNull);
+  });
+
+  testWidgets('in accesso i requisiti non sono mostrati', (tester) async {
+    await mostra(tester, modo: ModoAccesso.accedi);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Password'), 'x');
+    await tester.pump();
+
+    expect(find.text('Almeno 8 caratteri'), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Accedi'))
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets("l'icona a occhio mostra e nasconde la password", (
+    tester,
+  ) async {
+    await mostra(tester, modo: ModoAccesso.registrati);
+    bool nascosta() => tester
+        .widget<EditableText>(
+          find.descendant(
+            of: find.widgetWithText(TextField, 'Password'),
+            matching: find.byType(EditableText),
+          ),
+        )
+        .obscureText;
+
+    expect(nascosta(), isTrue);
+    await tester.tap(find.byTooltip('Mostra password'));
+    await tester.pump();
+    expect(nascosta(), isFalse);
+    await tester.tap(find.byTooltip('Nascondi password'));
+    await tester.pump();
+    expect(nascosta(), isTrue);
   });
 }
