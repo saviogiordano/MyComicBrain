@@ -74,5 +74,24 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<!-- Deep link di ritorno per conferma email e Apple su Android (#171, ricerca #168 §3). -->
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.saviogiordano.mycomicbrain</string>
+			</array>
+		</dict>
+		<!-- Reversed client ID iOS di Google Sign-In (#169). -->
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.864729242544-irrm80b5cd3fqceb8rkpsih4b8sibcee</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

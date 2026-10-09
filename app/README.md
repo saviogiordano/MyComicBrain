@@ -6,7 +6,7 @@ App Flutter per iOS e Android, stato con Riverpod, persistenza locale con Drift/
 
 ## Prerequisiti
 
-- **Flutter 3.38.3 / Dart 3.10.1** — verifica con `flutter --version`; se non coincide, `flutter upgrade` o `fvm use` a seconda di come gestisci le versioni.
+- **Flutter 3.47.1 / Dart 3.13.1** (deciso su #171: `pubspec.lock` richiede già Flutter ≥3.44) — verifica con `flutter --version`; se non coincide, `flutter upgrade` o `fvm use` a seconda di come gestisci le versioni.
 - **Per iOS**: Xcode con iOS Simulator installato, CocoaPods (`sudo gem install cocoapods` se manca).
 - **Per Android**: Android Studio con Android SDK e almeno un AVD (emulatore) configurato, oppure un device fisico con debug USB attivo.
 - `flutter doctor` senza errori bloccanti per le piattaforme che ti interessano.
@@ -89,7 +89,7 @@ Utile in particolare per testare lo scanner (fotocamera reale, permessi, prestaz
      # oppure, per i log di performance senza le ottimizzazioni aggressive del release:
      flutter run --profile -d <id-device>
      ```
-   - Ogni tanto vale la pena rifare `flutter upgrade`: la variante intermittente potrebbe essere risolta in una release più recente di quella attuale (3.38.3).
+   - Ogni tanto vale la pena rifare `flutter upgrade`: la variante intermittente potrebbe essere risolta in una release più recente di quella attuale (3.47.1).
 7. **Primo avvio: "Untrusted Developer"** — se l'app non parte e su iPhone appare un errore, vai su *Impostazioni → Generali → VPN e gestione dispositivo*, seleziona il tuo Apple ID/profilo sviluppatore e tocca *Trust*. Poi riavvia l'app dalla home o rilancia `flutter run`.
 8. **Permesso fotocamera** — al primo utilizzo dello scanner iOS mostra il prompt di sistema (testo da `NSCameraUsageDescription` in `ios/Runner/Info.plist`); se negato per errore, va riabilitato da *Impostazioni → Privacy e sicurezza → Fotocamera → MyComicBrain*.
 
@@ -114,6 +114,20 @@ Utile in particolare per testare lo scanner (fotocamera reale, permessi, prestaz
    flutter devices                     # il device dovrebbe comparire via rete
    ```
 7. **Permesso fotocamera** — `image_picker`/`camera` richiedono il permesso runtime al primo utilizzo dello scanner; se negato per errore, va riabilitato da *Impostazioni → App → MyComicBrain → Autorizzazioni → Fotocamera*.
+
+## Account (login reale, dietro flag)
+
+Il login con Supabase (email, Apple, Google — #171) è dietro un flag di sviluppo finché il porting dei dati su Supabase non è completo (ADR-0007, #181). Senza flag l'app si comporta come prima (login fittizio, solo Modalità locale). Per attivarlo:
+
+```bash
+flutter run --release -d <id-device> \
+  --dart-define=ACCOUNT_LOGIN=true \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=<chiave pubblicabile del progetto ojfwicezfctlwpouudsa>
+```
+
+La chiave pubblicabile (`sb_publishable_…`) è nel dashboard Supabase → *Project Settings → API Keys*: è pubblica per costruzione (le tabelle sono protette da RLS). `SUPABASE_URL` ha già il default del progetto.
+
+Il login Google funziona solo per gli utenti di test finché la schermata di consenso è in *Testing* (#169).
 
 ## Comandi utili durante `flutter run`
 

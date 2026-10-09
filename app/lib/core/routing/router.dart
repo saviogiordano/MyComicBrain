@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mycomicbrain/core/auth/auth_config.dart';
+import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/routing/app_bottom_nav.dart';
 import 'package:mycomicbrain/core/routing/session.dart';
 import 'package:mycomicbrain/features/collezione/presentation/collezione_page.dart';
@@ -10,7 +12,10 @@ import 'package:mycomicbrain/features/duplicati/presentation/duplicati_page.dart
 import 'package:mycomicbrain/features/identificazione/presentation/conferma_candidato_page.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/inserisci_manualmente_page.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
+import 'package:mycomicbrain/features/login/presentation/accedi_page.dart';
+import 'package:mycomicbrain/features/login/presentation/benvenuto_page.dart';
 import 'package:mycomicbrain/features/login/presentation/login_page.dart';
+import 'package:mycomicbrain/features/login/presentation/offline_page.dart';
 import 'package:mycomicbrain/features/ricerca/presentation/ricerca_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/revisione_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
@@ -21,13 +26,40 @@ import 'package:mycomicbrain/features/serie/presentation/serie_dettaglio_page.da
 import 'package:mycomicbrain/features/serie/presentation/serie_page.dart';
 import 'package:mycomicbrain/features/statistiche/presentation/statistiche_page.dart';
 
-/// Notifica il router quando [sessionProvider] cambia, così `redirect`
-/// viene rivalutato senza dover ricreare il [GoRouter] (che perderebbe
-/// la sua history interna).
+/// Notifica il router quando la sessione cambia ([sessionProvider] con il
+/// login fittizio, [sessionControllerProvider] con quello reale dietro
+/// flag, #171), così `redirect` viene rivalutato senza dover ricreare il
+/// [GoRouter] (che perderebbe la sua history interna).
 class _SessionRefresh extends ChangeNotifier {
   _SessionRefresh(Ref ref) {
-    ref.listen<bool>(sessionProvider, (_, _) => notifyListeners());
+    if (AuthConfig.loginAbilitato) {
+      ref.listen(sessionControllerProvider, (_, _) => notifyListeners());
+    } else {
+      ref.listen<bool>(sessionProvider, (_, _) => notifyListeners());
+    }
   }
+}
+
+/// Gate del login reale (#171): fuori dall'app solo benvenuto e accesso,
+/// un Profilo autenticato senza rete solo il blocco offline;
+/// dentro, `/accedi` resta raggiungibile in Modalità locale (da
+/// Impostazioni) ma non con un Profilo già autenticato.
+String? _redirectAccount(Ref ref, GoRouterState state) {
+  final sessione = ref.read(sessionControllerProvider);
+  final posizione = state.matchedLocation;
+  final suBenvenuto = posizione == '/benvenuto';
+  final suAccedi = posizione == '/accedi';
+  final suOffline = posizione == '/offline';
+  if (sessione.ingresso == Ingresso.offline) {
+    return suOffline ? null : '/offline';
+  }
+  if (sessione.ingresso != Ingresso.app) {
+    return suBenvenuto || suAccedi ? null : '/benvenuto';
+  }
+  if (suBenvenuto || suOffline || (suAccedi && sessione.profilo != null)) {
+    return '/dashboard';
+  }
+  return null;
 }
 
 /// Router unico dell'app. Costruito come provider così la gate di sessione
@@ -37,9 +69,10 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: AuthConfig.loginAbilitato ? '/benvenuto' : '/login',
     refreshListenable: refresh,
     redirect: (context, state) {
+      if (AuthConfig.loginAbilitato) return _redirectAccount(ref, state);
       final inApp = ref.read(sessionProvider);
       final onLogin = state.matchedLocation == '/login';
       if (!inApp) return onLogin ? null : '/login';
@@ -50,6 +83,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/offline',
+        builder: (context, state) => const OfflinePage(),
+      ),
+      GoRoute(
+        path: '/benvenuto',
+        builder: (context, state) => const BenvenutoPage(),
+      ),
+      GoRoute(
+        path: '/accedi',
+        builder: (context, state) => AccediPage(
+          modo: state.uri.queryParameters['modo'] == 'accedi'
+              ? ModoAccesso.accedi
+              : ModoAccesso.registrati,
+        ),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

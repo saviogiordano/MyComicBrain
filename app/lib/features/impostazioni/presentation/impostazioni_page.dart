@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mycomicbrain/core/auth/auth_config.dart';
 import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/impostazioni/application/ai_provider.dart';
 import 'package:mycomicbrain/features/impostazioni/application/esportazione_service.dart';
 import 'package:mycomicbrain/features/impostazioni/application/importazione_service.dart';
+import 'package:mycomicbrain/features/impostazioni/presentation/sezione_account.dart';
 
 /// Schermo Impostazioni (§12, deciso su #104): elenco di righe stile
 /// impostazioni di sistema — il valore corrente in trailing, ogni riga apre
@@ -588,6 +590,10 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                   AppSpacing.xxl,
                 ),
                 children: [
+                  if (AuthConfig.loginAbilitato) ...[
+                    const SezioneAccount(),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
                   const SectionHeader(label: 'Provider AI Visivo'),
                   const SizedBox(height: AppSpacing.sm),
                   Column(

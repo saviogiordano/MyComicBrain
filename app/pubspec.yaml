@@ -33,6 +33,7 @@ dependencies:
   # Zip dell'export (dati + cover). Fissato a ^3.6.1: `excel` ^4.0.6
   # richiede `archive` 3.x (vedi la nota su `image` più sotto).
   archive: ^3.6.1
+  crypto: ^3.0.7
   csv: ^8.0.0
   cunning_document_scanner: ^3.0.1
   cupertino_icons: ^1.0.8
@@ -45,6 +46,7 @@ dependencies:
   flutter_riverpod: 2.6.1
   flutter_secure_storage: ^11.0.0
   go_router: ^17.5.0
+  google_sign_in: ^7.2.0
   http: ^1.6.0
   # Fissato a ^4.3.0 (non ^4.5.4): versioni più recenti richiedono
   # `archive` ^4.x, incompatibile con `excel` ^4.0.6 (richiede `archive`
@@ -61,10 +63,12 @@ dependencies:
   printing: ^5.14.3
   share_plus: ^13.3.0
   shared_preferences: ^2.5.5
+  sign_in_with_apple: ^8.2.0
   # Fissato a 7.4.0 esatto (non un range aperto): la 7.5.0-beta alza il
   # minimo SDK a Flutter 3.44/Dart 3.12, oltre allo stack del progetto —
   # vedi docs/research/assistente-speech-to-text.md §7.1.
   speech_to_text: 7.4.0
+  supabase_flutter: ^2.17.2
 
 dependency_overrides:
   # permission_handler_android 14.0.0's own android/build.gradle.kts is broken
