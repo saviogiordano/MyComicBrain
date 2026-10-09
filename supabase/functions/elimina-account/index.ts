@@ -65,13 +65,24 @@ const dipendenze: Dipendenze = {
     if (error) throw error;
   },
 
-  revocaApple: (code) =>
-    revocaApple({
+  revocaApple(code) {
+    const nomi = [
+      "APPLE_TEAM_ID",
+      "APPLE_KEY_ID",
+      "APPLE_PRIVATE_KEY",
+      "APPLE_CLIENT_ID",
+    ];
+    const mancanti = nomi.filter((nome) => !Deno.env.get(nome));
+    if (mancanti.length > 0) {
+      throw new Error(`secret mancanti: ${mancanti.join(", ")}`);
+    }
+    return revocaApple({
       teamId: Deno.env.get("APPLE_TEAM_ID")!,
       keyId: Deno.env.get("APPLE_KEY_ID")!,
       privateKey: Deno.env.get("APPLE_PRIVATE_KEY")!,
       clientId: Deno.env.get("APPLE_CLIENT_ID")!,
-    }, code),
+    }, code);
+  },
 
   async eliminaUtente(userId) {
     const { error } = await admin.auth.admin.deleteUser(userId);
