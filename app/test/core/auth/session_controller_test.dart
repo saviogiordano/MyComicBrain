@@ -223,4 +223,39 @@ void main() {
       expect(gateway.confermeInviate, 2);
     });
   });
+
+  group('eliminazione account', () {
+    test(
+      "riporta al benvenuto solo accesso e l'account non esiste più",
+      () async {
+        final container = avvia();
+        final controller = container.read(sessionControllerProvider.notifier);
+        await controller.accediConGoogle();
+        await pumpEventQueue();
+
+        await controller.eliminaAccount();
+        await pumpEventQueue();
+
+        final sessione = container.read(sessionControllerProvider);
+        expect(sessione.profilo, isNull);
+        expect(sessione.ingresso, Ingresso.soloAccesso);
+        expect(gateway.accountEliminati, ['mario.rossi@gmail.com']);
+      },
+    );
+
+    test('se fallisce il Profilo resta autenticato', () async {
+      final container = avvia();
+      final controller = container.read(sessionControllerProvider.notifier);
+      await controller.accediConGoogle();
+      await pumpEventQueue();
+      gateway.prossimoErrore = const AuthException(AuthErrore.rete);
+
+      await expectLater(
+        controller.eliminaAccount(),
+        throwsA(isA<AuthException>()),
+      );
+
+      expect(container.read(sessionControllerProvider).profilo, isNotNull);
+    });
+  });
 }

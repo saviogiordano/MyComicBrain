@@ -105,6 +105,17 @@ class FakeAuthGateway implements AuthGateway {
   @override
   Future<void> esci() async => _emetti(null);
 
+  final accountEliminati = <String>[];
+
+  @override
+  Future<void> eliminaAccount() async {
+    _lanciaSeImpostato();
+    final email = _profilo!.email;
+    account.remove(email);
+    accountEliminati.add(email);
+    _emetti(null);
+  }
+
   @override
   Future<bool> raggiungibile() async => online;
 }

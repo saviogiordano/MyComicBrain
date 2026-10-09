@@ -135,6 +135,10 @@ class SessionController extends Notifier<SessionState> {
 
   Future<void> esci() => _gateway.esci();
 
+  /// Il Profilo torna `null` da [AuthGateway.cambiamenti], come per il
+  /// logout: logout ed eliminazione lasciano intatte le chiavi del device.
+  Future<void> eliminaAccount() => _gateway.eliminaAccount();
+
   /// Verifica la rete per il Profilo autenticato: all'avvio, a ogni login
   /// e dal pulsante "Riprova" del blocco offline.
   Future<void> riprovaConnessione() async {
