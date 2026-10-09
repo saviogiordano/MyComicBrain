@@ -30,6 +30,12 @@ abstract interface class AuthGateway {
   Future<void> reinviaConferma(String email);
   Future<void> esci();
 
+  /// Elimina l'account e tutti i suoi dati (App Store 5.1.1(v), #172) con
+  /// l'Edge Function `elimina-account`, poi chiude la sessione. Con Apple
+  /// su iOS chiede prima il foglio Apple: il code fresco serve a revocare
+  /// il token.
+  Future<void> eliminaAccount();
+
   /// Supabase è raggiungibile? Un Profilo autenticato lavora online-only
   /// (ADR-0005): senza rete l'app mostra il blocco offline (#170).
   Future<bool> raggiungibile();
@@ -56,6 +62,11 @@ enum AuthErrore {
 
   /// Link della mail scaduto o già usato (`otp_expired`).
   linkNonValido,
+
+  /// Eliminazione rifiutata: l'utente possiede una Collezione con
+  /// collaboratori (ADR-0004). Non succede finché le Collezioni condivise
+  /// non arrivano nell'app.
+  proprietarioConCollaboratori,
   rete,
   sconosciuto,
 }

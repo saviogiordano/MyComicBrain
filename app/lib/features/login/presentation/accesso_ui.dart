@@ -16,6 +16,9 @@ String messaggioErroreAccesso(AuthErrore errore) => switch (errore) {
   AuthErrore.linkNonValido =>
     'Il link di conferma è scaduto o è già stato usato. Prova ad accedere; '
         'se la tua email non è ancora confermata, chiedi un nuovo link.',
+  AuthErrore.proprietarioConCollaboratori =>
+    'Trasferisci la proprietà della collezione o rimuovi i collaboratori '
+        "prima di eliminare l'account.",
   AuthErrore.rete => 'Serve una connessione a Internet.',
   AuthErrore.sconosciuto => 'Accesso non riuscito. Riprova.',
 };
