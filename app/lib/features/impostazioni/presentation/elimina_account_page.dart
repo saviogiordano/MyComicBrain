@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/auth/auth_gateway.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
@@ -7,8 +8,9 @@ import 'package:mycomicbrain/features/login/presentation/accesso_ui.dart';
 
 /// Eliminazione dell'account dall'app (App Store 5.1.1(v), #172; schermata
 /// decisa sul prototipo #170): conseguenze elencate e spunta "Ho capito"
-/// prima che il pulsante si attivi. A eliminazione riuscita il Profilo
-/// torna `null` e il router porta al benvenuto.
+/// prima che il pulsante si attivi. A eliminazione riuscita va alla
+/// Dashboard: in Modalità locale ancora attiva (dati non importati) ci
+/// resta, altrimenti il router la porta al benvenuto.
 class EliminaAccountPage extends ConsumerStatefulWidget {
   const EliminaAccountPage({super.key});
 
@@ -34,6 +36,7 @@ class _EliminaAccountPageState extends ConsumerState<EliminaAccountPage> {
       messenger.showSnackBar(
         const SnackBar(content: Text('Account eliminato')),
       );
+      if (mounted) context.go('/dashboard');
     } on AuthException catch (e) {
       if (e.errore != AuthErrore.annullato) {
         messenger.showSnackBar(

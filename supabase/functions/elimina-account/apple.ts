@@ -16,8 +16,27 @@ export interface ConfigApple {
 
 const appleId = "https://appleid.apple.com";
 
+/**
+ * Ricostruisce il PEM PKCS#8 dal solo corpo base64: un `.p8` passato a
+ * `supabase secrets set` può perdere gli a capo, averli come `\n`
+ * letterali o portarsi dietro virgolette e spazi, e `jose` rifiuta tutto
+ * ciò che non inizia esattamente con l'intestazione.
+ */
+export function pemPkcs8(valore: string): string {
+  const corpo = valore
+    .replace(/-----(BEGIN|END) PRIVATE KEY-----/g, "")
+    .replace(/\\n/g, "")
+    .replace(/[^A-Za-z0-9+/=]/g, "");
+  const righe = corpo.match(/.{1,64}/g) ?? [];
+  return [
+    "-----BEGIN PRIVATE KEY-----",
+    ...righe,
+    "-----END PRIVATE KEY-----",
+  ].join("\n");
+}
+
 async function clientSecret(config: ConfigApple): Promise<string> {
-  const chiave = await importPKCS8(config.privateKey, "ES256");
+  const chiave = await importPKCS8(pemPkcs8(config.privateKey), "ES256");
   return new SignJWT({})
     .setProtectedHeader({ alg: "ES256", kid: config.keyId })
     .setIssuer(config.teamId)

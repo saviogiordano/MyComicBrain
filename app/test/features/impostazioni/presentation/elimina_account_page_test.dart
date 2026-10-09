@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/auth/auth_gateway.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/elimina_account_page.dart';
@@ -27,12 +30,27 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
+    final router = GoRouter(
+      initialLocation: '/dashboard',
+      routes: [
+        GoRoute(
+          path: '/dashboard',
+          builder: (context, state) => const Scaffold(body: Text('Dashboard')),
+        ),
+        GoRoute(
+          path: '/account/elimina',
+          builder: (context, state) => const EliminaAccountPage(),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: EliminaAccountPage()),
+        child: MaterialApp.router(routerConfig: router),
       ),
     );
+    unawaited(router.push('/account/elimina'));
     await tester.pumpAndSettle();
     return container;
   }
@@ -65,7 +83,11 @@ void main() {
     );
   });
 
-  testWidgets("elimina l'account e lo conferma", (tester) async {
+  // La Modalità locale non è esaurita (dati non importati): il router non
+  // porta al benvenuto, è la schermata a dover tornare alla Dashboard.
+  testWidgets("elimina l'account, lo conferma e torna alla Dashboard", (
+    tester,
+  ) async {
     final container = await mostra(tester);
 
     await tester.tap(find.byType(Checkbox));
@@ -76,6 +98,8 @@ void main() {
     expect(gateway.accountEliminati, ['mario@example.com']);
     expect(container.read(sessionControllerProvider).profilo, isNull);
     expect(find.text('Account eliminato'), findsOneWidget);
+    expect(find.byType(EliminaAccountPage), findsNothing);
+    expect(find.text('Dashboard'), findsOneWidget);
   });
 
   testWidgets("senza rete mostra l'errore e permette di riprovare", (
