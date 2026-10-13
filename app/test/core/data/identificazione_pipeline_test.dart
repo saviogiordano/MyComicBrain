@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/identificazione_pipeline.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 
@@ -55,7 +56,7 @@ void main() {
         closeStreamsSynchronously: true,
       ),
     );
-    repo = ComicsRepository(db);
+    repo = DriftComicsRepository(db);
   });
 
   tearDown(() => db.close());

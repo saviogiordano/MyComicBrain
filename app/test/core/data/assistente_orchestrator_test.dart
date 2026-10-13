@@ -5,6 +5,7 @@ import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/assistente_orchestrator.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
@@ -54,7 +55,7 @@ void main() {
         closeStreamsSynchronously: true,
       ),
     );
-    repository = ComicsRepository(db);
+    repository = DriftComicsRepository(db);
     settingsRepository = SettingsRepository.inMemoria();
     await settingsRepository.impostaProviderAi(
       RuoloProviderAi.testuale,

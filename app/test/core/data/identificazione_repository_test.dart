@@ -1,15 +1,14 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart' hide isNotNull, isNull;
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
-import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:path/path.dart' as p;
+
+import 'contratto/adapter_sotto_contratto.dart';
 
 /// `http.Client` finto per [CopertinaDownloader]: risponde con [bytes] fissi,
 /// oppure lancia se `null` (simula un host irraggiungibile) — stesso
@@ -27,21 +26,19 @@ class _FakeCoverHttpClient extends http.BaseClient {
   }
 }
 
-void main() {
-  late AppDatabase db;
+void main() => contrattoIdentificazione(creaAdapterDriftInMemoria);
+
+/// Area Identificazione della suite di contratto di `ComicsRepository` (ADR-0007).
+void contrattoIdentificazione(CreaAdapter crea) {
+  late AdapterSottoContratto adapter;
   late ComicsRepository repo;
 
-  setUp(() {
-    db = AppDatabase(
-      DatabaseConnection(
-        NativeDatabase.memory(),
-        closeStreamsSynchronously: true,
-      ),
-    );
-    repo = ComicsRepository(db);
+  setUp(() async {
+    adapter = await crea();
+    repo = adapter.repo;
   });
 
-  tearDown(() => db.close());
+  tearDown(() => adapter.chiudi());
 
   Future<int> scansione() => repo.aggiungiScansione(image: '/scansioni/1.jpg');
 
@@ -101,8 +98,8 @@ void main() {
       scansioneId: scansioneId,
     );
 
-    final riga = await (db.select(
-      db.identificazioneTable,
+    final riga = await (adapter.drift.select(
+      adapter.drift.identificazioneTable,
     )..where((i) => i.id.equals(identificazioneId))).getSingle();
     expect(riga.scansioneId, scansioneId);
     expect(riga.status, StatoIdentificazione.inCorso);
@@ -130,8 +127,8 @@ void main() {
         edizioneId: edizioneId,
       );
 
-      final riga = await (db.select(
-        db.candidatiTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.candidatiTable,
       )..where((c) => c.id.equals(candidatoId))).getSingle();
       expect(riga.identificazioneId, identificazioneId);
       expect(riga.source, FonteCandidato.interno);
@@ -152,8 +149,7 @@ void main() {
         'watchIdentificazione_cover_interno_test_',
       );
       addTearDown(() => tempBase.delete(recursive: true));
-      final repoConBase = ComicsRepository(
-        db,
+      final repoConBase = adapter.repoCon(
         copertinaDownloader: CopertinaDownloader(
           baseDirectory: () async => tempBase,
         ),
@@ -203,8 +199,8 @@ void main() {
         coverImageUrl: 'https://comicvine.example/1.jpg',
       );
 
-      final riga = await (db.select(
-        db.candidatiTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.candidatiTable,
       )..where((c) => c.id.equals(candidatoId))).getSingle();
       expect(riga.source, FonteCandidato.esterno);
       expect(riga.edizioneId, isNull);
@@ -227,13 +223,13 @@ void main() {
 
       await repo.completaIdentificazione(id: identificazioneId);
 
-      final riga = await (db.select(
-        db.identificazioneTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.identificazioneTable,
       )..where((i) => i.id.equals(identificazioneId))).getSingle();
       expect(riga.status, StatoIdentificazione.completata);
       expect(riga.completedAt, isNotNull);
-      final candidati = await (db.select(
-        db.candidatiTable,
+      final candidati = await (adapter.drift.select(
+        adapter.drift.candidatiTable,
       )..where((c) => c.identificazioneId.equals(identificazioneId))).get();
       expect(candidati, isEmpty);
     },
@@ -252,8 +248,8 @@ void main() {
         errorMessage: 'ComicVine offline',
       );
 
-      final riga = await (db.select(
-        db.identificazioneTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.identificazioneTable,
       )..where((i) => i.id.equals(identificazioneId))).getSingle();
       expect(riga.status, StatoIdentificazione.fallita);
       expect(riga.errorMessage, 'ComicVine offline');
@@ -281,11 +277,11 @@ void main() {
 
       await repo.marcaCandidatoScelto(id: scelto);
 
-      final rigaScelta = await (db.select(
-        db.candidatiTable,
+      final rigaScelta = await (adapter.drift.select(
+        adapter.drift.candidatiTable,
       )..where((c) => c.id.equals(scelto))).getSingle();
-      final rigaAltro = await (db.select(
-        db.candidatiTable,
+      final rigaAltro = await (adapter.drift.select(
+        adapter.drift.candidatiTable,
       )..where((c) => c.id.equals(altro))).getSingle();
       expect(rigaScelta.scelto, isTrue);
       expect(rigaAltro.scelto, isFalse);
@@ -484,22 +480,22 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(copia.edizioneId, edizioneId);
       expect(copia.status, StatoCopia.posseduta);
       expect(copia.scansioneId, scansioneId);
       expect(copia.condition, CondizioneCopia.fine);
       expect(copia.purchasePrice, isNull);
-      final edizioni = await db.select(db.edizioni).get();
+      final edizioni = await adapter.drift.select(adapter.drift.edizioni).get();
       expect(
         edizioni,
         hasLength(1),
         reason: 'nessuna nuova Edizione creata per un candidato interno',
       );
-      final rigaCandidato = await (db.select(
-        db.candidatiTable,
+      final rigaCandidato = await (adapter.drift.select(
+        adapter.drift.candidatiTable,
       )..where((c) => c.id.equals(candidatoId))).getSingle();
       expect(rigaCandidato.scelto, isTrue);
     },
@@ -536,8 +532,8 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(edizioneId))).getSingle();
       expect(edizione.description, 'Peter Parker affronta il Green Goblin.');
     },
@@ -574,8 +570,8 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(edizioneId))).getSingle();
       expect(edizione.description, 'Trama già presente in catalogo.');
     },
@@ -610,8 +606,8 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(copia.condition, CondizioneCopia.fine);
       expect(copia.purchasePrice, 5.30);
@@ -646,8 +642,8 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(copia.purchasePrice, 3.99);
       expect(copia.purchasePriceCurrency, ValutaPrezzo.usd);
@@ -681,8 +677,8 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(copia.purchasePriceCurrency, ValutaPrezzo.eur);
     },
@@ -695,8 +691,7 @@ void main() {
         'confermaCandidato_esterno_test_',
       );
       addTearDown(() => tempBase.delete(recursive: true));
-      final repoConDownload = ComicsRepository(
-        db,
+      final repoConDownload = adapter.repoCon(
         copertinaDownloader: CopertinaDownloader(
           httpClient: _FakeCoverHttpClient(bytes: [1, 2, 3]),
           baseDirectory: () async => tempBase,
@@ -725,13 +720,13 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(copia.status, StatoCopia.posseduta);
       expect(copia.scansioneId, scansioneId);
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.publisher, 'Marvel');
       expect(edizione.issueNumberLabel, '1');
@@ -751,16 +746,16 @@ void main() {
       final fileCopertina = File(p.join(tempBase.path, coverImage));
       expect(fileCopertina.existsSync(), isTrue);
       expect(fileCopertina.readAsBytesSync(), [1, 2, 3]);
-      final opera = await (db.select(
-        db.opere,
+      final opera = await (adapter.drift.select(
+        adapter.drift.opere,
       )..where((o) => o.id.equals(edizione.operaId))).getSingle();
       expect(opera.title, 'Amazing Spider-Man');
-      final serie = await (db.select(
-        db.serieTable,
+      final serie = await (adapter.drift.select(
+        adapter.drift.serieTable,
       )..where((s) => s.id.equals(edizione.serieId!))).getSingle();
       expect(serie.name, 'The Amazing Spider-Man');
-      final rigaCandidato = await (db.select(
-        db.candidatiTable,
+      final rigaCandidato = await (adapter.drift.select(
+        adapter.drift.candidatiTable,
       )..where((c) => c.id.equals(candidatoId))).getSingle();
       expect(rigaCandidato.scelto, isTrue);
     },
@@ -795,11 +790,11 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.issueNumberLabel, '679.1');
       expect(edizione.issueNumber, 679);
@@ -809,8 +804,7 @@ void main() {
   test(
     "confermaCandidato esterno: download cover fallito ricade sull'URL remoto",
     () async {
-      final repoDownloadFallito = ComicsRepository(
-        db,
+      final repoDownloadFallito = adapter.repoCon(
         copertinaDownloader: CopertinaDownloader(
           httpClient: _FakeCoverHttpClient(),
         ),
@@ -835,11 +829,11 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.coverImage, 'https://comicvine.example/1.jpg');
     },
@@ -879,11 +873,11 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.publisher, 'Marvel Worldwide Inc.');
       expect(edizione.releaseDate, 'febbraio 2013');
@@ -929,11 +923,11 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.printingType, 'Direct Edition');
       expect(edizione.classificazione, 'Rated T+');
@@ -966,11 +960,11 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.printingType, isNull);
       expect(edizione.classificazione, isNull);
@@ -1007,17 +1001,17 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
-      final opera = await (db.select(
-        db.opere,
+      final opera = await (adapter.drift.select(
+        adapter.drift.opere,
       )..where((o) => o.id.equals(edizione.operaId))).getSingle();
-      final serie = await (db.select(
-        db.serieTable,
+      final serie = await (adapter.drift.select(
+        adapter.drift.serieTable,
       )..where((s) => s.id.equals(edizione.serieId!))).getSingle();
       expect(opera.title, 'Amazing Fantasy 15');
       expect(serie.name, 'Amazing Fantasy');
@@ -1049,11 +1043,11 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.issueNumberLabel, '12');
       expect(edizione.issueNumber, 12);
@@ -1083,11 +1077,11 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.year, 1988);
     },
@@ -1117,11 +1111,11 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final copia = await (db.select(
-        db.copie,
+      final copia = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (db.select(
-        db.edizioni,
+      final edizione = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
       expect(edizione.year, 1988);
     },
@@ -1140,8 +1134,8 @@ void main() {
         scansioneId: scansioneId,
       );
 
-      final riga = await (db.select(
-        db.copie,
+      final riga = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(riga.scansioneId, scansioneId);
     },

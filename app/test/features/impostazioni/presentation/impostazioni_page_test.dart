@@ -10,6 +10,7 @@ import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
@@ -587,7 +588,7 @@ void main() {
         await pumpImpostazioni(
           tester,
           esportazioneService: _EsportazioneServiceCheFallisce(
-            ComicsRepository(db),
+            DriftComicsRepository(db),
           ),
         );
         await tester.scrollUntilVisible(find.text('Esporta in CSV'), 200);
@@ -623,7 +624,7 @@ void main() {
             ),
           );
           addTearDown(db.close);
-          final servizio = _EsportazioneServiceInSospeso(ComicsRepository(db));
+          final servizio = _EsportazioneServiceInSospeso(DriftComicsRepository(db));
 
           await pumpImpostazioni(tester, esportazioneService: servizio);
           final riga = switch (formato) {
