@@ -49,6 +49,7 @@ Future<List<Override>> _overridesAccount(
     ),
   );
   return [
+    supabaseClientProvider.overrideWithValue(supabase.client),
     authGatewayProvider.overrideWithValue(
       SupabaseAuthGateway(supabase.client),
     ),
@@ -56,7 +57,7 @@ Future<List<Override>> _overridesAccount(
       SharedPreferencesAdapter(sharedPreferences),
     ),
     haDatiLocaliProvider.overrideWith(
-      (ref) => ref.watch(comicsRepositoryProvider).haDatiDaImportare,
+      (ref) => ref.watch(driftComicsRepositoryProvider).haDatiDaImportare,
     ),
   ];
 }
