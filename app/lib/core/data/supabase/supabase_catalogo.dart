@@ -32,7 +32,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
         .from(TabellaSupabase.serie.nome)
         .select('id')
         .ilike('name', _escapeLike(nome))
-        .order('id')
+        .order('id', ascending: true)
         .limit(1)
         .maybeSingle();
     if (esistente != null) return esistente['id'] as int;
@@ -247,7 +247,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
             .from(TabellaSupabase.serie.nome)
             .select()
             .ilike('name', '%${_escapeLike(query)}%')
-            .order('id'))
+            .order('id', ascending: true))
       SerieTableData(
         id: riga['id'] as int,
         name: riga['name'] as String,
@@ -290,7 +290,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
         .from(TabellaSupabase.comicCreator.nome)
         .select(_selectAutori)
         .eq('edizione_id', edizioneId)
-        .order('id');
+        .order('id', ascending: true);
     return righe.map(_autore).toList();
   }
 
@@ -575,7 +575,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
       .from(tabella.nome)
       .select('id, name')
       .ilike('name', '%${_escapeLike(query)}%')
-      .order('id');
+      .order('id', ascending: true);
 }
 
 String _escapeLike(String testo) =>

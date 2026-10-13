@@ -44,6 +44,9 @@ void main() {
     userId: userId,
     cartellaCache: () async =>
         Directory(p.join(temp.path, cache))..createSync(recursive: true),
+    cartellaScansioni: () async =>
+        Directory(p.join(temp.path, cache, 'scansioni'))
+          ..createSync(recursive: true),
   );
 
   Future<File> immagine(List<int> bytes) async =>
@@ -103,6 +106,52 @@ void main() {
         await repository(c2, utente2, 'utente-2').risolviCoverImage(chiave),
         isNull,
       );
+    });
+
+    test(
+      'una Scansione senza file locale si scarica in cache con lo stesso nome',
+      () async {
+        final (c, userId) = await utente();
+        final deviceA = repository(c, userId, 'device-a');
+        final scattata = File(
+          p.join(temp.path, 'device-a', 'scansioni', '1739.jpg'),
+        );
+        await scattata.parent.create(recursive: true);
+        await scattata.writeAsBytes([0xFF, 0xD8, 1, 2]);
+        final id = await deviceA.aggiungiScansione(image: scattata.path);
+
+        final deviceB = repository(c, userId, 'device-b');
+        final immagini = await deviceB
+            .watchImmaginiScansioniNonConfermate()
+            .first;
+
+        expect(immagini.single, startsWith(p.join(temp.path, 'device-b')));
+        expect(p.basename(immagini.single), '1739.jpg');
+        expect(await File(immagini.single).readAsBytes(), [0xFF, 0xD8, 1, 2]);
+        expect(await deviceB.idScansionePerImmagine(immagini.single), id);
+        expect(
+          await deviceA.watchImmaginiScansioniNonConfermate().first,
+          [scattata.path],
+          reason: "sul device che l'ha scattata resta il file locale",
+        );
+      },
+    );
+
+    test("eliminaScansione rimuove anche l'oggetto su Storage", () async {
+      final (c, userId) = await utente();
+      final repo = repository(c, userId, 'cache');
+      final file = File(p.join(temp.path, 'cache', 'scansioni', '42.jpg'));
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes([0xFF, 0xD8]);
+      final id = await repo.aggiungiScansione(image: file.path);
+      expect(
+        await c.storage.from('scansioni').list(path: userId),
+        hasLength(1),
+      );
+
+      await repo.eliminaScansione(id: id);
+
+      expect(await c.storage.from('scansioni').list(path: userId), isEmpty);
     });
 
     test('un metodo non ancora portato lancia UnimplementedError', () async {

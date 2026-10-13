@@ -30,3 +30,11 @@ Decisione, in sintesi:
 - Ogni nuovo metodo aggiunto a `ComicsRepository` da qui in avanti va implementato su entrambi gli adapter e coperto dalla suite di contratto.
 - I bucket e le policy Storage descritti sopra vanno creati insieme allo schema di ADR-0004.
 - Con le Collezioni condivise (§17.2) la reattività per invalidazione interna non basta più (scrittori su altri account): servirà Realtime o equivalente.
+
+## Implementazione
+
+Scostamenti emersi durante il porting (mappa [#165](https://github.com/saviogiordano/MyComicBrain/issues/165)):
+
+- **Chiave delle immagini delle Scansioni** ([#178](https://github.com/saviogiordano/MyComicBrain/issues/178)). La chiave è `scansioni/<user_id>/<nome del file locale>` e non `<user_id>/<uuid>.jpg`. Il motivo: la UI identifica una Scansione con il percorso del file salvato da `ScansioneStorage` (`watchStatoAnalisiCopertina`, `idScansionePerImmagine`, …). Il nome del file (`<millisecondi>.jpg`) è già unico sul device, quindi l'adapter traduce percorso e chiave in modo deterministico, senza cambiare la UI e senza scrivere percorsi di un device nel DB. Una Scansione senza file locale viene scaricata nella cache su disco con lo stesso nome di file, come le cover: è il caso di una Scansione importata (`<user_id>/importazione-…`) o scattata su un altro device. Le Scansioni caricate prima di questo cambio conservano le loro chiavi.
+- **Rimozioni** ([#177](https://github.com/saviogiordano/MyComicBrain/issues/177)). Le FK fra tabelle di dominio di ADR-0004 non sono a cascata, quindi le RPC `rimuovi_copia`/`elimina_edizione` eliminano esplicitamente i collegamenti dell'Edizione e il Valore stimato delle Copie.
+- **Indice della Collezione** ([#193](https://github.com/saviogiordano/MyComicBrain/issues/193)). È la funzione `indice_collezione(target_collection_id)`, che restituisce un solo jsonb, invece di una select PostgREST: così non c'è il tetto `max_rows`. Il filtro di `cercaEdizioni` (`filtraIndiceCollezione`) è condiviso dai due adapter.

@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/supabase/invalidazione_tabelle.dart';
 import 'package:mycomicbrain/core/data/supabase/uuid_v4.dart';
+import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/edizione_collezione.dart';
@@ -18,9 +20,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 part 'supabase_catalogo.dart';
 part 'supabase_collezione.dart';
+part 'supabase_scansioni.dart';
 
-const _bucketCover = 'covers';
-const _cartellaCacheCover = 'cover_supabase';
+/// I bucket Storage privati di ADR-0007, con la cartella della cache su
+/// disco in cui l'adapter scarica i loro oggetti.
+enum _Bucket {
+  covers('covers', 'cover_supabase'),
+  scansioni('scansioni', 'scansioni_supabase');
+
+  const _Bucket(this.nome, this.cartellaCache);
+
+  final String nome;
+  final String cartellaCache;
+}
 
 /// [ComicsRepository] su Supabase per un Profilo autenticato (ADR-0007):
 /// legato a un `user_id` e alla Collezione di cui è `owner`, risolta alla
@@ -28,26 +40,33 @@ const _cartellaCacheCover = 'cover_supabase';
 /// barriera di autorizzazione.
 ///
 /// Le aree portate stanno in file `part` (`supabase_catalogo.dart`,
-/// `supabase_collezione.dart`).
+/// `supabase_collezione.dart`, `supabase_scansioni.dart`).
 /// Il porting procede per fette (mappa #165): i metodi non ancora portati
 /// lanciano [UnimplementedError] tramite [noSuchMethod]. Il login resta
 /// dietro `ACCOUNT_LOGIN` finché la suite di contratto non passa per intero
 /// anche qui.
 class SupabaseComicsRepository
-    with _CatalogoSupabase, _CollezioneSupabase
+    with _CatalogoSupabase, _CollezioneSupabase, _ScansioniSupabase
     implements ComicsRepository {
   SupabaseComicsRepository(
     this._client, {
     required this.userId,
     Future<Directory> Function()? cartellaCache,
+    Future<Directory> Function()? cartellaScansioni,
     InvalidazioneTabelle? invalidazione,
   }) : _cartellaCache = cartellaCache ?? getApplicationCacheDirectory,
+       _cartellaScansioni = cartellaScansioni ?? ScansioneStorage().cartella,
        _invalidazione = invalidazione ?? InvalidazioneTabelle();
 
   @override
   final SupabaseClient _client;
+  @override
   final String userId;
   final Future<Directory> Function() _cartellaCache;
+
+  /// Dove `ScansioneStorage` salva le Scansioni scattate su questo device.
+  @override
+  final Future<Directory> Function() _cartellaScansioni;
   @override
   final InvalidazioneTabelle _invalidazione;
 
@@ -91,13 +110,13 @@ class SupabaseComicsRepository
     final estensione = _estensione(file.path);
     final chiave = '${await collectionId()}/${uuidV4()}.$estensione';
     await _client.storage
-        .from(_bucketCover)
+        .from(_Bucket.covers.nome)
         .upload(
           chiave,
           file,
           fileOptions: FileOptions(contentType: _contentType(estensione)),
         );
-    final inCache = await _fileInCache(chiave);
+    final inCache = await _fileInCache(_Bucket.covers, chiave);
     await inCache.parent.create(recursive: true);
     await file.copy(inCache.path);
     return chiave;
@@ -114,24 +133,38 @@ class SupabaseComicsRepository
     if (coverImage.startsWith('http://') || coverImage.startsWith('https://')) {
       return coverImage;
     }
-    final inCache = await _fileInCache(coverImage);
+    return _risolviInCache(_Bucket.covers, coverImage);
+  }
+
+  /// Il file locale dell'oggetto [chiave] di [bucket], scaricato con la
+  /// sessione dell'utente se non è già in cache. Le chiavi sono immutabili,
+  /// quindi un file in cache non scade. `null` se l'oggetto non esiste o non
+  /// è visibile all'utente.
+  @override
+  Future<String?> _risolviInCache(_Bucket bucket, String chiave) async {
+    final inCache = await _fileInCache(bucket, chiave);
     if (inCache.existsSync()) return inCache.path;
-    // Più widget chiedono spesso la stessa cover insieme: un solo download.
-    final inCorso = _downloadInCorso[coverImage];
+    // Più widget chiedono spesso lo stesso file insieme: un solo download.
+    final id = '${bucket.nome}/$chiave';
+    final inCorso = _downloadInCorso[id];
     if (inCorso != null) return inCorso;
-    final download = _scarica(coverImage, inCache);
-    _downloadInCorso[coverImage] = download;
+    final download = _scarica(bucket, chiave, inCache);
+    _downloadInCorso[id] = download;
     try {
       return await download;
     } finally {
-      unawaited(_downloadInCorso.remove(coverImage));
+      unawaited(_downloadInCorso.remove(id));
     }
   }
 
-  Future<String?> _scarica(String chiave, File destinazione) async {
+  Future<String?> _scarica(
+    _Bucket bucket,
+    String chiave,
+    File destinazione,
+  ) async {
     final List<int> bytes;
     try {
-      bytes = await _client.storage.from(_bucketCover).download(chiave);
+      bytes = await _client.storage.from(bucket.nome).download(chiave);
     } on StorageException {
       return null;
     }
@@ -143,10 +176,11 @@ class SupabaseComicsRepository
     return destinazione.path;
   }
 
-  Future<File> _fileInCache(String chiave) async {
+  @override
+  Future<File> _fileInCache(_Bucket bucket, String chiave) async {
     final base = await _cartellaCache();
     return File(
-      p.joinAll([base.path, _cartellaCacheCover, ...chiave.split('/')]),
+      p.joinAll([base.path, bucket.cartellaCache, ...chiave.split('/')]),
     );
   }
 
