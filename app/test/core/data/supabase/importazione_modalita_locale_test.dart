@@ -229,7 +229,7 @@ void main() {
       expect(await secondo.copie.count().getSingle(), 0);
     });
 
-    test("un account già popolato riceve i fumetti del device in più, senza "
+    test('un account già popolato riceve i fumetti del device in più, senza '
         'deduplica', () async {
       final (c, userId) = await utente();
       final primo = drift();

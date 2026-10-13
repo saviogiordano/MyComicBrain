@@ -137,7 +137,7 @@ void main() {
   });
 
   testWidgets('importazione riuscita: "Fatto!" e solo da "Vai alla '
-      "collezione\" la Modalità locale si esaurisce", (tester) async {
+      'collezione" la Modalità locale si esaurisce', (tester) async {
     await mostra(tester);
 
     await tester.tap(find.text('Importa nel mio account'));
