@@ -81,6 +81,7 @@ void main() {
     final dentro = container.read(sessionControllerProvider);
     expect(dentro.profilo?.metodo, MetodoAccesso.google);
     expect(dentro.importazioneInSospeso, isTrue);
+    expect(dentro.ingresso, Ingresso.importazione);
 
     await controller.esci();
     await pumpEventQueue();
@@ -90,18 +91,91 @@ void main() {
     expect(fuori.profilo, isNull);
   });
 
-  test("una sessione salvata viene ripristinata all'avvio", () {
+  test("una sessione salvata viene ripristinata all'avvio", () async {
     gateway = FakeAuthGateway(
       sessioneSalvata: const Profilo(
         email: 'mario@example.com',
         metodo: MetodoAccesso.email,
       ),
     );
+    await preferences.setString('account.modalitaLocaleEsaurita', 'true');
 
     final sessione = avvia().read(sessionControllerProvider);
 
     expect(sessione.ingresso, Ingresso.app);
     expect(sessione.profilo?.email, 'mario@example.com');
+  });
+
+  group('prompt di importazione (ADR-0005, #173)', () {
+    const salvato = Profilo(
+      email: 'mario@example.com',
+      metodo: MetodoAccesso.email,
+    );
+
+    test("con dati locali il login porta al prompt, e l'esaurimento della "
+        "Modalità locale porta nell'app per sempre", () async {
+      datiLocali = true;
+      final container = avvia();
+      final controller = container.read(sessionControllerProvider.notifier);
+      await controller.accediConApple();
+      await pumpEventQueue();
+      expect(
+        container.read(sessionControllerProvider).ingresso,
+        Ingresso.importazione,
+      );
+
+      await controller.esaurisciModalitaLocale();
+      expect(container.read(sessionControllerProvider).ingresso, Ingresso.app);
+
+      await controller.esci();
+      await pumpEventQueue();
+      expect(
+        container.read(sessionControllerProvider).ingresso,
+        Ingresso.soloAccesso,
+      );
+    });
+
+    test("un'importazione interrotta dalla chiusura dell'app si ripresenta "
+        'al riavvio', () async {
+      datiLocali = true;
+      gateway = FakeAuthGateway(sessioneSalvata: salvato);
+      final container = avvia();
+      container.read(sessionControllerProvider);
+      await pumpEventQueue();
+
+      expect(
+        container.read(sessionControllerProvider).ingresso,
+        Ingresso.importazione,
+      );
+    });
+
+    test('se drift è già vuoto al riavvio (app chiusa dopo averlo '
+        "svuotato) si entra nell'app", () async {
+      gateway = FakeAuthGateway(sessioneSalvata: salvato);
+      final container = avvia();
+      container.read(sessionControllerProvider);
+      await pumpEventQueue();
+
+      final sessione = container.read(sessionControllerProvider);
+      expect(sessione.ingresso, Ingresso.app);
+      expect(sessione.modalitaLocaleEsaurita, isTrue);
+    });
+
+    test(
+      'offline ha la precedenza sul prompt: importare richiede la rete',
+      () async {
+        datiLocali = true;
+        gateway = FakeAuthGateway(sessioneSalvata: salvato)..online = false;
+        final container = avvia();
+        container.read(sessionControllerProvider);
+        await pumpEventQueue();
+
+        expect(
+          container.read(sessionControllerProvider).ingresso,
+          Ingresso.offline,
+        );
+      },
+    );
   });
   group('Profilo autenticato offline (#170, variante A)', () {
     const salvato = Profilo(

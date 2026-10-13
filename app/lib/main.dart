@@ -7,8 +7,10 @@ import 'package:mycomicbrain/core/auth/supabase_auth_gateway.dart';
 import 'package:mycomicbrain/core/data/preferences_shared_preferences_adapter.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
+import 'package:mycomicbrain/core/data/supabase/importazione_modalita_locale.dart';
 import 'package:mycomicbrain/core/design_system/app_theme.dart';
 import 'package:mycomicbrain/core/routing/router.dart';
+import 'package:mycomicbrain/features/importazione/application/importazione_controller.dart';
 import 'package:mycomicbrain/features/login/presentation/avviso_accesso.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -58,6 +60,14 @@ Future<List<Override>> _overridesAccount(
     ),
     haDatiLocaliProvider.overrideWith(
       (ref) => ref.watch(driftComicsRepositoryProvider).haDatiDaImportare,
+    ),
+    importatoreModalitaLocaleProvider.overrideWith(
+      (ref) => ImportazioneModalitaLocale(
+        db: ref.watch(appDatabaseProvider),
+        client: supabase.client,
+        userId: ref.watch(idUtenteSupabaseProvider)!,
+        baseDirectory: ref.watch(copertinaDownloaderProvider).baseDirectory,
+      ),
     ),
   ];
 }

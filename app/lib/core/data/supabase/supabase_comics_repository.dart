@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
-
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/supabase/invalidazione_tabelle.dart';
+import 'package:mycomicbrain/core/data/supabase/uuid_v4.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -71,7 +70,7 @@ class SupabaseComicsRepository implements ComicsRepository {
   @override
   Future<String> salvaCoverLocale(File file) async {
     final estensione = _estensione(file.path);
-    final chiave = '${await collectionId()}/${_uuidV4()}.$estensione';
+    final chiave = '${await collectionId()}/${uuidV4()}.$estensione';
     await _client.storage
         .from(_bucketCover)
         .upload(
@@ -119,7 +118,7 @@ class SupabaseComicsRepository implements ComicsRepository {
     }
     await destinazione.parent.create(recursive: true);
     // Scrittura atomica: un file a metà in cache sarebbe servito per sempre.
-    final temporaneo = File('${destinazione.path}.${_uuidV4()}.tmp');
+    final temporaneo = File('${destinazione.path}.${uuidV4()}.tmp');
     await temporaneo.writeAsBytes(bytes, flush: true);
     await temporaneo.rename(destinazione.path);
     return destinazione.path;
@@ -148,17 +147,6 @@ class SupabaseComicsRepository implements ComicsRepository {
     'webp' => 'image/webp',
     _ => 'image/jpeg',
   };
-
-  static final _casuale = Random.secure();
-
-  static String _uuidV4() {
-    final bytes = List<int>.generate(16, (_) => _casuale.nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
-        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
-  }
 
   /// I metodi non ancora portati (fette successive della mappa #165).
   @override

@@ -11,6 +11,7 @@ import 'package:mycomicbrain/features/dashboard/presentation/dashboard_page.dart
 import 'package:mycomicbrain/features/duplicati/presentation/duplicati_page.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/conferma_candidato_page.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/inserisci_manualmente_page.dart';
+import 'package:mycomicbrain/features/importazione/presentation/importazione_page.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/elimina_account_page.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
 import 'package:mycomicbrain/features/login/presentation/accedi_page.dart';
@@ -42,7 +43,9 @@ class _SessionRefresh extends ChangeNotifier {
 }
 
 /// Gate del login reale (#171): fuori dall'app solo benvenuto e accesso,
-/// un Profilo autenticato senza rete solo il blocco offline;
+/// un Profilo autenticato senza rete solo il blocco offline, uno con dati
+/// in Modalità locale ancora da importare solo il prompt di importazione
+/// (#173);
 /// dentro, `/accedi` resta raggiungibile in Modalità locale (da
 /// Impostazioni) ma non con un Profilo già autenticato.
 String? _redirectAccount(Ref ref, GoRouterState state) {
@@ -51,13 +54,20 @@ String? _redirectAccount(Ref ref, GoRouterState state) {
   final suBenvenuto = posizione == '/benvenuto';
   final suAccedi = posizione == '/accedi';
   final suOffline = posizione == '/offline';
+  final suImportazione = posizione == '/importazione';
   if (sessione.ingresso == Ingresso.offline) {
     return suOffline ? null : '/offline';
+  }
+  if (sessione.ingresso == Ingresso.importazione) {
+    return suImportazione ? null : '/importazione';
   }
   if (sessione.ingresso != Ingresso.app) {
     return suBenvenuto || suAccedi ? null : '/benvenuto';
   }
-  if (suBenvenuto || suOffline || (suAccedi && sessione.profilo != null)) {
+  if (suBenvenuto ||
+      suOffline ||
+      suImportazione ||
+      (suAccedi && sessione.profilo != null)) {
     return '/dashboard';
   }
   return null;
@@ -88,6 +98,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/offline',
         builder: (context, state) => const OfflinePage(),
+      ),
+      GoRoute(
+        path: '/importazione',
+        builder: (context, state) => const ImportazionePage(),
       ),
       GoRoute(
         path: '/benvenuto',
