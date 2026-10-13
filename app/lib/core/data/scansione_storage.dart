@@ -21,6 +21,12 @@ class ScansioneStorage {
 
   final Future<Directory> Function() _baseDirectory;
 
+  /// La directory in cui [salva] mette le Scansioni confermate (non la
+  /// crea). L'adapter Supabase la usa per ritrovare il file locale di una
+  /// Scansione dalla sua chiave Storage (ADR-0007, #178).
+  Future<Directory> cartella() async =>
+      Directory(p.join((await _baseDirectory()).path, _cartellaScansioni));
+
   /// Copia subito i file appena restituiti da uno scanner di terze parti
   /// (`cunning_document_scanner`, #89) nella directory
   /// `<ApplicationSupportDirectory>/scansioni_grezze/` — vivono in una cache
@@ -37,7 +43,10 @@ class ScansioneStorage {
 
     final risultato = <String>[];
     for (var i = 0; i < percorsiOriginali.length; i++) {
-      final destPath = p.join(dir.path, '${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
+      final destPath = p.join(
+        dir.path,
+        '${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+      );
       final salvato = await File(percorsiOriginali[i]).copy(destPath);
       risultato.add(salvato.path);
     }

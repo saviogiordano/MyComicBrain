@@ -166,6 +166,34 @@ void contrattoCreator(CreaAdapter crea) {
   );
 
   test(
+    "autoriDiEdizione e cercaCreator seguono l'ordine di inserimento",
+    () async {
+      final edizioneId = await edizione();
+      final primo = await repo.aggiungiCreator('Stan Lee');
+      final secondo = await repo.aggiungiCreator('Steve Ditko');
+      await repo.collegaCreatorAEdizione(
+        edizioneId: edizioneId,
+        creatorId: primo,
+        ruolo: RuoloCreator.sceneggiatore,
+      );
+      await repo.collegaCreatorAEdizione(
+        edizioneId: edizioneId,
+        creatorId: secondo,
+        ruolo: RuoloCreator.disegnatore,
+      );
+
+      expect(
+        (await repo.autoriDiEdizione(edizioneId)).map((a) => a.creatorId),
+        [primo, secondo],
+      );
+      expect(
+        (await repo.cercaCreator('St')).map((c) => c.id),
+        [primo, secondo],
+      );
+    },
+  );
+
+  test(
     'rimuoviCreatorDaEdizione rimuove solo il collegamento indicato',
     () async {
       final edizioneId = await edizione();

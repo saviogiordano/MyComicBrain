@@ -35,7 +35,15 @@ CreaAdapter? creaAdapterSupabaseLocale() {
       password: 'Contratto-${_casuale()}1',
     );
     final cache = await Directory.systemTemp.createTemp('contratto_supabase_');
-    return _AdapterSupabaseLocale(client, risposta.user!.id, cache);
+    final scansioni = await Directory.systemTemp.createTemp(
+      'contratto_scansioni_',
+    );
+    return _AdapterSupabaseLocale(
+      client,
+      risposta.user!.id,
+      cache,
+      scansioni,
+    );
   };
 }
 
@@ -45,15 +53,21 @@ String _casuale() => List.generate(
 ).join();
 
 class _AdapterSupabaseLocale implements AdapterSottoContratto {
-  _AdapterSupabaseLocale(this._client, String userId, this._cache)
-    : repo = SupabaseComicsRepository(
+  _AdapterSupabaseLocale(
+    this._client,
+    String userId,
+    this._cache,
+    this._scansioni,
+  ) : repo = SupabaseComicsRepository(
         _client,
         userId: userId,
         cartellaCache: () async => _cache,
+        cartellaScansioni: () async => _scansioni,
       );
 
   final SupabaseClient _client;
   final Directory _cache;
+  final Directory _scansioni;
 
   @override
   final SupabaseComicsRepository repo;
@@ -74,10 +88,15 @@ class _AdapterSupabaseLocale implements AdapterSottoContratto {
   );
 
   @override
+  Future<String> immagineScansione(String nome) =>
+      scriviImmagineScansione(_scansioni, nome);
+
+  @override
   Future<void> chiudi() async {
     await repo.chiudi();
     await _client.auth.signOut();
     await _client.dispose();
     await _cache.delete(recursive: true);
+    await _scansioni.delete(recursive: true);
   }
 }
