@@ -114,6 +114,7 @@ final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
   final repository = SupabaseComicsRepository(
     ref.watch(supabaseClientProvider)!,
     userId: userId,
+    copertinaDownloader: ref.watch(copertinaDownloaderProvider),
   );
   ref.onDispose(repository.chiudi);
   return repository;

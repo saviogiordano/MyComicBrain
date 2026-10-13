@@ -5,6 +5,7 @@ import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/exchange_rate_client.dart';
+import 'package:mycomicbrain/core/data/supabase/invalidazione_tabelle.dart';
 import 'package:mycomicbrain/core/data/supabase/supabase_comics_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -55,31 +56,43 @@ String _casuale() => List.generate(
 class _AdapterSupabaseLocale implements AdapterSottoContratto {
   _AdapterSupabaseLocale(
     this._client,
-    String userId,
+    this._userId,
     this._cache,
     this._scansioni,
-  ) : repo = SupabaseComicsRepository(
-        _client,
-        userId: userId,
-        cartellaCache: () async => _cache,
-        cartellaScansioni: () async => _scansioni,
-      );
+  ) {
+    repo = _crea();
+  }
 
   final SupabaseClient _client;
+  final String _userId;
   final Directory _cache;
   final Directory _scansioni;
 
-  @override
-  final SupabaseComicsRepository repo;
+  /// Condivisa con i repository di [repoCon]: le loro scritture rileggono
+  /// anche gli stream di [repo].
+  final _invalidazione = InvalidazioneTabelle();
 
-  /// Stesso utente e stessa cache: l'adapter non usa ancora le dipendenze
-  /// sostituibili (arriveranno con le fette che scaricano cover ComicVine e
-  /// leggono il tasso di cambio).
+  @override
+  late final SupabaseComicsRepository repo;
+
+  /// Stesso utente e stessa cache, con il [copertinaDownloader] dato. Il
+  /// tasso di cambio non è ancora usato dall'adapter (arriverà con la fetta
+  /// del Valore stimato).
   @override
   ComicsRepository repoCon({
     CopertinaDownloader? copertinaDownloader,
     ExchangeRateClient? exchangeRateClient,
-  }) => repo;
+  }) => _crea(copertinaDownloader: copertinaDownloader);
+
+  SupabaseComicsRepository _crea({CopertinaDownloader? copertinaDownloader}) =>
+      SupabaseComicsRepository(
+        _client,
+        userId: _userId,
+        cartellaCache: () async => _cache,
+        cartellaScansioni: () async => _scansioni,
+        invalidazione: _invalidazione,
+        copertinaDownloader: copertinaDownloader,
+      );
 
   @override
   AppDatabase get drift => throw StateError(
