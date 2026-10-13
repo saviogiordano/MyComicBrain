@@ -240,6 +240,23 @@ mixin _CatalogoSupabase implements ComicsRepository {
     _invalidazione.segnala(_tabelleDiEdizione);
   }
 
+  @override
+  Future<List<SerieTableData>> cercaSerie(String query) async => [
+    for (final riga
+        in await _client
+            .from(TabellaSupabase.serie.nome)
+            .select()
+            .ilike('name', '%${_escapeLike(query)}%')
+            .order('id'))
+      SerieTableData(
+        id: riga['id'] as int,
+        name: riga['name'] as String,
+        totalIssues: riga['total_issues'] as int?,
+        issn: riga['issn'] as String?,
+        coverImage: riga['cover_image'] as String?,
+      ),
+  ];
+
   // --- Creator, Personaggi, Tag, Generi ---
 
   @override
@@ -559,28 +576,26 @@ mixin _CatalogoSupabase implements ComicsRepository {
       .select('id, name')
       .ilike('name', '%${_escapeLike(query)}%')
       .order('id');
-
-  static String _escapeLike(String testo) => testo
-      .replaceAll(r'\', r'\\')
-      .replaceAll('%', r'\%')
-      .replaceAll('_', r'\_');
-
-  /// Un embed PostgREST uno-a-uno arriva come oggetto o come lista, a
-  /// seconda di come PostgREST legge i vincoli unique della FK composita.
-  static Map<String, dynamic>? _unaONessuna(Object? embed) => switch (embed) {
-    final Map<String, dynamic> riga => riga,
-    final List<dynamic> righe when righe.isNotEmpty =>
-      righe.first as Map<String, dynamic>,
-    _ => null,
-  };
-
-  static T? _enumOrNull<T extends Enum>(List<T> valori, Object? nome) =>
-      nome == null ? null : valori.byName(nome as String);
-
-  static DateTime? _data(Object? valore) =>
-      valore == null ? null : DateTime.parse(valore as String).toLocal();
-
-  static String _iso(DateTime data) => data.toUtc().toIso8601String();
-
-  static String? _isoOrNull(DateTime? data) => data == null ? null : _iso(data);
 }
+
+String _escapeLike(String testo) =>
+    testo.replaceAll(r'\', r'\\').replaceAll('%', r'\%').replaceAll('_', r'\_');
+
+/// Un embed PostgREST uno-a-uno arriva come oggetto o come lista, a
+/// seconda di come PostgREST legge i vincoli unique della FK composita.
+Map<String, dynamic>? _unaONessuna(Object? embed) => switch (embed) {
+  final Map<String, dynamic> riga => riga,
+  final List<dynamic> righe when righe.isNotEmpty =>
+    righe.first as Map<String, dynamic>,
+  _ => null,
+};
+
+T? _enumOrNull<T extends Enum>(List<T> valori, Object? nome) =>
+    nome == null ? null : valori.byName(nome as String);
+
+DateTime? _data(Object? valore) =>
+    valore == null ? null : DateTime.parse(valore as String).toLocal();
+
+String _iso(DateTime data) => data.toUtc().toIso8601String();
+
+String? _isoOrNull(DateTime? data) => data == null ? null : _iso(data);

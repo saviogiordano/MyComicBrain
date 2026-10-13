@@ -6,15 +6,18 @@ import 'package:mycomicbrain/core/data/supabase/invalidazione_tabelle.dart';
 import 'package:mycomicbrain/core/data/supabase/uuid_v4.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
+import 'package:mycomicbrain/core/domain/edizione_collezione.dart';
 import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
 import 'package:mycomicbrain/core/domain/genere.dart';
+import 'package:mycomicbrain/core/domain/ricerca_assistente.dart';
 import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 part 'supabase_catalogo.dart';
+part 'supabase_collezione.dart';
 
 const _bucketCover = 'covers';
 const _cartellaCacheCover = 'cover_supabase';
@@ -24,13 +27,14 @@ const _cartellaCacheCover = 'cover_supabase';
 /// prima richiesta e poi riusata. Le RLS di ADR-0004 restano l'unica
 /// barriera di autorizzazione.
 ///
-/// Le aree portate stanno in file `part` (Catalogo: `supabase_catalogo.dart`).
+/// Le aree portate stanno in file `part` (`supabase_catalogo.dart`,
+/// `supabase_collezione.dart`).
 /// Il porting procede per fette (mappa #165): i metodi non ancora portati
 /// lanciano [UnimplementedError] tramite [noSuchMethod]. Il login resta
 /// dietro `ACCOUNT_LOGIN` finché la suite di contratto non passa per intero
 /// anche qui.
 class SupabaseComicsRepository
-    with _CatalogoSupabase
+    with _CatalogoSupabase, _CollezioneSupabase
     implements ComicsRepository {
   SupabaseComicsRepository(
     this._client, {
