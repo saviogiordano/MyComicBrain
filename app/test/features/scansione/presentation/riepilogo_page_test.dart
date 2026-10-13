@@ -10,9 +10,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
-import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
 import 'package:path/path.dart' as p;
 
@@ -315,7 +316,7 @@ void main() {
         ),
       );
       addTearDown(db.close);
-      final repository = ComicsRepository(db);
+      final repository = DriftComicsRepository(db);
       final scansioni = scansioniFinte(1);
       await repository.aggiungiScansione(image: scansioni.single.path);
 
@@ -349,7 +350,7 @@ void main() {
       ),
     );
     addTearDown(db.close);
-    final repository = ComicsRepository(db);
+    final repository = DriftComicsRepository(db);
     final scansioni = scansioniFinte(1);
     await repository.aggiungiScansione(image: scansioni.single.path);
     final scansioneId = await repository.idScansionePerImmagine(
@@ -389,7 +390,7 @@ void main() {
         ),
       );
       addTearDown(db.close);
-      final repository = ComicsRepository(db);
+      final repository = DriftComicsRepository(db);
       final scansioni = scansioniFinte(1);
       await repository.aggiungiScansione(image: scansioni.single.path);
       final scansioneId = await repository.idScansionePerImmagine(
@@ -437,7 +438,7 @@ void main() {
         ),
       );
       addTearDown(db.close);
-      final repository = ComicsRepository(db);
+      final repository = DriftComicsRepository(db);
       final scansioni = scansioniFinte(1);
       await repository.aggiungiScansione(image: scansioni.single.path);
       final scansioneId = await repository.idScansionePerImmagine(
@@ -485,7 +486,7 @@ void main() {
         ),
       );
       addTearDown(db.close);
-      final repository = ComicsRepository(db);
+      final repository = DriftComicsRepository(db);
       final scansioni = scansioniFinte(1);
       await repository.aggiungiScansione(image: scansioni.single.path);
       final scansioneId = await repository.idScansionePerImmagine(
@@ -530,7 +531,7 @@ void main() {
         ),
       );
       addTearDown(db.close);
-      final repository = ComicsRepository(db);
+      final repository = DriftComicsRepository(db);
       final scansioni = scansioniFinte(1);
       await repository.aggiungiScansione(image: scansioni.single.path);
       final scansioneId = await repository.idScansionePerImmagine(
@@ -579,7 +580,7 @@ void main() {
         ),
       );
       addTearDown(db.close);
-      final repository = ComicsRepository(db);
+      final repository = DriftComicsRepository(db);
       final scansioni = scansioniFinte(2);
       for (final s in scansioni) {
         await repository.aggiungiScansione(image: s.path);
@@ -629,7 +630,7 @@ void main() {
       ),
     );
     addTearDown(db.close);
-    final repository = ComicsRepository(db);
+    final repository = DriftComicsRepository(db);
     final scansioni = scansioniFinte(1);
     await repository.aggiungiScansione(image: scansioni.single.path);
 
@@ -694,7 +695,7 @@ void main() {
         ),
       );
       addTearDown(db.close);
-      final repository = ComicsRepository(db);
+      final repository = DriftComicsRepository(db);
       final scansioni = scansioniFinte(2);
       for (final s in scansioni) {
         await repository.aggiungiScansione(image: s.path);
@@ -746,7 +747,7 @@ void main() {
           ),
         );
         addTearDown(db.close);
-        final repository = ComicsRepository(db);
+        final repository = DriftComicsRepository(db);
         final scansioni = scansioniFinte(2);
         for (final s in scansioni) {
           await repository.aggiungiScansione(image: s.path);
@@ -800,7 +801,7 @@ void main() {
           ),
         );
         addTearDown(db.close);
-        final repository = ComicsRepository(db);
+        final repository = DriftComicsRepository(db);
         final scansioni = scansioniFinte(2);
         for (final s in scansioni) {
           await repository.aggiungiScansione(image: s.path);
@@ -838,7 +839,7 @@ void main() {
           ),
         );
         addTearDown(db.close);
-        final repository = ComicsRepository(db);
+        final repository = DriftComicsRepository(db);
         final scansioni = scansioniFinte(1);
         await repository.aggiungiScansione(image: scansioni.single.path);
         final scansioneId = await repository.idScansionePerImmagine(
@@ -887,7 +888,7 @@ void main() {
         ),
       );
       addTearDown(db.close);
-      final repository = ComicsRepository(db);
+      final repository = DriftComicsRepository(db);
       final scansioni = scansioniFinte(2);
       for (final s in scansioni) {
         await repository.aggiungiScansione(image: s.path);

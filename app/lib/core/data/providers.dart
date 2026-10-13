@@ -11,6 +11,7 @@ import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/identificazione_pipeline.dart';
 import 'package:mycomicbrain/core/data/image_crop_service.dart';
 import 'package:mycomicbrain/core/data/locale_assistente_client.dart';
@@ -71,7 +72,7 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
 });
 
 final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
-  final repository = ComicsRepository(
+  final repository = DriftComicsRepository(
     ref.watch(appDatabaseProvider),
     copertinaDownloader: ref.watch(copertinaDownloaderProvider),
   );
@@ -124,10 +125,7 @@ final localeCoverAnalysisClientProvider = Provider<LocaleCoverAnalysisClient>(
 /// classe concreta e non sull'interfaccia [CoverAnalysisClient].
 final ProviderFamily<CoverAnalysisClient, AiProvider>
 coverAnalysisClientPerProvider =
-    Provider.family<CoverAnalysisClient, AiProvider>((
-      ref,
-      provider,
-    ) {
+    Provider.family<CoverAnalysisClient, AiProvider>((ref, provider) {
       return switch (provider) {
         AiProvider.openai => ref.watch(openAiCoverAnalysisClientProvider),
         AiProvider.claude => ref.watch(claudeCoverAnalysisClientProvider),
@@ -184,9 +182,7 @@ final ProviderFamily<AssistenteClient, AiProvider> assistenteClientPerProvider =
       return switch (provider) {
         AiProvider.openai => ref.watch(openAiAssistenteClientProvider),
         AiProvider.claude => ref.watch(claudeAssistenteClientProvider),
-        AiProvider.openRouter => ref.watch(
-          openRouterAssistenteClientProvider,
-        ),
+        AiProvider.openRouter => ref.watch(openRouterAssistenteClientProvider),
         AiProvider.locale => ref.watch(localeAssistenteClientProvider),
       };
     });
@@ -347,10 +343,7 @@ final StreamProviderFamily<EsitoIdentificazione, int> identificazioneProvider =
 /// interno né ComicVine hanno trovato un candidato affidabile.
 final FutureProviderFamily<AnalisiCopertinaTableData, int>
 analisiCopertinaProvider =
-    FutureProvider.family<AnalisiCopertinaTableData, int>((
-      ref,
-      scansioneId,
-    ) {
+    FutureProvider.family<AnalisiCopertinaTableData, int>((ref, scansioneId) {
       return ref
           .watch(comicsRepositoryProvider)
           .analisiCopertinaPerScansione(scansioneId);

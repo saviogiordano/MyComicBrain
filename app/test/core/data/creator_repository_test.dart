@@ -1,22 +1,22 @@
-import 'package:drift/drift.dart' hide isNotNull, isNull;
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
-import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 
-void main() {
-  late AppDatabase db;
+import 'contratto/adapter_sotto_contratto.dart';
+
+void main() => contrattoCreator(creaAdapterDriftInMemoria);
+
+/// Area Creator della suite di contratto di `ComicsRepository` (ADR-0007).
+void contrattoCreator(CreaAdapter crea) {
+  late AdapterSottoContratto adapter;
   late ComicsRepository repo;
 
-  setUp(() {
-    db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
-    );
-    repo = ComicsRepository(db);
+  setUp(() async {
+    adapter = await crea();
+    repo = adapter.repo;
   });
 
-  tearDown(() => db.close());
+  tearDown(() => adapter.chiudi());
 
   Future<int> edizione() async {
     final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
@@ -32,8 +32,8 @@ void main() {
       description: 'La prima raccolta.',
     );
 
-    final riga = await (db.select(
-      db.edizioni,
+    final riga = await (adapter.drift.select(
+      adapter.drift.edizioni,
     )..where((e) => e.id.equals(edizioneId))).getSingle();
     expect(riga.volume, 'Omnibus 1');
     expect(riga.description, 'La prima raccolta.');

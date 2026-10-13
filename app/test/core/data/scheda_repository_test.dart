@@ -1,27 +1,24 @@
-import 'package:drift/drift.dart' hide isNotNull, isNull;
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
-import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
 import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 
-void main() {
-  late AppDatabase db;
+import 'contratto/adapter_sotto_contratto.dart';
+
+void main() => contrattoScheda(creaAdapterDriftInMemoria);
+
+/// Area Scheda della suite di contratto di `ComicsRepository` (ADR-0007).
+void contrattoScheda(CreaAdapter crea) {
+  late AdapterSottoContratto adapter;
   late ComicsRepository repo;
 
-  setUp(() {
-    db = AppDatabase(
-      DatabaseConnection(
-        NativeDatabase.memory(),
-        closeStreamsSynchronously: true,
-      ),
-    );
-    repo = ComicsRepository(db);
+  setUp(() async {
+    adapter = await crea();
+    repo = adapter.repo;
   });
 
-  tearDown(() => db.close());
+  tearDown(() => adapter.chiudi());
 
   Future<int> opera({String title = 'The Amazing Spider-Man'}) =>
       repo.aggiungiOpera(title: title);
@@ -182,8 +179,8 @@ void main() {
       final operaId = await opera(title: 'Vecchio titolo');
       await repo.aggiornaTitoloOpera(operaId: operaId, title: 'Nuovo titolo');
 
-      final riga = await (db.select(
-        db.opere,
+      final riga = await (adapter.drift.select(
+        adapter.drift.opere,
       )..where((o) => o.id.equals(operaId))).getSingle();
       expect(riga.title, 'Nuovo titolo');
     },
@@ -201,8 +198,8 @@ void main() {
       description: 'Descrizione aggiornata',
     );
 
-    final riga = await (db.select(
-      db.edizioni,
+    final riga = await (adapter.drift.select(
+      adapter.drift.edizioni,
     )..where((e) => e.id.equals(edizioneId))).getSingle();
     expect(riga.publisher, 'Marvel Italia');
     expect(riga.issueNumber, 67);
@@ -226,8 +223,8 @@ void main() {
       notes: 'Prima ristampa italiana.',
     );
 
-    final riga = await (db.select(
-      db.copie,
+    final riga = await (adapter.drift.select(
+      adapter.drift.copie,
     )..where((c) => c.id.equals(copiaId))).getSingle();
     expect(riga.condition, CondizioneCopia.veryFine);
     expect(riga.purchasePrice, 3.5);
@@ -254,8 +251,8 @@ void main() {
         valutazione: 12,
       );
 
-      final riga = await (db.select(
-        db.copie,
+      final riga = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(riga.purchasePrice, 3.99);
       expect(riga.purchasePriceCurrency, ValutaPrezzo.usd);
@@ -281,8 +278,8 @@ void main() {
 
       await repo.cambiaStatoCopia(id: copiaId, status: StatoCopia.prestata);
 
-      final riga = await (db.select(
-        db.copie,
+      final riga = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(riga.status, StatoCopia.prestata);
       expect(riga.readingStatus, isNull);
@@ -303,8 +300,8 @@ void main() {
 
       await repo.impostaInVendita(id: copiaId, inVendita: true);
 
-      final riga = await (db.select(
-        db.copie,
+      final riga = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(riga.forSale, isTrue);
       expect(riga.status, StatoCopia.posseduta, reason: 'invariato');
@@ -312,8 +309,8 @@ void main() {
       expect(riga.seller, 'Edicola di zona', reason: 'invariato');
 
       await repo.impostaInVendita(id: copiaId, inVendita: false);
-      final rigaSpenta = await (db.select(
-        db.copie,
+      final rigaSpenta = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.id.equals(copiaId))).getSingle();
       expect(rigaSpenta.forSale, isFalse);
     },
@@ -356,8 +353,8 @@ void main() {
       expect(scritte, 3, reason: 'copiaAPosseduta + copiaAPrestata + copiaB');
 
       Future<bool> forSaleDi(int id) async {
-        final riga = await (db.select(
-          db.copie,
+        final riga = await (adapter.drift.select(
+          adapter.drift.copie,
         )..where((c) => c.id.equals(id))).getSingle();
         return riga.forSale;
       }
@@ -398,12 +395,12 @@ void main() {
       final edizioneEliminata = await repo.rimuoviCopia(copia1);
 
       expect(edizioneEliminata, isFalse);
-      final copieRimaste = await (db.select(
-        db.copie,
+      final copieRimaste = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.edizioneId.equals(edizioneId))).get();
       expect(copieRimaste, hasLength(1));
-      final edizioneRiga = await (db.select(
-        db.edizioni,
+      final edizioneRiga = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(edizioneId))).getSingleOrNull();
       expect(edizioneRiga, isNotNull);
     },
@@ -421,8 +418,8 @@ void main() {
       final edizioneEliminata = await repo.rimuoviCopia(copiaId);
 
       expect(edizioneEliminata, isTrue);
-      final edizioneRiga = await (db.select(
-        db.edizioni,
+      final edizioneRiga = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(edizioneId))).getSingleOrNull();
       expect(edizioneRiga, isNull);
     },
@@ -445,8 +442,8 @@ void main() {
 
       await repo.rimuoviCopia(copiaId);
 
-      final legami = await (db.select(
-        db.comicCreator,
+      final legami = await (adapter.drift.select(
+        adapter.drift.comicCreator,
       )..where((c) => c.edizioneId.equals(edizioneId))).get();
       expect(legami, isEmpty);
     },
@@ -473,16 +470,16 @@ void main() {
 
       await repo.eliminaEdizione(edizioneId);
 
-      final edizioneRiga = await (db.select(
-        db.edizioni,
+      final edizioneRiga = await (adapter.drift.select(
+        adapter.drift.edizioni,
       )..where((e) => e.id.equals(edizioneId))).getSingleOrNull();
       expect(edizioneRiga, isNull);
-      final copieRimaste = await (db.select(
-        db.copie,
+      final copieRimaste = await (adapter.drift.select(
+        adapter.drift.copie,
       )..where((c) => c.edizioneId.equals(edizioneId))).get();
       expect(copieRimaste, isEmpty);
-      final legami = await (db.select(
-        db.comicCreator,
+      final legami = await (adapter.drift.select(
+        adapter.drift.comicCreator,
       )..where((c) => c.edizioneId.equals(edizioneId))).get();
       expect(legami, isEmpty);
     },

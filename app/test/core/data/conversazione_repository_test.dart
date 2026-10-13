@@ -1,26 +1,23 @@
-import 'package:drift/drift.dart' hide isNotNull, isNull;
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
-import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 
-void main() {
-  late AppDatabase db;
+import 'contratto/adapter_sotto_contratto.dart';
+
+void main() => contrattoConversazione(creaAdapterDriftInMemoria);
+
+/// Area Conversazione della suite di contratto di `ComicsRepository` (ADR-0007).
+void contrattoConversazione(CreaAdapter crea) {
+  late AdapterSottoContratto adapter;
   late ComicsRepository repo;
 
-  setUp(() {
-    db = AppDatabase(
-      DatabaseConnection(
-        NativeDatabase.memory(),
-        closeStreamsSynchronously: true,
-      ),
-    );
-    repo = ComicsRepository(db);
+  setUp(() async {
+    adapter = await crea();
+    repo = adapter.repo;
   });
 
-  tearDown(() => db.close());
+  tearDown(() => adapter.chiudi());
 
   Future<int> edizione() async {
     final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
@@ -34,7 +31,7 @@ void main() {
       final id2 = await repo.getOrCreaConversazione();
 
       expect(id1, id2);
-      final tutte = await db.select(db.conversazioneTable).get();
+      final tutte = await adapter.drift.select(adapter.drift.conversazioneTable).get();
       expect(tutte, hasLength(1));
     },
   );
@@ -145,8 +142,8 @@ void main() {
 
       await repo.eliminaConversazione(conversazioneId);
 
-      final conversazioni = await db.select(db.conversazioneTable).get();
-      final messaggi = await db.select(db.messaggioTable).get();
+      final conversazioni = await adapter.drift.select(adapter.drift.conversazioneTable).get();
+      final messaggi = await adapter.drift.select(adapter.drift.messaggioTable).get();
       expect(conversazioni, isEmpty);
       expect(messaggi, isEmpty);
     },

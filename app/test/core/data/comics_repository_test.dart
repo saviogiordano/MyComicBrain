@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
@@ -15,21 +14,21 @@ import 'package:mycomicbrain/core/domain/genere.dart';
 import 'package:mycomicbrain/core/domain/ricerca_assistente.dart';
 import 'package:path/path.dart' as p;
 
-void main() {
-  late AppDatabase db;
+import 'contratto/adapter_sotto_contratto.dart';
+
+void main() => contrattoCatalogo(creaAdapterDriftInMemoria);
+
+/// Area Catalogo della suite di contratto di `ComicsRepository` (ADR-0007).
+void contrattoCatalogo(CreaAdapter crea) {
+  late AdapterSottoContratto adapter;
   late ComicsRepository repo;
 
-  setUp(() {
-    db = AppDatabase(
-      DatabaseConnection(
-        NativeDatabase.memory(),
-        closeStreamsSynchronously: true,
-      ),
-    );
-    repo = ComicsRepository(db);
+  setUp(() async {
+    adapter = await crea();
+    repo = adapter.repo;
   });
 
-  tearDown(() => db.close());
+  tearDown(() => adapter.chiudi());
 
   /// Crea un'opera + un'edizione (opzionalmente in una serie, con un
   /// numero) e vi aggiunge una copia con lo [status] dato. Ritorna l'id
@@ -165,11 +164,11 @@ void main() {
         // Simula i dati creati prima del fix su `aggiungiSerie`: più righe
         // `serie` con lo stesso nome, inserite direttamente (bypassando la
         // deduplica ora in `aggiungiSerie`).
-        final serieVecchia = await db
-            .into(db.serieTable)
+        final serieVecchia = await adapter.drift
+            .into(adapter.drift.serieTable)
             .insert(SerieTableCompanion.insert(name: 'Batman'));
-        final serieNuova = await db
-            .into(db.serieTable)
+        final serieNuova = await adapter.drift
+            .into(adapter.drift.serieTable)
             .insert(
               SerieTableCompanion.insert(
                 name: 'batman', // case diverso, stesso nome
@@ -192,7 +191,7 @@ void main() {
 
         await repo.unisciSerieDuplicate();
 
-        final serieRimaste = await db.select(db.serieTable).get();
+        final serieRimaste = await adapter.drift.select(adapter.drift.serieTable).get();
         expect(serieRimaste, hasLength(1));
         expect(serieRimaste.single.id, serieVecchia);
         expect(
@@ -200,7 +199,7 @@ void main() {
           12,
         ); // recuperato dalla duplicata
 
-        final edizioni = await db.select(db.edizioni).get();
+        final edizioni = await adapter.drift.select(adapter.drift.edizioni).get();
         expect(
           edizioni.map((e) => e.serieId),
           everyElement(serieVecchia),
@@ -218,29 +217,29 @@ void main() {
 
     test('non tocca Serie con nomi diversi', () async {
       final serieA = await repo.aggiungiSerie(name: 'Batman');
-      final serieB = await db
-          .into(db.serieTable)
+      final serieB = await adapter.drift
+          .into(adapter.drift.serieTable)
           .insert(SerieTableCompanion.insert(name: 'Superman'));
 
       await repo.unisciSerieDuplicate();
 
-      final serieRimaste = await db.select(db.serieTable).get();
+      final serieRimaste = await adapter.drift.select(adapter.drift.serieTable).get();
       expect(serieRimaste.map((s) => s.id), containsAll([serieA, serieB]));
       expect(serieRimaste, hasLength(2));
     });
 
     test('è idempotente: una seconda chiamata non rompe nulla', () async {
-      await db
-          .into(db.serieTable)
+      await adapter.drift
+          .into(adapter.drift.serieTable)
           .insert(SerieTableCompanion.insert(name: 'Batman'));
-      await db
-          .into(db.serieTable)
+      await adapter.drift
+          .into(adapter.drift.serieTable)
           .insert(SerieTableCompanion.insert(name: 'Batman'));
 
       await repo.unisciSerieDuplicate();
       await repo.unisciSerieDuplicate();
 
-      final serieRimaste = await db.select(db.serieTable).get();
+      final serieRimaste = await adapter.drift.select(adapter.drift.serieTable).get();
       expect(serieRimaste, hasLength(1));
     });
   });
@@ -899,8 +898,7 @@ void main() {
       'converte in EUR le Copie con prezzo in dollari (fumetto americano) '
       'usando il tasso corrente',
       () async {
-        final repoConTasso = ComicsRepository(
-          db,
+        final repoConTasso = adapter.repoCon(
           exchangeRateClient: _TassoFisso(0.9),
         );
 
@@ -934,8 +932,7 @@ void main() {
     test(
       'nessuna Copia in dollari: il tasso di cambio non viene interrogato',
       () async {
-        final repoConTasso = ComicsRepository(
-          db,
+        final repoConTasso = adapter.repoCon(
           exchangeRateClient: _TassoCheFallisceSempre(),
         );
         final operaId = await repoConTasso.aggiungiOpera(title: 'Solo EUR');
@@ -1233,8 +1230,7 @@ void main() {
           'comics_repository_cover_relativo_',
         );
         addTearDown(() => tempBase.delete(recursive: true));
-        final repoConBase = ComicsRepository(
-          db,
+        final repoConBase = adapter.repoCon(
           copertinaDownloader: CopertinaDownloader(
             baseDirectory: () async => tempBase,
           ),
@@ -1267,8 +1263,7 @@ void main() {
           'comics_repository_cover_legacy_',
         );
         addTearDown(() => tempBase.delete(recursive: true));
-        final repoConBase = ComicsRepository(
-          db,
+        final repoConBase = adapter.repoCon(
           copertinaDownloader: CopertinaDownloader(
             baseDirectory: () async => tempBase,
           ),
@@ -1544,8 +1539,8 @@ void main() {
           addTearDown(subscription.cancel);
           await pumpEventQueue();
 
-          await (db.update(
-            db.edizioni,
+          await (adapter.drift.update(
+            adapter.drift.edizioni,
           )..where((e) => e.id.equals(edizioneId))).write(
             const EdizioniCompanion(
               coverImage: Value('https://example.com/nuova.jpg'),
@@ -2172,8 +2167,7 @@ void main() {
           'importaRighe_copertine_test_',
         );
         addTearDown(() => tempBase.delete(recursive: true));
-        final repoConBase = ComicsRepository(
-          db,
+        final repoConBase = adapter.repoCon(
           copertinaDownloader: CopertinaDownloader(
             baseDirectory: () async => tempBase,
           ),
@@ -2203,8 +2197,8 @@ void main() {
           copertine: {'copertine/edizione_10.jpg': jpeg},
         );
 
-        final edizioni = await (db.select(
-          db.edizioni,
+        final edizioni = await (adapter.drift.select(
+          adapter.drift.edizioni,
         )..orderBy([(e) => OrderingTerm.asc(e.id)])).get();
         expect(edizioni, hasLength(3));
         final cover = edizioni[0].coverImage!;
@@ -2298,7 +2292,7 @@ void main() {
           ),
         ]);
 
-        final serie = await db.select(db.serieTable).get();
+        final serie = await adapter.drift.select(adapter.drift.serieTable).get();
         expect(serie, hasLength(1));
       },
     );

@@ -1,25 +1,22 @@
-import 'package:drift/drift.dart' hide isNotNull, isNull;
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
-import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 
-void main() {
-  late AppDatabase db;
+import 'contratto/adapter_sotto_contratto.dart';
+
+void main() => contrattoAnalisiCopertina(creaAdapterDriftInMemoria);
+
+/// Area AnalisiCopertina della suite di contratto di `ComicsRepository` (ADR-0007).
+void contrattoAnalisiCopertina(CreaAdapter crea) {
+  late AdapterSottoContratto adapter;
   late ComicsRepository repo;
 
-  setUp(() {
-    db = AppDatabase(
-      DatabaseConnection(
-        NativeDatabase.memory(),
-        closeStreamsSynchronously: true,
-      ),
-    );
-    repo = ComicsRepository(db);
+  setUp(() async {
+    adapter = await crea();
+    repo = adapter.repo;
   });
 
-  tearDown(() => db.close());
+  tearDown(() => adapter.chiudi());
 
   Future<int> scansione() => repo.aggiungiScansione(image: '/scansioni/1.jpg');
 
@@ -40,7 +37,7 @@ void main() {
 
       await repo.eliminaScansione(id: id);
 
-      final righe = await db.select(db.scansioni).get();
+      final righe = await adapter.drift.select(adapter.drift.scansioni).get();
       expect(righe.map((r) => r.id), [altroId]);
     },
   );
@@ -52,8 +49,8 @@ void main() {
       scansioneId: scansioneId,
     );
 
-    final riga = await (db.select(
-      db.analisiCopertinaTable,
+    final riga = await (adapter.drift.select(
+      adapter.drift.analisiCopertinaTable,
     )..where((a) => a.id.equals(analisiId))).getSingle();
     expect(riga.scansioneId, scansioneId);
     expect(riga.status, StatoAnalisiCopertina.inCorso);
@@ -92,8 +89,8 @@ void main() {
         description: 'Peter Parker affronta Venom in un confronto decisivo.',
       );
 
-      final riga = await (db.select(
-        db.analisiCopertinaTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.analisiCopertinaTable,
       )..where((a) => a.id.equals(analisiId))).getSingle();
       expect(riga.status, StatoAnalisiCopertina.completata);
       expect(riga.title, 'Amazing Spider-Man');
@@ -120,8 +117,8 @@ void main() {
 
       await repo.completaAnalisiCopertina(id: analisiId, rawResponse: '{}');
 
-      final riga = await (db.select(
-        db.analisiCopertinaTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.analisiCopertinaTable,
       )..where((a) => a.id.equals(analisiId))).getSingle();
       expect(riga.characters, isEmpty);
       expect(riga.coverStyleTags, isEmpty);
@@ -145,8 +142,8 @@ void main() {
         errorMessage: 'timeout',
       );
 
-      final riga = await (db.select(
-        db.analisiCopertinaTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.analisiCopertinaTable,
       )..where((a) => a.id.equals(analisiId))).getSingle();
       expect(riga.status, StatoAnalisiCopertina.fallita);
       expect(riga.errorMessage, 'timeout');

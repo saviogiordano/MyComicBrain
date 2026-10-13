@@ -10,6 +10,7 @@ import 'package:mycomicbrain/core/auth/auth_gateway.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
@@ -26,7 +27,7 @@ void main() {
         closeStreamsSynchronously: true,
       ),
     );
-    repo = ComicsRepository(db);
+    repo = DriftComicsRepository(db);
   });
 
   tearDown(() => db.close());

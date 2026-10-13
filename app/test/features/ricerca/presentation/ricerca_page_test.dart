@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/data/speech_to_text_service.dart';
@@ -82,7 +83,7 @@ void main() {
         closeStreamsSynchronously: true,
       ),
     );
-    repository = ComicsRepository(db);
+    repository = DriftComicsRepository(db);
     settingsRepository = SettingsRepository.inMemoria();
   });
 

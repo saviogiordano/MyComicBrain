@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/features/collezione/application/collezione_providers.dart';
@@ -28,7 +29,7 @@ void main() {
         closeStreamsSynchronously: true,
       ),
     );
-    repository = ComicsRepository(db);
+    repository = DriftComicsRepository(db);
     SharedPreferences.setMockInitialValues({});
     sharedPreferences = await SharedPreferences.getInstance();
     container = ProviderContainer(

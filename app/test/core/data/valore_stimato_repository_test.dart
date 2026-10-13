@@ -1,26 +1,23 @@
-import 'package:drift/drift.dart' hide isNotNull, isNull;
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
-import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 
-void main() {
-  late AppDatabase db;
+import 'contratto/adapter_sotto_contratto.dart';
+
+void main() => contrattoValoreStimato(creaAdapterDriftInMemoria);
+
+/// Area ValoreStimato della suite di contratto di `ComicsRepository` (ADR-0007).
+void contrattoValoreStimato(CreaAdapter crea) {
+  late AdapterSottoContratto adapter;
   late ComicsRepository repo;
 
-  setUp(() {
-    db = AppDatabase(
-      DatabaseConnection(
-        NativeDatabase.memory(),
-        closeStreamsSynchronously: true,
-      ),
-    );
-    repo = ComicsRepository(db);
+  setUp(() async {
+    adapter = await crea();
+    repo = adapter.repo;
   });
 
-  tearDown(() => db.close());
+  tearDown(() => adapter.chiudi());
 
   Future<int> copia({CondizioneCopia? condition}) async {
     final operaId = await repo.aggiungiOpera(title: 'Amazing Spider-Man');
@@ -43,8 +40,8 @@ void main() {
 
       final id = await repo.avviaOrRiavviaValoreStimato(copiaId: copiaId);
 
-      final riga = await (db.select(
-        db.valoreStimatoTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.valoreStimatoTable,
       )..where((v) => v.id.equals(id))).getSingle();
       expect(riga.copiaId, copiaId);
       expect(riga.status, StatoValoreStimato.inCorso);
@@ -65,8 +62,8 @@ void main() {
       );
 
       expect(secondoId, id);
-      final righe = await (db.select(
-        db.valoreStimatoTable,
+      final righe = await (adapter.drift.select(
+        adapter.drift.valoreStimatoTable,
       )..where((v) => v.copiaId.equals(copiaId))).get();
       expect(righe, hasLength(1));
       expect(righe.single.status, StatoValoreStimato.inCorso);
@@ -81,8 +78,8 @@ void main() {
 
       await repo.completaValoreStimato(id: id, value: 12.3);
 
-      final riga = await (db.select(
-        db.valoreStimatoTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.valoreStimatoTable,
       )..where((v) => v.id.equals(id))).getSingle();
       expect(riga.status, StatoValoreStimato.completata);
       expect(riga.value, 12.3);
@@ -98,8 +95,8 @@ void main() {
 
       await repo.segnaValoreStimatoNonDisponibile(id: id);
 
-      final riga = await (db.select(
-        db.valoreStimatoTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.valoreStimatoTable,
       )..where((v) => v.id.equals(id))).getSingle();
       expect(riga.status, StatoValoreStimato.nonDisponibile);
       expect(riga.value, isNull);
@@ -117,8 +114,8 @@ void main() {
 
       await repo.fallisciValoreStimato(id: id, errorMessage: 'timeout');
 
-      final riga = await (db.select(
-        db.valoreStimatoTable,
+      final riga = await (adapter.drift.select(
+        adapter.drift.valoreStimatoTable,
       )..where((v) => v.id.equals(id))).getSingle();
       expect(riga.status, StatoValoreStimato.fallita);
       expect(riga.errorMessage, 'timeout');

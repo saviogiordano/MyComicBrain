@@ -7,9 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/scheda/presentation/modifica_scheda_page.dart';
@@ -22,7 +22,7 @@ import 'package:mycomicbrain/features/scheda/presentation/modifica_scheda_page.d
 /// artificialmente lo stesso ritardo, gated da un `Completer` controllato
 /// dal test, per riprodurre deterministicamente la finestra in cui l'utente
 /// può toccare "Salva" prima che il fetch sia arrivato.
-class _RepositoryConFetchCoverLento extends ComicsRepository {
+class _RepositoryConFetchCoverLento extends DriftComicsRepository {
   _RepositoryConFetchCoverLento(super.db, {required super.copertinaDownloader});
 
   final gate = Completer<void>();

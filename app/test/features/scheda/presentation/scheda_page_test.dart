@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
@@ -27,7 +28,7 @@ void main() {
       ),
     );
     tempBase = await Directory.systemTemp.createTemp('scheda_page_test_');
-    repository = ComicsRepository(
+    repository = DriftComicsRepository(
       db,
       copertinaDownloader: CopertinaDownloader(
         baseDirectory: () async => tempBase,
