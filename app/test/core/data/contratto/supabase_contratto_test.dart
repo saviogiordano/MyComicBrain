@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import '../collezione_repository_test.dart';
 import '../cover_repository_test.dart';
 import '../creator_repository_test.dart';
 import '../scheda_repository_test.dart';
@@ -21,6 +22,7 @@ void main() {
       group('Cover', () => contrattoCover(factory));
       group('Creator', () => contrattoCreator(factory));
       group('Scheda', () => contrattoScheda(factory));
+      group('Collezione', () => contrattoCollezione(factory));
     },
     skip: crea == null
         ? 'Stack Supabase locale non configurato: '

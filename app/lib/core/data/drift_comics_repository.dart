@@ -2134,73 +2134,20 @@ ORDER BY p.n
     String? isbn,
     String? testoLibero,
   }) async {
-    var risultati = await watchIndiceCollezione().first;
-
-    if (titolo != null) {
-      risultati = _filtraPerTesto(risultati, titolo, (e) => [e.titolo]);
-    }
-    if (serie != null) {
-      final serieIds = (await cercaSerie(serie)).map((s) => s.id).toSet();
-      risultati = risultati.where((e) => serieIds.contains(e.serieId)).toList();
-    }
-    if (autore != null) {
-      risultati = _filtraPerTesto(risultati, autore, (e) => e.autori);
-    }
-    if (editore != null) {
-      risultati = _filtraPerTesto(risultati, editore, (e) => [e.publisher]);
-    }
-    if (personaggio != null) {
-      risultati = _filtraPerTesto(risultati, personaggio, (e) => e.personaggi);
-    }
-    if (tag != null) {
-      risultati = _filtraPerTesto(risultati, tag, (e) => e.tag);
-    }
-    if (numero != null) {
-      risultati = risultati.where((e) => e.issueNumber == numero).toList();
-    }
-    if (isbn != null) {
-      risultati = risultati.where((e) => e.ean == isbn).toList();
-    }
-    if (testoLibero != null) {
-      risultati = _filtraPerTesto(
-        risultati,
-        testoLibero,
-        (e) => [
-          e.titolo,
-          e.serieName,
-          e.publisher,
-          ...e.autori,
-          ...e.personaggi,
-          ...e.tag,
-        ],
-      );
-    }
-
-    final totale = risultati.length;
-    return (
-      edizioni: risultati.take(30).toList(),
-      totale: totale,
-      troncato: totale > 30,
+    return filtraIndiceCollezione(
+      await watchIndiceCollezione().first,
+      titolo: titolo,
+      serieIds: serie == null
+          ? null
+          : {for (final s in await cercaSerie(serie)) s.id},
+      autore: autore,
+      editore: editore,
+      personaggio: personaggio,
+      tag: tag,
+      numero: numero,
+      isbn: isbn,
+      testoLibero: testoLibero,
     );
-  }
-
-  /// Match parziale case-insensitive di [query] contro uno o più campi
-  /// testuali di ogni riga — condiviso da tutti gli assi testuali di
-  /// [cercaEdizioni] (`titolo`/`autore`/`editore`/`personaggio`/`tag`/
-  /// `testoLibero`), stesso criterio "contains" di `cercaCreator`/
-  /// `cercaCharacter`/`cercaTag` ma lato Dart: qui opera sull'indice già
-  /// caricato, non su una query.
-  List<EdizioneCollezioneIndice> _filtraPerTesto(
-    List<EdizioneCollezioneIndice> righe,
-    String query,
-    Iterable<String?> Function(EdizioneCollezioneIndice) campi,
-  ) {
-    final q = query.toLowerCase();
-    return righe
-        .where(
-          (e) => campi(e).any((v) => v?.toLowerCase().contains(q) ?? false),
-        )
-        .toList();
   }
 
   @override
