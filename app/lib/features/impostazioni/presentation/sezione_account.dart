@@ -8,7 +8,7 @@ import 'package:mycomicbrain/features/login/presentation/accesso_ui.dart';
 
 /// Sezione "Account", prima di Impostazioni (#171, prototipo #170): tre
 /// stati — Modalità locale, email in attesa di conferma, Profilo
-/// autenticato con "Esci". "Elimina account" arriva con #172.
+/// autenticato con "Esci" ed "Elimina account" (#172).
 class SezioneAccount extends ConsumerWidget {
   const SezioneAccount({super.key});
 
@@ -204,28 +204,53 @@ class _Autenticato extends ConsumerWidget {
             ),
           ),
           const Divider(height: 1, color: AppColors.borderSubtle),
-          InkWell(
+          _Riga(
+            etichetta: 'Esci',
+            colore: AppColors.textPrimary,
             onTap: () => _esci(context, ref),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm + 2,
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    'Esci',
-                    style: AppTypography.bodyLarge.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(Icons.chevron_right, color: AppColors.textTertiary),
-                ],
-              ),
-            ),
+          ),
+          const Divider(height: 1, color: AppColors.borderSubtle),
+          _Riga(
+            etichetta: 'Elimina account',
+            colore: AppColors.amberStrong,
+            onTap: () => context.push('/account/elimina'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _Riga extends StatelessWidget {
+  const _Riga({
+    required this.etichetta,
+    required this.colore,
+    required this.onTap,
+  });
+
+  final String etichetta;
+  final Color colore;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm + 2,
+        ),
+        child: Row(
+          children: [
+            Text(
+              etichetta,
+              style: AppTypography.bodyLarge.copyWith(color: colore),
+            ),
+            const Spacer(),
+            Icon(Icons.chevron_right, color: AppColors.textTertiary),
+          ],
+        ),
       ),
     );
   }

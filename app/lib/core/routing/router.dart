@@ -11,6 +11,7 @@ import 'package:mycomicbrain/features/dashboard/presentation/dashboard_page.dart
 import 'package:mycomicbrain/features/duplicati/presentation/duplicati_page.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/conferma_candidato_page.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/inserisci_manualmente_page.dart';
+import 'package:mycomicbrain/features/impostazioni/presentation/elimina_account_page.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
 import 'package:mycomicbrain/features/login/presentation/accedi_page.dart';
 import 'package:mycomicbrain/features/login/presentation/benvenuto_page.dart';
@@ -222,6 +223,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => SerieDettaglioPage(
           serieId: int.parse(state.pathParameters['id']!),
         ),
+      ),
+      // Eliminazione dell'account (#172), da Impostazioni → Account.
+      GoRoute(
+        path: '/account/elimina',
+        builder: (context, state) => const EliminaAccountPage(),
       ),
       GoRoute(
         path: '/duplicati',

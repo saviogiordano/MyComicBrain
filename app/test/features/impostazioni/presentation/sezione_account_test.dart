@@ -87,4 +87,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(sessionControllerProvider).profilo, isNull);
   });
+
+  testWidgets('con un Profilo offre "Elimina account"', (tester) async {
+    gateway = FakeAuthGateway(
+      sessioneSalvata: const Profilo(
+        email: 'mario@example.com',
+        metodo: MetodoAccesso.email,
+      ),
+    );
+    await mostra(tester);
+
+    expect(find.text('Elimina account'), findsOneWidget);
+  });
 }

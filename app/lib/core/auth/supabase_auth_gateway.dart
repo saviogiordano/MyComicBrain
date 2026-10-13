@@ -169,6 +169,34 @@ class SupabaseAuthGateway implements AuthGateway {
   });
 
   @override
+  Future<void> eliminaAccount() => _traduci(() async {
+    String? appleCode;
+    if (Platform.isIOS && profiloCorrente?.metodo == MetodoAccesso.apple) {
+      final credenziale = await SignInWithApple.getAppleIDCredential(
+        scopes: const [],
+      );
+      appleCode = credenziale.authorizationCode;
+    }
+    try {
+      await _client.functions.invoke(
+        'elimina-account',
+        body: {'appleAuthorizationCode': ?appleCode},
+      );
+    } on sb.FunctionException catch (e) {
+      throw AuthException(
+        e.status == 409
+            ? AuthErrore.proprietarioConCollaboratori
+            : AuthErrore.sconosciuto,
+        '${e.status}: ${e.details}',
+      );
+    }
+    // L'utente non esiste più: `signOut` ignora il 404 del server e
+    // chiude comunque la sessione sul device.
+    await _auth.signOut();
+    if (_googleInizializzato) await GoogleSignIn.instance.signOut();
+  });
+
+  @override
   Future<bool> raggiungibile() async {
     try {
       final risposta = await http
@@ -214,6 +242,8 @@ class SupabaseAuthGateway implements AuthGateway {
         _ => AuthErrore.sconosciuto,
       }, e.message);
     } on SocketException catch (e) {
+      throw AuthException(AuthErrore.rete, e.message);
+    } on http.ClientException catch (e) {
       throw AuthException(AuthErrore.rete, e.message);
     }
   }
