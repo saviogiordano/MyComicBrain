@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
 import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/assistente_orchestrator.dart';
@@ -26,6 +27,7 @@ import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/data/speech_to_text_service.dart';
+import 'package:mycomicbrain/core/data/supabase/supabase_comics_repository.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
@@ -34,6 +36,7 @@ import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/serie_lista.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
@@ -71,7 +74,10 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   return repository;
 });
 
-final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
+/// Il catalogo della Modalità locale. Oltre che da [comicsRepositoryProvider]
+/// senza sessione, è letto direttamente da ciò che riguarda i dati locali
+/// anche con un Profilo autenticato (dati da importare, ADR-0005).
+final driftComicsRepositoryProvider = Provider<DriftComicsRepository>((ref) {
   final repository = DriftComicsRepository(
     ref.watch(appDatabaseProvider),
     copertinaDownloader: ref.watch(copertinaDownloaderProvider),
@@ -80,6 +86,36 @@ final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
   // `aggiungiSerie` (bug osservato: il contatore "serie" della Dashboard
   // contava una riga per scansione invece che per collana).
   unawaited(repository.unisciSerieDuplicate());
+  return repository;
+});
+
+/// Il client Supabase, sostituito da `main.dart` solo con il login
+/// abilitato (`ACCOUNT_LOGIN`): senza, l'app resta tutta su drift.
+final supabaseClientProvider = Provider<SupabaseClient?>((ref) => null);
+
+/// L'id dell'utente Supabase autenticato, `null` in Modalità locale. Segue
+/// il Profilo di `SessionController`, l'unico punto in cui la sessione
+/// cambia (#171).
+final idUtenteSupabaseProvider = Provider<String?>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  if (client == null) return null;
+  final email = ref.watch(
+    sessionControllerProvider.select((stato) => stato.profilo?.email),
+  );
+  return email == null ? null : client.auth.currentUser?.id;
+});
+
+/// Sceglie l'adapter dalla sessione (ADR-0007): nessuna sessione → drift;
+/// Profilo autenticato → Supabase, legato al suo utente. Login e logout
+/// ricostruiscono tutto ciò che dipende da qui.
+final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
+  final userId = ref.watch(idUtenteSupabaseProvider);
+  if (userId == null) return ref.watch(driftComicsRepositoryProvider);
+  final repository = SupabaseComicsRepository(
+    ref.watch(supabaseClientProvider)!,
+    userId: userId,
+  );
+  ref.onDispose(repository.chiudi);
   return repository;
 });
 

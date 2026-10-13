@@ -20,6 +20,16 @@ supabase db lint    # controlli statici su funzioni e schema
 Per uno stack più leggero bastano DB, Auth e Storage:
 `supabase start -x realtime,studio,imgproxy,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta`.
 
+## Suite di contratto di `ComicsRepository`
+
+La stessa suite gira su drift (sempre, con `flutter test`) e su `SupabaseComicsRepository` contro lo stack locale (ADR-0007):
+
+```sh
+scripts/test-contratto-supabase.sh   # avvia lo stack se serve, poi flutter test
+```
+
+Lo script passa a `flutter test` l'URL e la chiave pubblicabile dello stack (`SUPABASE_TEST_URL`, `SUPABASE_TEST_PUBLISHABLE_KEY`); senza queste variabili i test su Supabase vengono saltati. Ogni test registra un utente nuovo, con la sua Collezione creata dal trigger di signup; `supabase db reset` li cancella. Le aree portate si aggiungono in `app/test/core/data/contratto/supabase_contratto_test.dart`.
+
 ## Remoto
 
 ```sh
