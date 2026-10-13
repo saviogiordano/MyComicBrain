@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/auth/auth_config.dart';
 import 'package:mycomicbrain/core/auth/auth_gateway.dart';
@@ -15,6 +17,11 @@ enum Ingresso {
 
   /// Dentro l'app — in Modalità locale o con un Profilo autenticato.
   app,
+
+  /// Profilo autenticato su un device con dati in Modalità locale non
+  /// ancora importati né rifiutati: prompt di importazione a schermo intero
+  /// prima di entrare nell'app (ADR-0005, variante A del prototipo #170).
+  importazione,
 
   /// Profilo autenticato senza rete: blocco a schermo intero con "Riprova"
   /// (variante A del prototipo #170) — online-only, nessuna cache.
@@ -43,12 +50,15 @@ class SessionState {
   final bool offline;
 
   /// Profilo autenticato su un device con dati in Modalità locale non
-  /// ancora importati né rifiutati (ADR-0005): il prompt di importazione
-  /// arriva con #173.
+  /// ancora importati né rifiutati (ADR-0005): con drift vuoto la Modalità
+  /// locale si esaurisce già al login.
   bool get importazioneInSospeso => profilo != null && !modalitaLocaleEsaurita;
 
   Ingresso get ingresso {
-    if (profilo != null) return offline ? Ingresso.offline : Ingresso.app;
+    if (profilo != null) {
+      if (offline) return Ingresso.offline;
+      return importazioneInSospeso ? Ingresso.importazione : Ingresso.app;
+    }
     if (modalitaLocaleEsaurita) return Ingresso.soloAccesso;
     if (benvenutoSuperato) return Ingresso.app;
     return Ingresso.benvenuto;
@@ -90,7 +100,14 @@ class SessionController extends Notifier<SessionState> {
     if (gateway.profiloCorrente != null) {
       // Dopo il primo `state`: `build` deve restituire prima di poterlo
       // aggiornare.
-      Future.microtask(riprovaConnessione);
+      unawaited(
+        Future.microtask(() async {
+          await riprovaConnessione();
+          // App chiusa dopo aver svuotato drift ma prima di esaurire la
+          // Modalità locale: non c'è più niente da importare.
+          await _esaurisciSeSenzaDatiLocali();
+        }),
+      );
     }
     return SessionState(
       profilo: gateway.profiloCorrente,
@@ -154,19 +171,35 @@ class SessionController extends Notifier<SessionState> {
 
   /// Unico punto in cui cambia il Profilo (vedi [AuthGateway]).
   Future<void> _suProfilo(Profilo? profilo) async {
+    if (profilo == null) {
+      state = _copia(profilo: () => null, offline: false);
+      return;
+    }
+    // Prima di pubblicare il Profilo: con drift vuoto si entra subito
+    // nell'app, senza passare per un attimo dal prompt di importazione.
+    await _esaurisciSeSenzaDatiLocali();
     state = _copia(profilo: () => profilo, offline: false);
-    if (profilo == null) return;
     await riprovaConnessione();
     if (state.emailInAttesa != null) await _impostaEmailInAttesa(null);
     if (!state.benvenutoSuperato) {
       await _preferences.setString(_chiaveBenvenutoSuperato, 'true');
       state = _copia(benvenutoSuperato: true);
     }
-    if (!state.modalitaLocaleEsaurita &&
-        !await ref.read(haDatiLocaliProvider)()) {
-      await _preferences.setString(_chiaveModalitaLocaleEsaurita, 'true');
-      state = _copia(modalitaLocaleEsaurita: true);
+  }
+
+  Future<void> _esaurisciSeSenzaDatiLocali() async {
+    if (state.modalitaLocaleEsaurita) return;
+    if (!await ref.read(haDatiLocaliProvider)()) {
+      await esaurisciModalitaLocale();
     }
+  }
+
+  /// L'importazione è riuscita o è stata rifiutata (ADR-0005): la
+  /// Modalità locale non torna più disponibile su questo device, nemmeno
+  /// dopo logout o eliminazione dell'account.
+  Future<void> esaurisciModalitaLocale() async {
+    await _preferences.setString(_chiaveModalitaLocaleEsaurita, 'true');
+    state = _copia(modalitaLocaleEsaurita: true);
   }
 
   Future<void> continuaSenzaAccount() async {
