@@ -32,19 +32,20 @@ void contrattoCreator(CreaAdapter crea) {
       description: 'La prima raccolta.',
     );
 
-    final riga = await (adapter.drift.select(
-      adapter.drift.edizioni,
-    )..where((e) => e.id.equals(edizioneId))).getSingle();
-    expect(riga.volume, 'Omnibus 1');
-    expect(riga.description, 'La prima raccolta.');
+    final dettaglio = await repo.watchEdizione(edizioneId).first;
+    expect(dettaglio!.volume, 'Omnibus 1');
+    expect(dettaglio.description, 'La prima raccolta.');
   });
 
-  test('aggiungiCreator crea un Creator senza controllo di univocità sul nome', () async {
-    final id1 = await repo.aggiungiCreator('Stan Lee');
-    final id2 = await repo.aggiungiCreator('Stan Lee');
+  test(
+    'aggiungiCreator crea un Creator senza controllo di univocità sul nome',
+    () async {
+      final id1 = await repo.aggiungiCreator('Stan Lee');
+      final id2 = await repo.aggiungiCreator('Stan Lee');
 
-    expect(id1, isNot(id2));
-  });
+      expect(id1, isNot(id2));
+    },
+  );
 
   test('cercaCreator trova Creator per match parziale del nome', () async {
     await repo.aggiungiCreator('Stan Lee');
@@ -56,22 +57,38 @@ void contrattoCreator(CreaAdapter crea) {
     expect(risultati.single.name, 'Stan Lee');
   });
 
-  test("collegaCreatorAEdizione collega un Creator a un'Edizione con un ruolo", () async {
-    final edizioneId = await edizione();
-    final creatorId = await repo.aggiungiCreator('Stan Lee');
+  test(
+    'cercaCharacter e cercaTag trovano per match parziale del nome',
+    () async {
+      await repo.aggiungiCharacter('Rorschach');
+      await repo.aggiungiCharacter('Ozymandias');
+      await repo.aggiungiTag('capolavoro');
+      await repo.aggiungiTag('da rileggere');
 
-    await repo.collegaCreatorAEdizione(
-      edizioneId: edizioneId,
-      creatorId: creatorId,
-      ruolo: RuoloCreator.sceneggiatore,
-    );
+      expect((await repo.cercaCharacter('rorsch')).single.name, 'Rorschach');
+      expect((await repo.cercaTag('lavoro')).single.name, 'capolavoro');
+    },
+  );
 
-    final autori = await repo.autoriDiEdizione(edizioneId);
-    expect(autori, hasLength(1));
-    expect(autori.single.creatorId, creatorId);
-    expect(autori.single.name, 'Stan Lee');
-    expect(autori.single.ruolo, RuoloCreator.sceneggiatore);
-  });
+  test(
+    "collegaCreatorAEdizione collega un Creator a un'Edizione con un ruolo",
+    () async {
+      final edizioneId = await edizione();
+      final creatorId = await repo.aggiungiCreator('Stan Lee');
+
+      await repo.collegaCreatorAEdizione(
+        edizioneId: edizioneId,
+        creatorId: creatorId,
+        ruolo: RuoloCreator.sceneggiatore,
+      );
+
+      final autori = await repo.autoriDiEdizione(edizioneId);
+      expect(autori, hasLength(1));
+      expect(autori.single.creatorId, creatorId);
+      expect(autori.single.name, 'Stan Lee');
+      expect(autori.single.ruolo, RuoloCreator.sceneggiatore);
+    },
+  );
 
   test(
     'un Creator può comparire più volte sulla stessa Edizione con ruoli diversi',
@@ -148,18 +165,21 @@ void contrattoCreator(CreaAdapter crea) {
     },
   );
 
-  test('rimuoviCreatorDaEdizione rimuove solo il collegamento indicato', () async {
-    final edizioneId = await edizione();
-    final creatorId = await repo.aggiungiCreator('Stan Lee');
-    await repo.collegaCreatorAEdizione(
-      edizioneId: edizioneId,
-      creatorId: creatorId,
-      ruolo: RuoloCreator.sceneggiatore,
-    );
-    final autori = await repo.autoriDiEdizione(edizioneId);
+  test(
+    'rimuoviCreatorDaEdizione rimuove solo il collegamento indicato',
+    () async {
+      final edizioneId = await edizione();
+      final creatorId = await repo.aggiungiCreator('Stan Lee');
+      await repo.collegaCreatorAEdizione(
+        edizioneId: edizioneId,
+        creatorId: creatorId,
+        ruolo: RuoloCreator.sceneggiatore,
+      );
+      final autori = await repo.autoriDiEdizione(edizioneId);
 
-    await repo.rimuoviCreatorDaEdizione(autori.single.comicCreatorId);
+      await repo.rimuoviCreatorDaEdizione(autori.single.comicCreatorId);
 
-    expect(await repo.autoriDiEdizione(edizioneId), isEmpty);
-  });
+      expect(await repo.autoriDiEdizione(edizioneId), isEmpty);
+    },
+  );
 }

@@ -1,11 +1,20 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
+import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/supabase/invalidazione_tabelle.dart';
 import 'package:mycomicbrain/core/data/supabase/uuid_v4.dart';
+import 'package:mycomicbrain/core/domain/copia.dart';
+import 'package:mycomicbrain/core/domain/creator.dart';
+import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
+import 'package:mycomicbrain/core/domain/formato.dart';
+import 'package:mycomicbrain/core/domain/genere.dart';
+import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+part 'supabase_catalogo.dart';
 
 const _bucketCover = 'covers';
 const _cartellaCacheCover = 'cover_supabase';
@@ -15,11 +24,14 @@ const _cartellaCacheCover = 'cover_supabase';
 /// prima richiesta e poi riusata. Le RLS di ADR-0004 restano l'unica
 /// barriera di autorizzazione.
 ///
+/// Le aree portate stanno in file `part` (Catalogo: `supabase_catalogo.dart`).
 /// Il porting procede per fette (mappa #165): i metodi non ancora portati
 /// lanciano [UnimplementedError] tramite [noSuchMethod]. Il login resta
 /// dietro `ACCOUNT_LOGIN` finché la suite di contratto non passa per intero
 /// anche qui.
-class SupabaseComicsRepository implements ComicsRepository {
+class SupabaseComicsRepository
+    with _CatalogoSupabase
+    implements ComicsRepository {
   SupabaseComicsRepository(
     this._client, {
     required this.userId,
@@ -28,9 +40,11 @@ class SupabaseComicsRepository implements ComicsRepository {
   }) : _cartellaCache = cartellaCache ?? getApplicationCacheDirectory,
        _invalidazione = invalidazione ?? InvalidazioneTabelle();
 
+  @override
   final SupabaseClient _client;
   final String userId;
   final Future<Directory> Function() _cartellaCache;
+  @override
   final InvalidazioneTabelle _invalidazione;
 
   Future<String>? _collectionId;
@@ -39,6 +53,7 @@ class SupabaseComicsRepository implements ComicsRepository {
   /// La Collezione dell'utente: la riga `owner` in `collection_members`,
   /// creata dal trigger di signup (ADR-0004). Un errore (rete) non resta in
   /// memoria: la richiesta successiva riprova.
+  @override
   Future<String> collectionId() =>
       _collectionId ??= _risolviCollezione().then<String>(
         (id) => id,
