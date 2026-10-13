@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
+import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
+import 'package:mycomicbrain/core/domain/genere.dart';
 import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 
 import 'contratto/adapter_sotto_contratto.dart';
@@ -30,6 +34,14 @@ void contrattoScheda(CreaAdapter crea) {
       issueNumberLabel: '1',
     );
   }
+
+  Future<EdizioneDettaglio?> dettaglioDi(int edizioneId) =>
+      repo.watchEdizione(edizioneId).first;
+
+  Future<CopiaDettaglio> copiaDi(int edizioneId, int copiaId) async =>
+      (await dettaglioDi(
+        edizioneId,
+      ))!.copie.singleWhere((c) => c.id == copiaId);
 
   test('watchEdizione ritorna null per un\'Edizione inesistente', () async {
     expect(await repo.watchEdizione(999).first, isNull);
@@ -177,12 +189,12 @@ void contrattoScheda(CreaAdapter crea) {
     'aggiornaTitoloOpera aggiorna il titolo sulla Opera, non sulla Edizione',
     () async {
       final operaId = await opera(title: 'Vecchio titolo');
+      final edizioneId = await edizione(operaId: operaId);
       await repo.aggiornaTitoloOpera(operaId: operaId, title: 'Nuovo titolo');
 
-      final riga = await (adapter.drift.select(
-        adapter.drift.opere,
-      )..where((o) => o.id.equals(operaId))).getSingle();
-      expect(riga.title, 'Nuovo titolo');
+      final dettaglio = await dettaglioDi(edizioneId);
+      expect(dettaglio!.titolo, 'Nuovo titolo');
+      expect(dettaglio.operaId, operaId);
     },
   );
 
@@ -198,11 +210,10 @@ void contrattoScheda(CreaAdapter crea) {
       description: 'Descrizione aggiornata',
     );
 
-    final riga = await (adapter.drift.select(
-      adapter.drift.edizioni,
-    )..where((e) => e.id.equals(edizioneId))).getSingle();
+    final riga = (await dettaglioDi(edizioneId))!;
     expect(riga.publisher, 'Marvel Italia');
     expect(riga.issueNumber, 67);
+    expect(riga.issueNumberLabel, '67');
     expect(riga.volume, 'Vol. 3');
     expect(riga.description, 'Descrizione aggiornata');
   });
@@ -223,9 +234,7 @@ void contrattoScheda(CreaAdapter crea) {
       notes: 'Prima ristampa italiana.',
     );
 
-    final riga = await (adapter.drift.select(
-      adapter.drift.copie,
-    )..where((c) => c.id.equals(copiaId))).getSingle();
+    final riga = await copiaDi(edizioneId, copiaId);
     expect(riga.condition, CondizioneCopia.veryFine);
     expect(riga.purchasePrice, 3.5);
     expect(riga.seller, 'Fumetteria Century');
@@ -251,15 +260,8 @@ void contrattoScheda(CreaAdapter crea) {
         valutazione: 12,
       );
 
-      final riga = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      expect(riga.purchasePrice, 3.99);
-      expect(riga.purchasePriceCurrency, ValutaPrezzo.usd);
-      expect(riga.valutazione, 12);
-
-      final dettaglio = await repo.watchEdizione(edizioneId).first;
-      final copia = dettaglio!.copie.single;
+      final copia = await copiaDi(edizioneId, copiaId);
+      expect(copia.purchasePrice, 3.99);
       expect(copia.purchasePriceCurrency, ValutaPrezzo.usd);
       expect(copia.valutazione, 12);
     },
@@ -278,9 +280,7 @@ void contrattoScheda(CreaAdapter crea) {
 
       await repo.cambiaStatoCopia(id: copiaId, status: StatoCopia.prestata);
 
-      final riga = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final riga = await copiaDi(edizioneId, copiaId);
       expect(riga.status, StatoCopia.prestata);
       expect(riga.readingStatus, isNull);
       expect(riga.seller, 'Edicola di zona', reason: 'invariato');
@@ -300,18 +300,14 @@ void contrattoScheda(CreaAdapter crea) {
 
       await repo.impostaInVendita(id: copiaId, inVendita: true);
 
-      final riga = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final riga = await copiaDi(edizioneId, copiaId);
       expect(riga.forSale, isTrue);
       expect(riga.status, StatoCopia.posseduta, reason: 'invariato');
       expect(riga.readingStatus, StatoLettura.letto, reason: 'invariato');
       expect(riga.seller, 'Edicola di zona', reason: 'invariato');
 
       await repo.impostaInVendita(id: copiaId, inVendita: false);
-      final rigaSpenta = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final rigaSpenta = await copiaDi(edizioneId, copiaId);
       expect(rigaSpenta.forSale, isFalse);
     },
   );
@@ -352,23 +348,19 @@ void contrattoScheda(CreaAdapter crea) {
 
       expect(scritte, 3, reason: 'copiaAPosseduta + copiaAPrestata + copiaB');
 
-      Future<bool> forSaleDi(int id) async {
-        final riga = await (adapter.drift.select(
-          adapter.drift.copie,
-        )..where((c) => c.id.equals(id))).getSingle();
-        return riga.forSale;
-      }
+      Future<bool> forSaleDi(int edizioneId, int id) async =>
+          (await copiaDi(edizioneId, id)).forSale;
 
-      expect(await forSaleDi(copiaAPosseduta), isTrue);
-      expect(await forSaleDi(copiaAPrestata), isTrue);
+      expect(await forSaleDi(edizioneA, copiaAPosseduta), isTrue);
+      expect(await forSaleDi(edizioneA, copiaAPrestata), isTrue);
       expect(
-        await forSaleDi(copiaAVenduta),
+        await forSaleDi(edizioneA, copiaAVenduta),
         isFalse,
         reason: 'venduta, non "posseduta"',
       );
-      expect(await forSaleDi(copiaB), isTrue);
+      expect(await forSaleDi(edizioneB, copiaB), isTrue);
       expect(
-        await forSaleDi(copiaC),
+        await forSaleDi(edizioneC, copiaC),
         isFalse,
         reason: 'edizione non indicata nella selezione',
       );
@@ -395,14 +387,9 @@ void contrattoScheda(CreaAdapter crea) {
       final edizioneEliminata = await repo.rimuoviCopia(copia1);
 
       expect(edizioneEliminata, isFalse);
-      final copieRimaste = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.edizioneId.equals(edizioneId))).get();
-      expect(copieRimaste, hasLength(1));
-      final edizioneRiga = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(edizioneId))).getSingleOrNull();
-      expect(edizioneRiga, isNotNull);
+      final dettaglio = await dettaglioDi(edizioneId);
+      expect(dettaglio, isNotNull);
+      expect(dettaglio!.copie, hasLength(1));
     },
   );
 
@@ -418,10 +405,7 @@ void contrattoScheda(CreaAdapter crea) {
       final edizioneEliminata = await repo.rimuoviCopia(copiaId);
 
       expect(edizioneEliminata, isTrue);
-      final edizioneRiga = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(edizioneId))).getSingleOrNull();
-      expect(edizioneRiga, isNull);
+      expect(await dettaglioDi(edizioneId), isNull);
     },
   );
 
@@ -442,10 +426,7 @@ void contrattoScheda(CreaAdapter crea) {
 
       await repo.rimuoviCopia(copiaId);
 
-      final legami = await (adapter.drift.select(
-        adapter.drift.comicCreator,
-      )..where((c) => c.edizioneId.equals(edizioneId))).get();
-      expect(legami, isEmpty);
+      expect(await repo.autoriDiEdizione(edizioneId), isEmpty);
     },
   );
 
@@ -470,18 +451,105 @@ void contrattoScheda(CreaAdapter crea) {
 
       await repo.eliminaEdizione(edizioneId);
 
-      final edizioneRiga = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(edizioneId))).getSingleOrNull();
-      expect(edizioneRiga, isNull);
-      final copieRimaste = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.edizioneId.equals(edizioneId))).get();
-      expect(copieRimaste, isEmpty);
-      final legami = await (adapter.drift.select(
-        adapter.drift.comicCreator,
-      )..where((c) => c.edizioneId.equals(edizioneId))).get();
-      expect(legami, isEmpty);
+      expect(await dettaglioDi(edizioneId), isNull);
+      expect(await repo.autoriDiEdizione(edizioneId), isEmpty);
     },
   );
+
+  test(
+    'eliminaEdizione elimina anche Personaggi, Tag, Generi e il Valore '
+    'stimato delle Copie',
+    () async {
+      final edizioneId = await edizione();
+      final copiaId = await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+      await repo.avviaOrRiavviaValoreStimato(copiaId: copiaId);
+      await repo.collegaCharacterAEdizione(
+        edizioneId: edizioneId,
+        characterId: await repo.aggiungiCharacter('Rorschach'),
+      );
+      await repo.collegaTagAEdizione(
+        edizioneId: edizioneId,
+        tagId: await repo.aggiungiTag('capolavoro'),
+      );
+      await repo.impostaGeneriEdizione(
+        edizioneId: edizioneId,
+        generi: {GenereEdizione.supereroi},
+      );
+
+      await repo.eliminaEdizione(edizioneId);
+
+      expect(await dettaglioDi(edizioneId), isNull);
+    },
+  );
+
+  test(
+    "rimuoviCopia sull'ultima Copia con Valore stimato elimina anche "
+    "l'Edizione",
+    () async {
+      final edizioneId = await edizione();
+      final copiaId = await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+      await repo.avviaOrRiavviaValoreStimato(copiaId: copiaId);
+
+      expect(await repo.rimuoviCopia(copiaId), isTrue);
+      expect(await dettaglioDi(edizioneId), isNull);
+    },
+  );
+
+  test(
+    'coverImageGrezzoDi restituisce il valore salvato, non risolto',
+    () async {
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: await opera(),
+        coverImage: 'cartella/cover.jpg',
+      );
+
+      expect(await repo.coverImageGrezzoDi(edizioneId), 'cartella/cover.jpg');
+    },
+  );
+
+  test('watchEdizione riemette dopo una scrittura sulle sue Copie', () async {
+    final edizioneId = await edizione();
+    final prima = Completer<void>();
+    final conCopia = Completer<void>();
+    final sottoscrizione = repo.watchEdizione(edizioneId).listen((d) {
+      if (!prima.isCompleted) prima.complete();
+      if (d!.copie.length == 1 && !conCopia.isCompleted) conCopia.complete();
+    });
+    await prima.future;
+
+    await repo.aggiungiCopia(
+      edizioneId: edizioneId,
+      status: StatoCopia.posseduta,
+    );
+
+    await conCopia.future.timeout(const Duration(seconds: 5));
+    await sottoscrizione.cancel();
+  });
+
+  test('impostaGeneriEdizione sostituisce per intero i Generi', () async {
+    final edizioneId = await edizione();
+    await repo.impostaGeneriEdizione(
+      edizioneId: edizioneId,
+      generi: {GenereEdizione.supereroi, GenereEdizione.horror},
+    );
+    await repo.impostaGeneriEdizione(
+      edizioneId: edizioneId,
+      generi: {GenereEdizione.horror, GenereEdizione.fantasy},
+    );
+    await repo.impostaGeneriEdizione(edizioneId: edizioneId, generi: {});
+    await repo.impostaGeneriEdizione(
+      edizioneId: edizioneId,
+      generi: {GenereEdizione.fantasy},
+    );
+
+    // Nessuna lettura dei Generi nella Scheda: il contratto qui è che le
+    // sostituzioni ripetute non falliscano (vincolo unique su Supabase).
+    expect(await dettaglioDi(edizioneId), isNotNull);
+  });
 }

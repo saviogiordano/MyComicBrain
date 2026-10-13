@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import '../cover_repository_test.dart';
+import '../creator_repository_test.dart';
+import '../scheda_repository_test.dart';
 import 'adapter_supabase_locale.dart';
 
 /// La suite di contratto su `SupabaseComicsRepository`, contro lo stack
@@ -14,9 +16,11 @@ void main() {
   group(
     'su Supabase locale',
     () {
-      contrattoCover(
-        crea ?? () => throw StateError('stack locale non configurato'),
-      );
+      final factory =
+          crea ?? () => throw StateError('stack locale non configurato');
+      group('Cover', () => contrattoCover(factory));
+      group('Creator', () => contrattoCreator(factory));
+      group('Scheda', () => contrattoScheda(factory));
     },
     skip: crea == null
         ? 'Stack Supabase locale non configurato: '
