@@ -45,7 +45,7 @@ void main() {
     await db.close();
   });
 
-  Future<int> edizionePosseduta(String titolo, {String? publisher}) async {
+  Future<String> edizionePosseduta(String titolo, {String? publisher}) async {
     final operaId = await repository.aggiungiOpera(title: titolo);
     final edizioneId = await repository.aggiungiEdizione(
       operaId: operaId,
@@ -157,9 +157,7 @@ void main() {
       () async {
         await aggiungiEdizioniPossedute(150, prefisso: 'Bonelli');
         await container.read(indiceCollezioneProvider.future);
-        container
-            .read(numeroCaricatiCollezioneProvider.notifier)
-            .caricaAltro();
+        container.read(numeroCaricatiCollezioneProvider.notifier).caricaAltro();
         expect(
           container.read(numeroCaricatiCollezioneProvider),
           2 * dimensionePaginaCollezione,
@@ -357,9 +355,11 @@ void main() {
       );
       await edizionePosseduta('Non in vendita');
 
-      container.read(filtriCollezioneProvider.notifier).impostaSoloInVendita(
-        true,
-      );
+      container
+          .read(filtriCollezioneProvider.notifier)
+          .impostaSoloInVendita(
+            true,
+          );
       await container.read(indiceCollezioneProvider.future);
 
       final visibili = container.read(edizioniVisibiliProvider).valueOrNull!;
@@ -380,18 +380,18 @@ void main() {
       container.read(modalitaSelezioneProvider.notifier).attiva();
       expect(container.read(modalitaSelezioneProvider), isTrue);
 
-      container.read(edizioniSelezionateProvider.notifier).toggle(1);
-      container.read(edizioniSelezionateProvider.notifier).toggle(2);
-      expect(container.read(edizioniSelezionateProvider), {1, 2});
+      container.read(edizioniSelezionateProvider.notifier).toggle('1');
+      container.read(edizioniSelezionateProvider.notifier).toggle('2');
+      expect(container.read(edizioniSelezionateProvider), {'1', '2'});
 
-      container.read(edizioniSelezionateProvider.notifier).toggle(1);
-      expect(container.read(edizioniSelezionateProvider), {2});
+      container.read(edizioniSelezionateProvider.notifier).toggle('1');
+      expect(container.read(edizioniSelezionateProvider), {'2'});
     });
 
     test('disattiva azzera anche la selezione', () {
       container.read(modalitaSelezioneProvider.notifier).attiva();
-      container.read(edizioniSelezionateProvider.notifier).toggle(1);
-      expect(container.read(edizioniSelezionateProvider), {1});
+      container.read(edizioniSelezionateProvider.notifier).toggle('1');
+      expect(container.read(edizioniSelezionateProvider), {'1'});
 
       container.read(modalitaSelezioneProvider.notifier).disattiva();
 

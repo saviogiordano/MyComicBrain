@@ -75,25 +75,30 @@ void main() {
 
     final opera = await db
         .into(db.opere)
-        .insert(OpereCompanion.insert(title: 'Dylan Dog', createdAt: adesso));
+        .insertReturning(
+          OpereCompanion.insert(title: 'Dylan Dog', createdAt: adesso),
+        )
+        .then((r) => r.id);
     final edizione = await db
         .into(db.edizioni)
-        .insert(
+        .insertReturning(
           EdizioniCompanion.insert(
             operaId: opera,
             issueNumberLabel: const Value('1'),
             coverImage: const Value('copertine/dd1.jpg'),
             createdAt: adesso,
           ),
-        );
+        )
+        .then((r) => r.id);
     final risolta = await db
         .into(db.scansioni)
-        .insert(
+        .insertReturning(
           ScansioniCompanion.insert(
             image: p.join(base.path, 'scansioni', 'risolta.jpg'),
             createdAt: adesso,
           ),
-        );
+        )
+        .then((r) => r.id);
     for (final scansione in [risolta, null]) {
       await db
           .into(db.copie)
@@ -109,12 +114,13 @@ void main() {
     }
     final aperta = await db
         .into(db.scansioni)
-        .insert(
+        .insertReturning(
           ScansioniCompanion.insert(
             image: immagineScansione,
             createdAt: adesso,
           ),
-        );
+        )
+        .then((r) => r.id);
     await db
         .into(db.analisiCopertinaTable)
         .insert(

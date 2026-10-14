@@ -25,8 +25,8 @@ void main() {
   }
 
   RigaEsportazioneCopia rigaCompleta() => RigaEsportazioneCopia(
-    copiaId: 1,
-    edizioneId: 10,
+    copiaId: '1',
+    edizioneId: '10',
     operaTitolo: 'Dylan Dog',
     serieName: 'Dylan Dog',
     publisher: 'Sergio Bonelli Editore',
@@ -44,8 +44,8 @@ void main() {
     format: FormatoEdizione.spillato,
     autori: const [
       (
-        comicCreatorId: 1,
-        creatorId: 1,
+        comicCreatorId: '1',
+        creatorId: '1',
         name: 'Tiziano Sclavi',
         ruolo: RuoloCreator.sceneggiatore,
       ),
@@ -102,8 +102,8 @@ void main() {
 
     test('una riga "Mancante" (Copia persa) riparte con lo status giusto', () {
       final rigaPersa = RigaEsportazioneCopia(
-        copiaId: 2,
-        edizioneId: 20,
+        copiaId: '2',
+        edizioneId: '20',
         operaTitolo: 'Volume unico',
         status: StatoCopia.persa,
         createdAt: DateTime(2024, 5),
@@ -121,8 +121,8 @@ void main() {
     test('Opera mancante viene scartata con motivo', () {
       final csv = generaCsvEsportazione([
         RigaEsportazioneCopia(
-          copiaId: 1,
-          edizioneId: 1,
+          copiaId: '1',
+          edizioneId: '1',
           operaTitolo: '',
           status: StatoCopia.posseduta,
           createdAt: DateTime(2024),
@@ -200,8 +200,8 @@ void main() {
     test('Opera mancante viene scartata con motivo, come per il CSV', () {
       final bytes = generaExcelEsportazione([
         RigaEsportazioneCopia(
-          copiaId: 1,
-          edizioneId: 1,
+          copiaId: '1',
+          edizioneId: '1',
           operaTitolo: '',
           status: StatoCopia.posseduta,
           createdAt: DateTime(2024),
@@ -255,7 +255,7 @@ void main() {
         () => utf8.encode(
           generaJsonEsportazione(
             [rigaCompleta()],
-            fileCopertine: {10: 'copertine/edizione_10.jpg'},
+            fileCopertine: {'10': 'copertine/edizione_10.jpg'},
           ),
         ),
       ),
@@ -263,7 +263,7 @@ void main() {
         'xlsx',
         () => generaExcelEsportazione(
           [rigaCompleta()],
-          fileCopertine: {10: 'copertine/edizione_10.jpg'},
+          fileCopertine: {'10': 'copertine/edizione_10.jpg'},
         ),
       ),
     ]) {
@@ -285,7 +285,7 @@ void main() {
     test('zip ricompresso con una cartella radice e metadati macOS', () {
       final csv = generaCsvEsportazione(
         [rigaCompleta()],
-        fileCopertine: {10: 'copertine/edizione_10.jpg'},
+        fileCopertine: {'10': 'copertine/edizione_10.jpg'},
       );
       final contenuto = analizzaZipImportazione(
         zipCon({

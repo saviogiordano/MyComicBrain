@@ -14,9 +14,9 @@ class EdizioneCatalogo {
     required this.coverImage,
   });
 
-  final int edizioneId;
+  final String edizioneId;
   final String title;
-  final int? serieId;
+  final String? serieId;
   final String? seriesName;
   final String? publisher;
   final int? issueNumber;

@@ -24,10 +24,10 @@ void contrattoScheda(CreaAdapter crea) {
 
   tearDown(() => adapter.chiudi());
 
-  Future<int> opera({String title = 'The Amazing Spider-Man'}) =>
+  Future<String> opera({String title = 'The Amazing Spider-Man'}) =>
       repo.aggiungiOpera(title: title);
 
-  Future<int> edizione({int? operaId, int? serieId}) async {
+  Future<String> edizione({String? operaId, String? serieId}) async {
     return repo.aggiungiEdizione(
       operaId: operaId ?? await opera(),
       serieId: serieId,
@@ -35,16 +35,16 @@ void contrattoScheda(CreaAdapter crea) {
     );
   }
 
-  Future<EdizioneDettaglio?> dettaglioDi(int edizioneId) =>
+  Future<EdizioneDettaglio?> dettaglioDi(String edizioneId) =>
       repo.watchEdizione(edizioneId).first;
 
-  Future<CopiaDettaglio> copiaDi(int edizioneId, int copiaId) async =>
+  Future<CopiaDettaglio> copiaDi(String edizioneId, String copiaId) async =>
       (await dettaglioDi(
         edizioneId,
       ))!.copie.singleWhere((c) => c.id == copiaId);
 
   test('watchEdizione ritorna null per un\'Edizione inesistente', () async {
-    expect(await repo.watchEdizione(999).first, isNull);
+    expect(await repo.watchEdizione('00000000-0000-7000-8000-000000000999').first, isNull);
   });
 
   test('watchEdizione risolve titolo (Opera), Copie e Autori', () async {
@@ -348,7 +348,7 @@ void contrattoScheda(CreaAdapter crea) {
 
       expect(scritte, 3, reason: 'copiaAPosseduta + copiaAPrestata + copiaB');
 
-      Future<bool> forSaleDi(int edizioneId, int id) async =>
+      Future<bool> forSaleDi(String edizioneId, String id) async =>
           (await copiaDi(edizioneId, id)).forSale;
 
       expect(await forSaleDi(edizioneA, copiaAPosseduta), isTrue);

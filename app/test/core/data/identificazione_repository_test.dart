@@ -39,7 +39,7 @@ void contrattoIdentificazione(CreaAdapter crea) {
 
   /// Il percorso immagine di ogni Scansione creata da [scansione], per
   /// `watchScansioneConfermata`.
-  final immagini = <int, String>{};
+  final immagini = <String, String>{};
 
   setUp(() async {
     adapter = await crea();
@@ -65,7 +65,7 @@ void contrattoIdentificazione(CreaAdapter crea) {
     ),
   );
 
-  Future<int> scansione() async {
+  Future<String> scansione() async {
     final immagine = await adapter.immagineScansione(
       '${immagini.length + 1}.jpg',
     );
@@ -74,16 +74,16 @@ void contrattoIdentificazione(CreaAdapter crea) {
     return id;
   }
 
-  Future<bool> confermata(int scansioneId) =>
+  Future<bool> confermata(String scansioneId) =>
       repo.watchScansioneConfermata(immagini[scansioneId]!).first;
 
-  Future<List<Candidato>> candidati(int scansioneId) async =>
+  Future<List<Candidato>> candidati(String scansioneId) async =>
       (await repo.watchIdentificazione(scansioneId).first).candidati;
 
   /// L'Edizione a cui appartiene la Copia [copiaId], con le sue Copie. Letta
   /// con [repoConCover]: `watchEdizione` risolve anche la cover.
   Future<(EdizioneDettaglio, CopiaDettaglio)> edizioneDiCopia(
-    int copiaId,
+    String copiaId,
   ) async {
     final lettore = repoConCover();
     for (final e in await lettore.catalogoPerMatching()) {
@@ -101,7 +101,7 @@ void contrattoIdentificazione(CreaAdapter crea) {
   /// Candidato ComicVine). Nessun campo valorizzato di default: i test che
   /// non passano parametri esercitano il ripiego sui campi grezzi del
   /// Candidato quando l'AI non ha letto nulla.
-  Future<int> scansioneConAnalisi({
+  Future<String> scansioneConAnalisi({
     String? title,
     String? issueNumberLabel,
     String? publisher,

@@ -32,9 +32,9 @@ void main() {
 
   tearDown(() => db.close());
 
-  Future<int> edizioneConCopia({
+  Future<String> edizioneConCopia({
     required String titolo,
-    required int serieId,
+    required String serieId,
     required int issueNumber,
     String? issueNumberLabel,
     String? coverImage,
@@ -58,7 +58,7 @@ void main() {
 
   Future<void> pumpDettaglio(
     WidgetTester tester, {
-    required int serieId,
+    required String serieId,
   }) async {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1;
@@ -71,7 +71,7 @@ void main() {
         GoRoute(
           path: '/serie/:id',
           builder: (context, state) => SerieDettaglioPage(
-            serieId: int.parse(state.pathParameters['id']!),
+            serieId: state.pathParameters['id']!,
           ),
         ),
         GoRoute(

@@ -34,11 +34,11 @@ class Candidato {
     this.coverImageUrl,
   });
 
-  final int id;
+  final String id;
   final FonteCandidato source;
   final double punteggio;
   final bool scelto;
-  final int? edizioneId;
+  final String? edizioneId;
   final String? title;
   final String? seriesName;
   final String? issueNumberLabel;

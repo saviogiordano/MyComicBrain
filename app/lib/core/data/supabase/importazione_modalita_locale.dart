@@ -164,7 +164,7 @@ class ImportazioneModalitaLocale implements ImportatoreModalitaLocale {
     }
 
     avanza(FaseImportazione.scansioni);
-    final chiaviScansioni = <int, String>{};
+    final chiaviScansioni = <String, String>{};
     for (final scansione in scansioni) {
       final chiave = await _carica(
         bucket: _bucketScansioni,
@@ -242,7 +242,7 @@ class ImportazioneModalitaLocale implements ImportatoreModalitaLocale {
     required List<SerieTableData> serie,
     required List<ScansioniData> scansioni,
     required Map<String, String?> chiaviCover,
-    required Map<int, String> chiaviScansioni,
+    required Map<String, String> chiaviScansioni,
   }) async {
     String? cover(String? valore) =>
         valore == null || _remoto(valore) ? valore : chiaviCover[valore];

@@ -9,7 +9,7 @@ import 'package:mycomicbrain/features/collezione/application/filtri_collezione_l
 /// una copia", ordinamento primario+secondario, "Senza serie" (#94).
 void main() {
   EdizioneCollezioneIndice edizione({
-    required int id,
+    required String id,
     required String titolo,
     String? serieName,
     String? publisher,
@@ -53,16 +53,26 @@ void main() {
   group('applicaFiltri', () {
     test('nessun filtro attivo: passano tutte le Edizioni', () {
       final edizioni = [
-        edizione(id: 1, titolo: 'A'),
-        edizione(id: 2, titolo: 'B'),
+        edizione(id: '1', titolo: 'A'),
+        edizione(id: '2', titolo: 'B'),
       ];
       expect(applicaFiltri(edizioni, const FiltriCollezioneState()), edizioni);
     });
 
     test('AND fra assi diversi: entrambe le condizioni devono valere', () {
-      final a = edizione(id: 1, titolo: 'A', publisher: 'Bonelli', year: 2020);
-      final b = edizione(id: 2, titolo: 'B', publisher: 'Bonelli', year: 2021);
-      final c = edizione(id: 3, titolo: 'C', publisher: 'Panini', year: 2020);
+      final a = edizione(
+        id: '1',
+        titolo: 'A',
+        publisher: 'Bonelli',
+        year: 2020,
+      );
+      final b = edizione(
+        id: '2',
+        titolo: 'B',
+        publisher: 'Bonelli',
+        year: 2021,
+      );
+      final c = edizione(id: '3', titolo: 'C', publisher: 'Panini', year: 2020);
 
       const stato = FiltriCollezioneState(
         filtri: {
@@ -77,9 +87,9 @@ void main() {
     test(
       'OR dentro lo stesso asse: basta un valore fra quelli selezionati',
       () {
-        final a = edizione(id: 1, titolo: 'A', publisher: 'Bonelli');
-        final b = edizione(id: 2, titolo: 'B', publisher: 'Panini');
-        final c = edizione(id: 3, titolo: 'C', publisher: 'Star Comics');
+        final a = edizione(id: '1', titolo: 'A', publisher: 'Bonelli');
+        final b = edizione(id: '2', titolo: 'B', publisher: 'Panini');
+        final c = edizione(id: '3', titolo: 'C', publisher: 'Star Comics');
 
         const stato = FiltriCollezioneState(
           filtri: {
@@ -93,7 +103,7 @@ void main() {
 
     test('regola "almeno una copia" per gli assi per-Copia (#80)', () {
       final conCopiaLetta = edizione(
-        id: 1,
+        id: '1',
         titolo: 'A',
         copie: [
           copia(readingStatus: StatoLettura.letto),
@@ -101,7 +111,7 @@ void main() {
         ],
       );
       final senzaCopiaLetta = edizione(
-        id: 2,
+        id: '2',
         titolo: 'B',
         copie: [copia(readingStatus: StatoLettura.daLeggere)],
       );
@@ -118,7 +128,12 @@ void main() {
     });
 
     test('combinazione impossibile: nessun risultato', () {
-      final a = edizione(id: 1, titolo: 'A', publisher: 'Bonelli', year: 2020);
+      final a = edizione(
+        id: '1',
+        titolo: 'A',
+        publisher: 'Bonelli',
+        year: 2020,
+      );
 
       const stato = FiltriCollezioneState(
         filtri: {
@@ -134,12 +149,12 @@ void main() {
       'soloInVendita (#163/#164): regola "almeno una copia posseduta"',
       () {
         final inVendita = edizione(
-          id: 1,
+          id: '1',
           titolo: 'A',
           copie: [copia(forSale: true), copia()],
         );
         final nonInVendita = edizione(
-          id: 2,
+          id: '2',
           titolo: 'B',
           copie: [copia()],
         );
@@ -154,13 +169,13 @@ void main() {
       'soloInVendita si combina in AND con i 12 assi',
       () {
         final inVenditaBonelli = edizione(
-          id: 1,
+          id: '1',
           titolo: 'A',
           publisher: 'Bonelli',
           copie: [copia(forSale: true)],
         );
         final inVenditaPanini = edizione(
-          id: 2,
+          id: '2',
           titolo: 'B',
           publisher: 'Panini',
           copie: [copia(forSale: true)],
@@ -183,11 +198,11 @@ void main() {
       '"Senza serie" (#94): raggiungibile solo con quel valore esplicito',
       () {
         final conSerie = edizione(
-          id: 1,
+          id: '1',
           titolo: 'Dylan Dog',
           serieName: 'Dylan Dog',
         );
-        final senzaSerie = edizione(id: 2, titolo: 'Watchmen');
+        final senzaSerie = edizione(id: '2', titolo: 'Watchmen');
 
         const stato = FiltriCollezioneState(
           filtri: {
@@ -202,21 +217,21 @@ void main() {
 
   group('applicaOrdinamento', () {
     test('titolo crescente per default', () {
-      final b = edizione(id: 1, titolo: 'Berserk');
-      final a = edizione(id: 2, titolo: 'Astro Boy');
+      final b = edizione(id: '1', titolo: 'Berserk');
+      final a = edizione(id: '2', titolo: 'Astro Boy');
 
       expect(applicaOrdinamento([b, a], const OrdinamentoCollezione()), [a, b]);
     });
 
     test('criterio secondario come pareggio quando il primario è a parità', () {
       final vecchiaEdizioneA = edizione(
-        id: 1,
+        id: '1',
         titolo: 'Stessa serie',
         publisher: 'Panini',
         year: 2020,
       );
       final vecchiaEdizioneB = edizione(
-        id: 2,
+        id: '2',
         titolo: 'Stessa serie',
         publisher: 'Bonelli',
         year: 2020,
@@ -237,8 +252,8 @@ void main() {
     });
 
     test("direzione decrescente inverte l'ordinamento primario", () {
-      final a = edizione(id: 1, titolo: 'A');
-      final b = edizione(id: 2, titolo: 'B');
+      final a = edizione(id: '1', titolo: 'A');
+      final b = edizione(id: '2', titolo: 'B');
 
       const ordinamento = OrdinamentoCollezione(
         direzionePrimario: DirezioneOrdinamento.decrescente,
@@ -308,9 +323,9 @@ void main() {
       'solo i valori davvero presenti in collezione, "Senza serie" sempre in coda',
       () {
         final edizioni = [
-          edizione(id: 1, titolo: 'A', serieName: 'Zeta'),
-          edizione(id: 2, titolo: 'B', serieName: 'Alfa'),
-          edizione(id: 3, titolo: 'C'),
+          edizione(id: '1', titolo: 'A', serieName: 'Zeta'),
+          edizione(id: '2', titolo: 'B', serieName: 'Alfa'),
+          edizione(id: '3', titolo: 'C'),
         ];
 
         expect(

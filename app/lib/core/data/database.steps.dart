@@ -4671,6 +4671,734 @@ i1.GeneratedColumn<int> _column_71(String aliasedName) =>
       $customConstraints: 'NOT NULL DEFAULT 0 CHECK (for_sale IN (0, 1))',
       defaultValue: const i1.CustomExpression('0'),
     );
+
+final class Schema16 extends i0.VersionedSchema {
+  Schema16({required super.database}) : super(version: 16);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    opere,
+    serie,
+    edizioni,
+    scansioni,
+    copie,
+    analisiCopertina,
+    identificazione,
+    candidati,
+    creator,
+    comicCreator,
+    tag,
+    edizioneTag,
+    character,
+    comicCharacter,
+    edizioneGenere,
+    conversazione,
+    messaggio,
+    valoreStimato,
+  ];
+  late final Shape30 opere = Shape30(
+    source: i0.VersionedTable(
+      entityName: 'opere',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [_column_72, _column_1, _column_2],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape31 serie = Shape31(
+    source: i0.VersionedTable(
+      entityName: 'serie',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [_column_72, _column_3, _column_4, _column_46, _column_10],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape32 edizioni = Shape32(
+    source: i0.VersionedTable(
+      entityName: 'edizioni',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_72,
+        _column_73,
+        _column_74,
+        _column_7,
+        _column_8,
+        _column_9,
+        _column_10,
+        _column_47,
+        _column_48,
+        _column_49,
+        _column_50,
+        _column_51,
+        _column_52,
+        _column_2,
+        _column_53,
+        _column_54,
+        _column_57,
+        _column_58,
+        _column_42,
+        _column_59,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape33 scansioni = Shape33(
+    source: i0.VersionedTable(
+      entityName: 'scansioni',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [_column_72, _column_21, _column_22, _column_2],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape34 copie = Shape34(
+    source: i0.VersionedTable(
+      entityName: 'copie',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_72,
+        _column_75,
+        _column_12,
+        _column_13,
+        _column_14,
+        _column_15,
+        _column_69,
+        _column_16,
+        _column_17,
+        _column_70,
+        _column_18,
+        _column_19,
+        _column_2,
+        _column_20,
+        _column_76,
+        _column_71,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape35 analisiCopertina = Shape35(
+    source: i0.VersionedTable(
+      entityName: 'analisi_copertina',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_72,
+        _column_77,
+        _column_24,
+        _column_9,
+        _column_7,
+        _column_25,
+        _column_26,
+        _column_27,
+        _column_28,
+        _column_47,
+        _column_42,
+        _column_49,
+        _column_50,
+        _column_51,
+        _column_46,
+        _column_33,
+        _column_34,
+        _column_35,
+        _column_36,
+        _column_37,
+        _column_57,
+        _column_58,
+        _column_54,
+        _column_29,
+        _column_30,
+        _column_31,
+        _column_32,
+        _column_2,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape36 identificazione = Shape36(
+    source: i0.VersionedTable(
+      entityName: 'identificazione',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_72,
+        _column_77,
+        _column_30,
+        _column_31,
+        _column_2,
+        _column_32,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape37 candidati = Shape37(
+    source: i0.VersionedTable(
+      entityName: 'candidati',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_72,
+        _column_78,
+        _column_40,
+        _column_79,
+        _column_24,
+        _column_25,
+        _column_9,
+        _column_7,
+        _column_42,
+        _column_43,
+        _column_44,
+        _column_45,
+        _column_54,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape38 creator = Shape38(
+    source: i0.VersionedTable(
+      entityName: 'creator',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [_column_72, _column_3],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape39 comicCreator = Shape39(
+    source: i0.VersionedTable(
+      entityName: 'comic_creator',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'PRIMARY KEY(id)',
+        'UNIQUE(edizione_id, creator_id, ruolo)',
+      ],
+      columns: [_column_72, _column_75, _column_80, _column_56],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape38 tag = Shape38(
+    source: i0.VersionedTable(
+      entityName: 'tag',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [_column_72, _column_3],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape40 edizioneTag = Shape40(
+    source: i0.VersionedTable(
+      entityName: 'edizione_tag',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)', 'UNIQUE(edizione_id, tag_id)'],
+      columns: [_column_72, _column_75, _column_81],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape38 character = Shape38(
+    source: i0.VersionedTable(
+      entityName: 'character',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [_column_72, _column_3],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape41 comicCharacter = Shape41(
+    source: i0.VersionedTable(
+      entityName: 'comic_character',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'PRIMARY KEY(id)',
+        'UNIQUE(edizione_id, character_id)',
+      ],
+      columns: [_column_72, _column_75, _column_82],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape42 edizioneGenere = Shape42(
+    source: i0.VersionedTable(
+      entityName: 'edizione_genere',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)', 'UNIQUE(edizione_id, genere)'],
+      columns: [_column_72, _column_75, _column_62],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape25 conversazione = Shape25(
+    source: i0.VersionedTable(
+      entityName: 'conversazione',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [_column_0, _column_2],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape26 messaggio = Shape26(
+    source: i0.VersionedTable(
+      entityName: 'messaggio',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [],
+      columns: [
+        _column_0,
+        _column_63,
+        _column_56,
+        _column_64,
+        _column_65,
+        _column_66,
+        _column_2,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape43 valoreStimato = Shape43(
+    source: i0.VersionedTable(
+      entityName: 'valore_stimato',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)', 'UNIQUE(copia_id)'],
+      columns: [
+        _column_72,
+        _column_83,
+        _column_12,
+        _column_68,
+        _column_31,
+        _column_32,
+        _column_2,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+}
+
+class Shape30 extends i0.VersionedTable {
+  Shape30({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get title =>
+      columnsByName['title']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_72(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL',
+    );
+
+class Shape31 extends i0.VersionedTable {
+  Shape31({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get name =>
+      columnsByName['name']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get totalIssues =>
+      columnsByName['total_issues']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get issn =>
+      columnsByName['issn']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get coverImage =>
+      columnsByName['cover_image']! as i1.GeneratedColumn<String>;
+}
+
+class Shape32 extends i0.VersionedTable {
+  Shape32({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get operaId =>
+      columnsByName['opera_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get serieId =>
+      columnsByName['serie_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get publisher =>
+      columnsByName['publisher']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get issueNumber =>
+      columnsByName['issue_number']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get issueNumberLabel =>
+      columnsByName['issue_number_label']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get coverImage =>
+      columnsByName['cover_image']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get releaseDate =>
+      columnsByName['release_date']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get coverPrice =>
+      columnsByName['cover_price']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get pageCount =>
+      columnsByName['page_count']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get language =>
+      columnsByName['language']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get color =>
+      columnsByName['color']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get ean =>
+      columnsByName['ean']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get volume =>
+      columnsByName['volume']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get description =>
+      columnsByName['description']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get printingType =>
+      columnsByName['printing_type']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get classificazione =>
+      columnsByName['classificazione']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get year =>
+      columnsByName['year']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get format =>
+      columnsByName['format']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_73(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'opera_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL REFERENCES opere(id)',
+    );
+i1.GeneratedColumn<String> _column_74(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'serie_id',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NULL REFERENCES serie(id)',
+    );
+
+class Shape33 extends i0.VersionedTable {
+  Shape33({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get userId =>
+      columnsByName['user_id']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get image =>
+      columnsByName['image']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<String>;
+}
+
+class Shape34 extends i0.VersionedTable {
+  Shape34({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get edizioneId =>
+      columnsByName['edizione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get status =>
+      columnsByName['status']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get readingStatus =>
+      columnsByName['reading_status']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get condition =>
+      columnsByName['condition']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<double> get purchasePrice =>
+      columnsByName['purchase_price']! as i1.GeneratedColumn<double>;
+  i1.GeneratedColumn<String> get purchasePriceCurrency =>
+      columnsByName['purchase_price_currency']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get purchaseDate =>
+      columnsByName['purchase_date']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get seller =>
+      columnsByName['seller']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<double> get valutazione =>
+      columnsByName['valutazione']! as i1.GeneratedColumn<double>;
+  i1.GeneratedColumn<String> get location =>
+      columnsByName['location']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get notes =>
+      columnsByName['notes']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get updatedAt =>
+      columnsByName['updated_at']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get scansioneId =>
+      columnsByName['scansione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get forSale =>
+      columnsByName['for_sale']! as i1.GeneratedColumn<int>;
+}
+
+i1.GeneratedColumn<String> _column_75(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'edizione_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL REFERENCES edizioni(id)',
+    );
+i1.GeneratedColumn<String> _column_76(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'scansione_id',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NULL REFERENCES scansioni(id)',
+    );
+
+class Shape35 extends i0.VersionedTable {
+  Shape35({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get scansioneId =>
+      columnsByName['scansione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get title =>
+      columnsByName['title']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get issueNumberLabel =>
+      columnsByName['issue_number_label']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get publisher =>
+      columnsByName['publisher']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get seriesName =>
+      columnsByName['series_name']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get isbn =>
+      columnsByName['isbn']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get barcode =>
+      columnsByName['barcode']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get price =>
+      columnsByName['price']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get releaseDate =>
+      columnsByName['release_date']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get year =>
+      columnsByName['year']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get pageCount =>
+      columnsByName['page_count']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get language =>
+      columnsByName['language']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get color =>
+      columnsByName['color']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get issn =>
+      columnsByName['issn']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get characters =>
+      columnsByName['characters']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get coverStyleTags =>
+      columnsByName['cover_style_tags']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get visualElementTags =>
+      columnsByName['visual_element_tags']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get recognizedPublisherLogo =>
+      columnsByName['recognized_publisher_logo']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get recognizedSeriesLogo =>
+      columnsByName['recognized_series_logo']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get printingType =>
+      columnsByName['printing_type']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get classificazione =>
+      columnsByName['classificazione']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get description =>
+      columnsByName['description']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get rawResponse =>
+      columnsByName['raw_response']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get status =>
+      columnsByName['status']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get errorMessage =>
+      columnsByName['error_message']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get completedAt =>
+      columnsByName['completed_at']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_77(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'scansione_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL REFERENCES scansioni(id)',
+    );
+
+class Shape36 extends i0.VersionedTable {
+  Shape36({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get scansioneId =>
+      columnsByName['scansione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get status =>
+      columnsByName['status']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get errorMessage =>
+      columnsByName['error_message']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get completedAt =>
+      columnsByName['completed_at']! as i1.GeneratedColumn<String>;
+}
+
+class Shape37 extends i0.VersionedTable {
+  Shape37({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get identificazioneId =>
+      columnsByName['identificazione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get source =>
+      columnsByName['source']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get edizioneId =>
+      columnsByName['edizione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get title =>
+      columnsByName['title']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get seriesName =>
+      columnsByName['series_name']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get issueNumberLabel =>
+      columnsByName['issue_number_label']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get publisher =>
+      columnsByName['publisher']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get year =>
+      columnsByName['year']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get coverImageUrl =>
+      columnsByName['cover_image_url']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<double> get punteggio =>
+      columnsByName['punteggio']! as i1.GeneratedColumn<double>;
+  i1.GeneratedColumn<int> get scelto =>
+      columnsByName['scelto']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get description =>
+      columnsByName['description']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_78(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'identificazione_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL REFERENCES identificazione(id)',
+    );
+i1.GeneratedColumn<String> _column_79(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'edizione_id',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NULL REFERENCES edizioni(id)',
+    );
+
+class Shape38 extends i0.VersionedTable {
+  Shape38({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get name =>
+      columnsByName['name']! as i1.GeneratedColumn<String>;
+}
+
+class Shape39 extends i0.VersionedTable {
+  Shape39({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get edizioneId =>
+      columnsByName['edizione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get creatorId =>
+      columnsByName['creator_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get ruolo =>
+      columnsByName['ruolo']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_80(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'creator_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL REFERENCES creator(id)',
+    );
+
+class Shape40 extends i0.VersionedTable {
+  Shape40({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get edizioneId =>
+      columnsByName['edizione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get tagId =>
+      columnsByName['tag_id']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_81(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'tag_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL REFERENCES tag(id)',
+    );
+
+class Shape41 extends i0.VersionedTable {
+  Shape41({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get edizioneId =>
+      columnsByName['edizione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get characterId =>
+      columnsByName['character_id']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_82(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'character_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL REFERENCES character(id)',
+    );
+
+class Shape42 extends i0.VersionedTable {
+  Shape42({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get edizioneId =>
+      columnsByName['edizione_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get genere =>
+      columnsByName['genere']! as i1.GeneratedColumn<String>;
+}
+
+class Shape43 extends i0.VersionedTable {
+  Shape43({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get copiaId =>
+      columnsByName['copia_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get status =>
+      columnsByName['status']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<double> get value =>
+      columnsByName['value']! as i1.GeneratedColumn<double>;
+  i1.GeneratedColumn<String> get errorMessage =>
+      columnsByName['error_message']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get completedAt =>
+      columnsByName['completed_at']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_83(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'copia_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL REFERENCES copie(id)',
+    );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
@@ -4686,6 +5414,7 @@ i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema13 schema) from12To13,
   required Future<void> Function(i1.Migrator m, Schema14 schema) from13To14,
   required Future<void> Function(i1.Migrator m, Schema15 schema) from14To15,
+  required Future<void> Function(i1.Migrator m, Schema16 schema) from15To16,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -4759,6 +5488,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from14To15(migrator, schema);
         return 15;
+      case 15:
+        final schema = Schema16(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from15To16(migrator, schema);
+        return 16;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -4780,6 +5514,7 @@ i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema13 schema) from12To13,
   required Future<void> Function(i1.Migrator m, Schema14 schema) from13To14,
   required Future<void> Function(i1.Migrator m, Schema15 schema) from14To15,
+  required Future<void> Function(i1.Migrator m, Schema16 schema) from15To16,
 }) => i0.VersionedSchema.stepByStepHelper(
   step: migrationSteps(
     from1To2: from1To2,
@@ -4796,5 +5531,6 @@ i1.OnUpgrade stepByStep({
     from12To13: from12To13,
     from13To14: from13To14,
     from14To15: from14To15,
+    from15To16: from15To16,
   ),
 );

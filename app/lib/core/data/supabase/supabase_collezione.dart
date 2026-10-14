@@ -42,10 +42,10 @@ mixin _CollezioneSupabase implements ComicsRepository {
   }
 
   @override
-  Stream<Map<int, String?>> watchHydratazioneCollezione(
-    List<int> edizioneIds,
+  Stream<Map<String, String?>> watchHydratazioneCollezione(
+    List<String> edizioneIds,
   ) {
-    if (edizioneIds.isEmpty) return Stream.value(const <int, String?>{});
+    if (edizioneIds.isEmpty) return Stream.value(const <String, String?>{});
     return _invalidazione.osserva(
       {TabellaSupabase.edizioni, TabellaSupabase.copie},
       () async {
@@ -58,7 +58,7 @@ mixin _CollezioneSupabase implements ComicsRepository {
             .inFilter('copie.status', _statiPosseduti);
         return {
           for (final riga in righe)
-            riga['id'] as int: await risolviCoverImage(
+            riga['id'] as String: await risolviCoverImage(
               riga['cover_image'] as String?,
             ),
         };
@@ -95,9 +95,9 @@ mixin _CollezioneSupabase implements ComicsRepository {
   static EdizioneCollezioneIndice _edizioneIndice(Map<String, dynamic> e) {
     List<String> nomi(String chiave) => (e[chiave] as List).cast<String>();
     return EdizioneCollezioneIndice(
-      edizioneId: e['id'] as int,
+      edizioneId: e['id'] as String,
       titolo: e['titolo'] as String,
-      serieId: e['serie_id'] as int?,
+      serieId: e['serie_id'] as String?,
       serieName: e['serie_name'] as String?,
       publisher: e['publisher'] as String?,
       issueNumber: e['issue_number'] as int?,

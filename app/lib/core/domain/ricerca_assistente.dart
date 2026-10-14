@@ -22,7 +22,7 @@ typedef RisultatoCercaEdizioni = ({
 RisultatoCercaEdizioni filtraIndiceCollezione(
   List<EdizioneCollezioneIndice> indice, {
   String? titolo,
-  Set<int>? serieIds,
+  Set<String>? serieIds,
   String? autore,
   String? editore,
   String? personaggio,
@@ -94,7 +94,7 @@ List<EdizioneCollezioneIndice> _filtraPerTesto(
 /// stessa Edizione posseduta in più di una Copia, coi soli campi utili a
 /// identificarla in una risposta conversazionale.
 typedef EdizioneDuplicata = ({
-  int edizioneId,
+  String edizioneId,
   String titolo,
   String? serieName,
   String? issueNumberLabel,

@@ -19,7 +19,7 @@ void contrattoConversazione(CreaAdapter crea) {
 
   tearDown(() => adapter.chiudi());
 
-  Future<int> edizione() async {
+  Future<String> edizione() async {
     final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
     return repo.aggiungiEdizione(operaId: operaId, issueNumberLabel: '1');
   }
@@ -31,7 +31,9 @@ void contrattoConversazione(CreaAdapter crea) {
       final id2 = await repo.getOrCreaConversazione();
 
       expect(id1, id2);
-      final tutte = await adapter.drift.select(adapter.drift.conversazioneTable).get();
+      final tutte = await adapter.drift
+          .select(adapter.drift.conversazioneTable)
+          .get();
       expect(tutte, hasLength(1));
     },
   );
@@ -142,8 +144,12 @@ void contrattoConversazione(CreaAdapter crea) {
 
       await repo.eliminaConversazione(conversazioneId);
 
-      final conversazioni = await adapter.drift.select(adapter.drift.conversazioneTable).get();
-      final messaggi = await adapter.drift.select(adapter.drift.messaggioTable).get();
+      final conversazioni = await adapter.drift
+          .select(adapter.drift.conversazioneTable)
+          .get();
+      final messaggi = await adapter.drift
+          .select(adapter.drift.messaggioTable)
+          .get();
       expect(conversazioni, isEmpty);
       expect(messaggi, isEmpty);
     },

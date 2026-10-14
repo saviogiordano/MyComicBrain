@@ -175,12 +175,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/scheda/:id',
         builder: (context, state) =>
-            SchedaPage(edizioneId: int.parse(state.pathParameters['id']!)),
+            SchedaPage(edizioneId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/scheda/:id/modifica',
         builder: (context, state) => ModificaSchedaPage(
-          edizioneId: int.parse(state.pathParameters['id']!),
+          edizioneId: state.pathParameters['id']!,
         ),
       ),
       // Schermate di revisione e riepilogo del batch (R-A/S-B, decise su
@@ -216,7 +216,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/scansione/conferma-candidato',
         builder: (context, state) =>
-            ConfermaCandidatoPage(scansioneId: state.extra! as int),
+            ConfermaCandidatoPage(scansioneId: state.extra! as String),
       ),
       // Schermo "Inserisci manualmente" (§6.3, deciso su #61, implementato
       // su #62): raggiunto da ConfermaCandidatoPage quando nessun Candidato
@@ -224,7 +224,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/scansione/inserisci-manualmente',
         builder: (context, state) =>
-            InserisciManualmentePage(scansioneId: state.extra! as int),
+            InserisciManualmentePage(scansioneId: state.extra! as String),
       ),
       GoRoute(
         path: '/serie',
@@ -235,7 +235,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/serie/:id',
         builder: (context, state) => SerieDettaglioPage(
-          serieId: int.parse(state.pathParameters['id']!),
+          serieId: state.pathParameters['id']!,
         ),
       ),
       // Eliminazione dell'account (#172), da Impostazioni → Account.

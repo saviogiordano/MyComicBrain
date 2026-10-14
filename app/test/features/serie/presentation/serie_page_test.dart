@@ -34,7 +34,7 @@ void main() {
 
   Future<void> edizioneConCopia({
     required String titolo,
-    required int serieId,
+    required String serieId,
     required int issueNumber,
     StatoCopia status = StatoCopia.posseduta,
   }) async {
@@ -55,7 +55,7 @@ void main() {
         GoRoute(
           path: '/serie/:id',
           builder: (context, state) => SerieDettaglioPage(
-            serieId: int.parse(state.pathParameters['id']!),
+            serieId: state.pathParameters['id']!,
           ),
         ),
       ],

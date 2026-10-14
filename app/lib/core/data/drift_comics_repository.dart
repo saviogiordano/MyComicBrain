@@ -86,19 +86,20 @@ class DriftComicsRepository implements ComicsRepository {
   // per il catalogo — nessuna schermata di questa mappa scrive dati). ---
 
   @override
-  Future<int> aggiungiOpera({required String title, DateTime? createdAt}) {
+  Future<String> aggiungiOpera({required String title, DateTime? createdAt}) {
     return _db
         .into(_db.opere)
-        .insert(
+        .insertReturning(
           OpereCompanion.insert(
             title: title,
             createdAt: createdAt ?? DateTime.now(),
           ),
-        );
+        )
+        .then((riga) => riga.id);
   }
 
   @override
-  Future<int> aggiungiSerie({
+  Future<String> aggiungiSerie({
     required String name,
     int? totalIssues,
     String? issn,
@@ -113,13 +114,14 @@ class DriftComicsRepository implements ComicsRepository {
 
     return _db
         .into(_db.serieTable)
-        .insert(
+        .insertReturning(
           SerieTableCompanion.insert(
             name: nomeNormalizzato,
             totalIssues: Value(totalIssues),
             issn: Value(issn),
           ),
-        );
+        )
+        .then((riga) => riga.id);
   }
 
   @override
@@ -173,9 +175,9 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> aggiungiEdizione({
-    required int operaId,
-    int? serieId,
+  Future<String> aggiungiEdizione({
+    required String operaId,
+    String? serieId,
     String? publisher,
     int? issueNumber,
     String? issueNumberLabel,
@@ -196,7 +198,7 @@ class DriftComicsRepository implements ComicsRepository {
   }) {
     return _db
         .into(_db.edizioni)
-        .insert(
+        .insertReturning(
           EdizioniCompanion.insert(
             operaId: operaId,
             serieId: Value(serieId),
@@ -218,12 +220,13 @@ class DriftComicsRepository implements ComicsRepository {
             format: Value(format),
             createdAt: createdAt ?? DateTime.now(),
           ),
-        );
+        )
+        .then((riga) => riga.id);
   }
 
   @override
-  Future<int> aggiungiCopia({
-    required int edizioneId,
+  Future<String> aggiungiCopia({
+    required String edizioneId,
     required StatoCopia status,
     StatoLettura? readingStatus,
     CondizioneCopia? condition,
@@ -236,12 +239,12 @@ class DriftComicsRepository implements ComicsRepository {
     double? valutazione,
     DateTime? createdAt,
     DateTime? updatedAt,
-    int? scansioneId,
+    String? scansioneId,
   }) {
     final now = DateTime.now();
     return _db
         .into(_db.copie)
-        .insert(
+        .insertReturning(
           CopieCompanion.insert(
             edizioneId: edizioneId,
             status: status,
@@ -258,7 +261,8 @@ class DriftComicsRepository implements ComicsRepository {
             updatedAt: updatedAt ?? createdAt ?? now,
             scansioneId: Value(scansioneId),
           ),
-        );
+        )
+        .then((riga) => riga.id);
   }
 
   @override
@@ -269,14 +273,17 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> aggiungiCreator(String name) {
-    return _db.into(_db.creator).insert(CreatorCompanion.insert(name: name));
+  Future<String> aggiungiCreator(String name) {
+    return _db
+        .into(_db.creator)
+        .insertReturning(CreatorCompanion.insert(name: name))
+        .then((riga) => riga.id);
   }
 
   @override
   Future<void> collegaCreatorAEdizione({
-    required int edizioneId,
-    required int creatorId,
+    required String edizioneId,
+    required String creatorId,
     required RuoloCreator ruolo,
   }) {
     return _db
@@ -291,14 +298,14 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<void> rimuoviCreatorDaEdizione(int comicCreatorId) {
+  Future<void> rimuoviCreatorDaEdizione(String comicCreatorId) {
     return (_db.delete(
       _db.comicCreator,
     )..where((c) => c.id.equals(comicCreatorId))).go();
   }
 
   @override
-  Future<List<CreatorConRuolo>> autoriDiEdizione(int edizioneId) {
+  Future<List<CreatorConRuolo>> autoriDiEdizione(String edizioneId) {
     final query = _db.select(_db.comicCreator).join([
       innerJoin(
         _db.creator,
@@ -329,16 +336,17 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> aggiungiCharacter(String name) {
+  Future<String> aggiungiCharacter(String name) {
     return _db
         .into(_db.character)
-        .insert(CharacterCompanion.insert(name: name));
+        .insertReturning(CharacterCompanion.insert(name: name))
+        .then((riga) => riga.id);
   }
 
   @override
   Future<void> collegaCharacterAEdizione({
-    required int edizioneId,
-    required int characterId,
+    required String edizioneId,
+    required String characterId,
   }) {
     return _db
         .into(_db.comicCharacter)
@@ -351,7 +359,7 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<void> rimuoviCharacterDaEdizione(int comicCharacterId) {
+  Future<void> rimuoviCharacterDaEdizione(String comicCharacterId) {
     return (_db.delete(
       _db.comicCharacter,
     )..where((c) => c.id.equals(comicCharacterId))).go();
@@ -367,14 +375,17 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> aggiungiTag(String name) {
-    return _db.into(_db.tagTable).insert(TagTableCompanion.insert(name: name));
+  Future<String> aggiungiTag(String name) {
+    return _db
+        .into(_db.tagTable)
+        .insertReturning(TagTableCompanion.insert(name: name))
+        .then((riga) => riga.id);
   }
 
   @override
   Future<void> collegaTagAEdizione({
-    required int edizioneId,
-    required int tagId,
+    required String edizioneId,
+    required String tagId,
   }) {
     return _db
         .into(_db.edizioneTag)
@@ -384,7 +395,7 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<void> rimuoviTagDaEdizione(int edizioneTagId) {
+  Future<void> rimuoviTagDaEdizione(String edizioneTagId) {
     return (_db.delete(
       _db.edizioneTag,
     )..where((t) => t.id.equals(edizioneTagId))).go();
@@ -394,7 +405,7 @@ class DriftComicsRepository implements ComicsRepository {
 
   @override
   Future<void> impostaGeneriEdizione({
-    required int edizioneId,
+    required String edizioneId,
     required Set<GenereEdizione> generi,
   }) {
     return _db.transaction(() async {
@@ -415,19 +426,23 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> aggiungiScansione({required String image, DateTime? createdAt}) {
+  Future<String> aggiungiScansione({
+    required String image,
+    DateTime? createdAt,
+  }) {
     return _db
         .into(_db.scansioni)
-        .insert(
+        .insertReturning(
           ScansioniCompanion.insert(
             image: image,
             createdAt: createdAt ?? DateTime.now(),
           ),
-        );
+        )
+        .then((riga) => riga.id);
   }
 
   @override
-  Future<int> idScansionePerImmagine(String image) async {
+  Future<String> idScansionePerImmagine(String image) async {
     final riga = await (_db.select(
       _db.scansioni,
     )..where((s) => s.image.equals(image))).getSingle();
@@ -435,7 +450,7 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<String> coverImagePerScansione(int scansioneId) async {
+  Future<String> coverImagePerScansione(String scansioneId) async {
     final riga = await (_db.select(
       _db.scansioni,
     )..where((s) => s.id.equals(scansioneId))).getSingle();
@@ -444,29 +459,30 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<void> eliminaScansione({required int id}) {
+  Future<void> eliminaScansione({required String id}) {
     return (_db.delete(_db.scansioni)..where((s) => s.id.equals(id))).go();
   }
 
   @override
-  Future<int> avviaAnalisiCopertina({
-    required int scansioneId,
+  Future<String> avviaAnalisiCopertina({
+    required String scansioneId,
     DateTime? createdAt,
   }) {
     return _db
         .into(_db.analisiCopertinaTable)
-        .insert(
+        .insertReturning(
           AnalisiCopertinaTableCompanion.insert(
             scansioneId: scansioneId,
             status: const Value(StatoAnalisiCopertina.inCorso),
             createdAt: createdAt ?? DateTime.now(),
           ),
-        );
+        )
+        .then((riga) => riga.id);
   }
 
   @override
   Future<void> completaAnalisiCopertina({
-    required int id,
+    required String id,
     required String rawResponse,
     String? title,
     String? issueNumberLabel,
@@ -525,7 +541,7 @@ class DriftComicsRepository implements ComicsRepository {
 
   @override
   Future<void> fallisciAnalisiCopertina({
-    required int id,
+    required String id,
     required String errorMessage,
     DateTime? completedAt,
   }) {
@@ -541,7 +557,7 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> idAnalisiCopertinaPerScansione(int scansioneId) async {
+  Future<String> idAnalisiCopertinaPerScansione(String scansioneId) async {
     final riga = await (_db.select(
       _db.analisiCopertinaTable,
     )..where((a) => a.scansioneId.equals(scansioneId))).getSingle();
@@ -549,7 +565,7 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<void> riavviaAnalisiCopertina({required int id}) {
+  Future<void> riavviaAnalisiCopertina({required String id}) {
     return (_db.update(
       _db.analisiCopertinaTable,
     )..where((a) => a.id.equals(id))).write(
@@ -603,8 +619,8 @@ class DriftComicsRepository implements ComicsRepository {
     ])..orderBy([OrderingTerm.asc(_db.scansioni.createdAt)]);
 
     return query.watch().map((rows) {
-      final confermate = <int>{};
-      final immagini = <int, String>{};
+      final confermate = <String>{};
+      final immagini = <String, String>{};
       for (final row in rows) {
         final scansione = row.readTable(_db.scansioni);
         immagini[scansione.id] = scansione.image;
@@ -620,23 +636,24 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> avviaIdentificazione({
-    required int scansioneId,
+  Future<String> avviaIdentificazione({
+    required String scansioneId,
     DateTime? createdAt,
   }) {
     return _db
         .into(_db.identificazioneTable)
-        .insert(
+        .insertReturning(
           IdentificazioneTableCompanion.insert(
             scansioneId: scansioneId,
             status: const Value(StatoIdentificazione.inCorso),
             createdAt: createdAt ?? DateTime.now(),
           ),
-        );
+        )
+        .then((riga) => riga.id);
   }
 
   @override
-  Future<int?> idIdentificazionePerScansione(int scansioneId) async {
+  Future<String?> idIdentificazionePerScansione(String scansioneId) async {
     final riga = await (_db.select(
       _db.identificazioneTable,
     )..where((i) => i.scansioneId.equals(scansioneId))).getSingleOrNull();
@@ -644,7 +661,7 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<void> riavviaIdentificazione({required int id}) async {
+  Future<void> riavviaIdentificazione({required String id}) async {
     await (_db.delete(
       _db.candidatiTable,
     )..where((c) => c.identificazioneId.equals(id))).go();
@@ -660,11 +677,11 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> aggiungiCandidato({
-    required int identificazioneId,
+  Future<String> aggiungiCandidato({
+    required String identificazioneId,
     required FonteCandidato source,
     required double punteggio,
-    int? edizioneId,
+    String? edizioneId,
     String? title,
     String? seriesName,
     String? issueNumberLabel,
@@ -674,7 +691,7 @@ class DriftComicsRepository implements ComicsRepository {
   }) {
     return _db
         .into(_db.candidatiTable)
-        .insert(
+        .insertReturning(
           CandidatiTableCompanion.insert(
             identificazioneId: identificazioneId,
             source: source,
@@ -687,12 +704,13 @@ class DriftComicsRepository implements ComicsRepository {
             year: Value(year),
             coverImageUrl: Value(coverImageUrl),
           ),
-        );
+        )
+        .then((riga) => riga.id);
   }
 
   @override
   Future<void> completaIdentificazione({
-    required int id,
+    required String id,
     DateTime? completedAt,
   }) {
     return (_db.update(
@@ -707,7 +725,7 @@ class DriftComicsRepository implements ComicsRepository {
 
   @override
   Future<void> fallisciIdentificazione({
-    required int id,
+    required String id,
     required String errorMessage,
     DateTime? completedAt,
   }) {
@@ -723,13 +741,13 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<void> marcaCandidatoScelto({required int id}) {
+  Future<void> marcaCandidatoScelto({required String id}) {
     return (_db.update(_db.candidatiTable)..where((c) => c.id.equals(id)))
         .write(const CandidatiTableCompanion(scelto: Value(true)));
   }
 
   @override
-  Stream<EsitoIdentificazione> watchIdentificazione(int scansioneId) {
+  Stream<EsitoIdentificazione> watchIdentificazione(String scansioneId) {
     final query =
         _db.select(_db.identificazioneTable).join([
             leftOuterJoin(
@@ -788,9 +806,9 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> confermaCandidato({
+  Future<String> confermaCandidato({
     required Candidato candidato,
-    required int scansioneId,
+    required String scansioneId,
   }) async {
     await marcaCandidatoScelto(id: candidato.id);
 
@@ -798,7 +816,7 @@ class DriftComicsRepository implements ComicsRepository {
       _db.analisiCopertinaTable,
     )..where((a) => a.scansioneId.equals(scansioneId))).getSingleOrNull();
 
-    final int edizioneId;
+    final String edizioneId;
     if (candidato.source == FonteCandidato.interno) {
       edizioneId = candidato.edizioneId!;
       await _completaDescrizioneMancante(edizioneId, analisi);
@@ -823,7 +841,7 @@ class DriftComicsRepository implements ComicsRepository {
   /// Crea Opera/Serie/Edizione per un Candidato `esterno` (ComicVine) con i
   /// campi di [nuovaEdizioneDaCandidato] e la cover di
   /// [_coverImagePerCandidato].
-  Future<int> _creaEdizioneDaCandidato(
+  Future<String> _creaEdizioneDaCandidato(
     Candidato candidato,
     AnalisiCopertinaTableData analisi,
   ) async {
@@ -856,7 +874,7 @@ class DriftComicsRepository implements ComicsRepository {
   /// Completa la Descrizione di un'Edizione già catalogata con quella di
   /// [descrizioneDaCompletare], senza mai sovrascriverne una presente.
   Future<void> _completaDescrizioneMancante(
-    int edizioneId,
+    String edizioneId,
     AnalisiCopertinaTableData? analisi,
   ) async {
     final descrizioneAi = descrizioneDaCompletare(analisi);
@@ -894,7 +912,7 @@ class DriftComicsRepository implements ComicsRepository {
 
   @override
   Future<AnalisiCopertinaTableData> analisiCopertinaPerScansione(
-    int scansioneId,
+    String scansioneId,
   ) {
     return (_db.select(
       _db.analisiCopertinaTable,
@@ -928,7 +946,7 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<Map<int, Set<int>>> numeriPossedutiPerSerie() {
+  Future<Map<String, Set<int>>> numeriPossedutiPerSerie() {
     final query =
         _db.select(_db.copie).join([
           innerJoin(
@@ -943,7 +961,7 @@ class DriftComicsRepository implements ComicsRepository {
         );
 
     return query.get().then((rows) {
-      final risultato = <int, Set<int>>{};
+      final risultato = <String, Set<int>>{};
       for (final row in rows) {
         final edizione = row.readTable(_db.edizioni);
         final serieId = edizione.serieId;
@@ -967,7 +985,7 @@ class DriftComicsRepository implements ComicsRepository {
       CondizioneCopia? condition,
     })
   >
-  copiaConEdizionePerId(int copiaId) async {
+  copiaConEdizionePerId(String copiaId) async {
     final query = _db.select(_db.copie).join([
       innerJoin(_db.edizioni, _db.edizioni.id.equalsExp(_db.copie.edizioneId)),
       innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
@@ -987,8 +1005,8 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
-  Future<int> avviaOrRiavviaValoreStimato({
-    required int copiaId,
+  Future<String> avviaOrRiavviaValoreStimato({
+    required String copiaId,
     DateTime? createdAt,
   }) async {
     final esistente = await (_db.select(
@@ -997,13 +1015,14 @@ class DriftComicsRepository implements ComicsRepository {
     if (esistente == null) {
       return _db
           .into(_db.valoreStimatoTable)
-          .insert(
+          .insertReturning(
             ValoreStimatoTableCompanion.insert(
               copiaId: copiaId,
               status: StatoValoreStimato.inCorso,
               createdAt: createdAt ?? DateTime.now(),
             ),
-          );
+          )
+          .then((riga) => riga.id);
     }
     await (_db.update(
       _db.valoreStimatoTable,
@@ -1018,7 +1037,7 @@ class DriftComicsRepository implements ComicsRepository {
 
   @override
   Future<void> completaValoreStimato({
-    required int id,
+    required String id,
     required double value,
     DateTime? completedAt,
   }) {
@@ -1035,7 +1054,7 @@ class DriftComicsRepository implements ComicsRepository {
 
   @override
   Future<void> segnaValoreStimatoNonDisponibile({
-    required int id,
+    required String id,
     DateTime? completedAt,
   }) {
     return (_db.update(
@@ -1052,7 +1071,7 @@ class DriftComicsRepository implements ComicsRepository {
 
   @override
   Future<void> fallisciValoreStimato({
-    required int id,
+    required String id,
     required String errorMessage,
   }) {
     return (_db.update(
@@ -1199,9 +1218,11 @@ ORDER BY s.name, ns.n
         )
         .watch()
         .map((rows) {
-          final perSerie = <int, List<QueryRow>>{};
+          final perSerie = <String, List<QueryRow>>{};
           for (final row in rows) {
-            perSerie.putIfAbsent(row.read<int>('serie_id'), () => []).add(row);
+            perSerie
+                .putIfAbsent(row.read<String>('serie_id'), () => [])
+                .add(row);
           }
           return [
             for (final entry in perSerie.entries)
@@ -1289,7 +1310,7 @@ LEFT JOIN mancanti_count mc ON mc.serie_id = s.id
             final coverOverride = row.readNullable<String>('cover_override');
             final coverDefault = row.readNullable<String>('cover_default');
             final riga = SerieRiga(
-              serieId: row.read<int>('serie_id'),
+              serieId: row.read<String>('serie_id'),
               nome: row.read<String>('nome'),
               numeriPosseduti: row.read<int>('numeri_posseduti'),
               numeriTotali: row.readNullable<int>('numeri_totali'),
@@ -1323,7 +1344,7 @@ LEFT JOIN mancanti_count mc ON mc.serie_id = s.id
   }
 
   @override
-  Stream<SerieDettaglio?> watchSerieDettaglio(int serieId) {
+  Stream<SerieDettaglio?> watchSerieDettaglio(String serieId) {
     return _db
         .customSelect(
           '''
@@ -1362,7 +1383,7 @@ LEFT JOIN posseduti p ON 1 = 1
 WHERE s.id = ?1
 ORDER BY p.n
 ''',
-          variables: [Variable.withInt(serieId)],
+          variables: [Variable.withString(serieId)],
           readsFrom: {_db.serieTable, _db.edizioni, _db.copie},
         )
         .watch()
@@ -1372,7 +1393,7 @@ ORDER BY p.n
           final coverOverride = first.readNullable<String>('cover_override');
           final coverDefault = first.readNullable<String>('cover_default');
           return SerieDettaglio(
-            serieId: first.read<int>('serie_id'),
+            serieId: first.read<String>('serie_id'),
             nome: first.read<String>('nome'),
             issn: first.readNullable<String>('issn'),
             numeriTotali: first.readNullable<int>('numeri_totali'),
@@ -1392,7 +1413,7 @@ ORDER BY p.n
 
   @override
   Future<void> aggiornaSerie({
-    required int id,
+    required String id,
     required String name,
     int? totalIssues,
     String? issn,
@@ -1409,7 +1430,9 @@ ORDER BY p.n
   }
 
   @override
-  Future<List<EdizioneCatalogo>> edizioniPosseduteDiSerie(int serieId) async {
+  Future<List<EdizioneCatalogo>> edizioniPosseduteDiSerie(
+    String serieId,
+  ) async {
     final query =
         _db.select(_db.edizioni).join([
             innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
@@ -1452,7 +1475,7 @@ ORDER BY p.n
   }
 
   @override
-  Future<String?> coverDefaultDiSerie(int serieId) async {
+  Future<String?> coverDefaultDiSerie(String serieId) async {
     final query =
         _db.select(_db.edizioni).join([
             innerJoin(
@@ -1547,7 +1570,7 @@ ORDER BY p.n
   // #69). ---
 
   @override
-  Stream<EdizioneDettaglio?> watchEdizione(int edizioneId) {
+  Stream<EdizioneDettaglio?> watchEdizione(String edizioneId) {
     final query = _db.select(_db.edizioni).join([
       innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
       leftOuterJoin(
@@ -1576,8 +1599,8 @@ ORDER BY p.n
       final opera = rows.first.readTable(_db.opere);
       final serie = rows.first.readTableOrNull(_db.serieTable);
 
-      final copieById = <int, CopiaDettaglio>{};
-      final autoriById = <int, CreatorConRuolo>{};
+      final copieById = <String, CopiaDettaglio>{};
+      final autoriById = <String, CreatorConRuolo>{};
       for (final row in rows) {
         final copia = row.readTableOrNull(_db.copie);
         if (copia != null) {
@@ -1646,7 +1669,7 @@ ORDER BY p.n
   }
 
   @override
-  Future<String?> coverImageGrezzoDi(int edizioneId) async {
+  Future<String?> coverImageGrezzoDi(String edizioneId) async {
     final riga = await (_db.select(
       _db.edizioni,
     )..where((e) => e.id.equals(edizioneId))).getSingle();
@@ -1666,7 +1689,7 @@ ORDER BY p.n
     final righe = await query.get();
     final base = await _copertinaDownloader.baseDirectory();
 
-    final daRipristinare = <int, String>{};
+    final daRipristinare = <String, String>{};
     for (final riga in righe) {
       final edizioneId = riga.readTable(_db.edizioni).id;
       if (daRipristinare.containsKey(edizioneId)) continue;
@@ -1691,7 +1714,7 @@ ORDER BY p.n
 
   @override
   Future<void> aggiornaTitoloOpera({
-    required int operaId,
+    required String operaId,
     required String title,
   }) {
     return (_db.update(_db.opere)..where((o) => o.id.equals(operaId))).write(
@@ -1701,8 +1724,8 @@ ORDER BY p.n
 
   @override
   Future<void> aggiornaEdizione({
-    required int id,
-    int? serieId,
+    required String id,
+    String? serieId,
     String? publisher,
     int? issueNumber,
     String? issueNumberLabel,
@@ -1741,7 +1764,7 @@ ORDER BY p.n
 
   @override
   Future<void> aggiornaCopia({
-    required int id,
+    required String id,
     CondizioneCopia? condition,
     double? purchasePrice,
     ValutaPrezzo? purchasePriceCurrency,
@@ -1768,7 +1791,7 @@ ORDER BY p.n
 
   @override
   Future<void> cambiaStatoCopia({
-    required int id,
+    required String id,
     required StatoCopia status,
     StatoLettura? readingStatus,
   }) {
@@ -1782,7 +1805,7 @@ ORDER BY p.n
   }
 
   @override
-  Future<void> impostaInVendita({required int id, required bool inVendita}) {
+  Future<void> impostaInVendita({required String id, required bool inVendita}) {
     return (_db.update(_db.copie)..where((c) => c.id.equals(id))).write(
       CopieCompanion(
         forSale: Value(inVendita),
@@ -1792,7 +1815,7 @@ ORDER BY p.n
   }
 
   @override
-  Future<int> segnaEdizioniInVendita(List<int> edizioneIds) {
+  Future<int> segnaEdizioniInVendita(List<String> edizioneIds) {
     if (edizioneIds.isEmpty) return Future.value(0);
     return (_db.update(_db.copie)..where(
           (c) =>
@@ -1811,7 +1834,7 @@ ORDER BY p.n
   }
 
   @override
-  Future<bool> rimuoviCopia(int id) {
+  Future<bool> rimuoviCopia(String id) {
     return _db.transaction(() async {
       final copia = await (_db.select(
         _db.copie,
@@ -1830,7 +1853,7 @@ ORDER BY p.n
   }
 
   @override
-  Future<void> eliminaEdizione(int edizioneId) {
+  Future<void> eliminaEdizione(String edizioneId) {
     return _db.transaction(() async {
       await (_db.delete(
         _db.copie,
@@ -1842,7 +1865,7 @@ ORDER BY p.n
   /// Rimuove i collegamenti Autore e la riga `Edizioni` — presuppone che le
   /// Copie siano già state eliminate dal chiamante ([rimuoviCopia],
   /// [eliminaEdizione]).
-  Future<void> _eliminaEdizioneSenzaCopie(int edizioneId) async {
+  Future<void> _eliminaEdizioneSenzaCopie(String edizioneId) async {
     await (_db.delete(
       _db.comicCreator,
     )..where((c) => c.edizioneId.equals(edizioneId))).go();
@@ -1861,8 +1884,8 @@ ORDER BY p.n
   /// [edizioneIds]) e [watchHydratazioneCollezione] (filtrata alla finestra
   /// caricata). Reattiva: qualunque cambiamento di Edizioni/Copie che
   /// tocchi le tabelle lette fa riemettere entrambe le stream.
-  Stream<Map<int, List<TypedResult>>> _watchRigheEdizioniPossedute({
-    Iterable<int>? edizioneIds,
+  Stream<Map<String, List<TypedResult>>> _watchRigheEdizioniPossedute({
+    Iterable<String>? edizioneIds,
   }) {
     final query = _db.select(_db.edizioni).join([
       innerJoin(_db.opere, _db.opere.id.equalsExp(_db.edizioni.operaId)),
@@ -1884,7 +1907,7 @@ ORDER BY p.n
     }
 
     return query.watch().map((rows) {
-      final righePerEdizione = <int, List<TypedResult>>{};
+      final righePerEdizione = <String, List<TypedResult>>{};
       for (final row in rows) {
         righePerEdizione
             .putIfAbsent(row.readTable(_db.edizioni).id, () => [])
@@ -1927,13 +1950,15 @@ ORDER BY p.n
   }
 
   @override
-  Stream<Map<int, String?>> watchHydratazioneCollezione(List<int> edizioneIds) {
-    if (edizioneIds.isEmpty) return Stream.value(const <int, String?>{});
+  Stream<Map<String, String?>> watchHydratazioneCollezione(
+    List<String> edizioneIds,
+  ) {
+    if (edizioneIds.isEmpty) return Stream.value(const <String, String?>{});
 
     return _watchRigheEdizioniPossedute(edizioneIds: edizioneIds).asyncMap((
       righePerEdizione,
     ) async {
-      final risultato = <int, String?>{};
+      final risultato = <String, String?>{};
       for (final entry in righePerEdizione.entries) {
         final edizione = entry.value.first.readTable(_db.edizioni);
         risultato[entry.key] = await risolviCoverImage(edizione.coverImage);
@@ -1945,8 +1970,8 @@ ORDER BY p.n
   /// Autori collegati (§8.1/§9), raggruppati per `edizioneId`, per
   /// l'insieme di Edizioni date — bulk equivalente di [autoriDiEdizione]
   /// per più Edizioni insieme, usato da [watchIndiceCollezione].
-  Future<Map<int, List<String>>> _autoriPerEdizione(
-    List<int> edizioneIds,
+  Future<Map<String, List<String>>> _autoriPerEdizione(
+    List<String> edizioneIds,
   ) async {
     final query = _db.select(_db.comicCreator).join([
       innerJoin(
@@ -1956,7 +1981,7 @@ ORDER BY p.n
     ])..where(_db.comicCreator.edizioneId.isIn(edizioneIds));
 
     final righe = await query.get();
-    final risultato = <int, List<String>>{};
+    final risultato = <String, List<String>>{};
     for (final riga in righe) {
       final edizioneId = riga.readTable(_db.comicCreator).edizioneId;
       risultato
@@ -1968,8 +1993,8 @@ ORDER BY p.n
 
   /// Personaggi collegati (§9, #84), raggruppati per `edizioneId`, per
   /// l'insieme di Edizioni date — usato da [watchIndiceCollezione].
-  Future<Map<int, List<String>>> _personaggiPerEdizione(
-    List<int> edizioneIds,
+  Future<Map<String, List<String>>> _personaggiPerEdizione(
+    List<String> edizioneIds,
   ) async {
     final query = _db.select(_db.comicCharacter).join([
       innerJoin(
@@ -1979,7 +2004,7 @@ ORDER BY p.n
     ])..where(_db.comicCharacter.edizioneId.isIn(edizioneIds));
 
     final righe = await query.get();
-    final risultato = <int, List<String>>{};
+    final risultato = <String, List<String>>{};
     for (final riga in righe) {
       final edizioneId = riga.readTable(_db.comicCharacter).edizioneId;
       risultato
@@ -1991,13 +2016,15 @@ ORDER BY p.n
 
   /// Tag collegati (§9, #82), raggruppati per `edizioneId`, per l'insieme
   /// di Edizioni date — usato da [watchIndiceCollezione].
-  Future<Map<int, List<String>>> _tagPerEdizione(List<int> edizioneIds) async {
+  Future<Map<String, List<String>>> _tagPerEdizione(
+    List<String> edizioneIds,
+  ) async {
     final query = _db.select(_db.edizioneTag).join([
       innerJoin(_db.tagTable, _db.tagTable.id.equalsExp(_db.edizioneTag.tagId)),
     ])..where(_db.edizioneTag.edizioneId.isIn(edizioneIds));
 
     final righe = await query.get();
-    final risultato = <int, List<String>>{};
+    final risultato = <String, List<String>>{};
     for (final riga in righe) {
       final edizioneId = riga.readTable(_db.edizioneTag).edizioneId;
       risultato
@@ -2007,13 +2034,13 @@ ORDER BY p.n
     return risultato;
   }
 
-  Future<Map<int, List<GenereEdizione>>> _generiPerEdizione(
-    List<int> edizioneIds,
+  Future<Map<String, List<GenereEdizione>>> _generiPerEdizione(
+    List<String> edizioneIds,
   ) async {
     final righe = await (_db.select(
       _db.edizioneGenere,
     )..where((g) => g.edizioneId.isIn(edizioneIds))).get();
-    final risultato = <int, List<GenereEdizione>>{};
+    final risultato = <String, List<GenereEdizione>>{};
     for (final riga in righe) {
       risultato.putIfAbsent(riga.edizioneId, () => []).add(riga.genere);
     }
@@ -2031,7 +2058,7 @@ ORDER BY p.n
     final opera = righe.first.readTable(_db.opere);
     final serie = righe.first.readTableOrNull(_db.serieTable);
 
-    final copiePerId = <int, CopiaAsseCollezione>{};
+    final copiePerId = <String, CopiaAsseCollezione>{};
     for (final riga in righe) {
       final copia = riga.readTableOrNull(_db.copie);
       if (copia == null) continue;
@@ -2161,7 +2188,7 @@ ORDER BY o.title, e.issue_number
           (rows) => [
             for (final row in rows)
               (
-                edizioneId: row.read<int>('edizione_id'),
+                edizioneId: row.read<String>('edizione_id'),
                 titolo: row.read<String>('titolo'),
                 serieName: row.readNullable<String>('serie'),
                 issueNumberLabel: row.readNullable<String>('numero_label'),
@@ -2190,7 +2217,7 @@ ORDER BY o.title, e.issue_number
     required RuoloMessaggio ruolo,
     required String testo,
     SottotipoSistema? sottotipoSistema,
-    List<int> edizioneIds = const [],
+    List<String> edizioneIds = const [],
     DateTime? createdAt,
   }) {
     return _db
@@ -2220,7 +2247,7 @@ ORDER BY o.title, e.issue_number
 
       final tuttiGliId = {for (final riga in righe) ...?riga.edizioneIds};
       final edizioniPerId = tuttiGliId.isEmpty
-          ? const <int, EdizioneCollezioneIndice>{}
+          ? const <String, EdizioneCollezioneIndice>{}
           : {
               for (final edizione in await watchIndiceCollezione().first)
                 if (tuttiGliId.contains(edizione.edizioneId))
@@ -2236,7 +2263,7 @@ ORDER BY o.title, e.issue_number
             testo: riga.testo,
             createdAt: riga.createdAt,
             edizioni: [
-              for (final id in riga.edizioneIds ?? const <int>[])
+              for (final id in riga.edizioneIds ?? const <String>[])
                 ?edizioniPerId[id],
             ],
           ),
@@ -2290,8 +2317,8 @@ ORDER BY o.title, e.issue_number
   /// Bulk equivalente di [autoriDiEdizione] per più Edizioni insieme (con
   /// ruolo, a differenza di [_autoriPerEdizione] che risolve solo i nomi),
   /// usato da [tutteLeCopiePerEsportazione].
-  Future<Map<int, List<CreatorConRuolo>>> _autoriConRuoloPerEdizione(
-    List<int> edizioneIds,
+  Future<Map<String, List<CreatorConRuolo>>> _autoriConRuoloPerEdizione(
+    List<String> edizioneIds,
   ) async {
     if (edizioneIds.isEmpty) return const {};
 
@@ -2303,7 +2330,7 @@ ORDER BY o.title, e.issue_number
     ])..where(_db.comicCreator.edizioneId.isIn(edizioneIds));
 
     final righe = await query.get();
-    final risultato = <int, List<CreatorConRuolo>>{};
+    final risultato = <String, List<CreatorConRuolo>>{};
     for (final riga in righe) {
       final comicCreator = riga.readTable(_db.comicCreator);
       risultato.putIfAbsent(comicCreator.edizioneId, () => []).add((
@@ -2443,7 +2470,7 @@ ORDER BY o.title, e.issue_number
           createdAt: riga.createdAt,
         );
 
-        int? serieId;
+        String? serieId;
         if (riga.serieName != null) {
           serieId = await aggiungiSerie(name: riga.serieName!);
         }

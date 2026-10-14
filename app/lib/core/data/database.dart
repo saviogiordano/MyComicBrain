@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:mycomicbrain/core/data/database.steps.dart';
+import 'package:mycomicbrain/core/data/uuid_v7.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
@@ -29,28 +30,15 @@ class StringListConverter extends TypeConverter<List<String>, String> {
   String toSql(List<String> value) => jsonEncode(value);
 }
 
-/// Converter per `MessaggioTable.edizioneIds` (deciso su #128) — lista di id
-/// Edizione, serializzata come JSON: riferimento vivo risolto a runtime via
-/// `ComicsRepository`, mai una copia congelata dei dati (stesso principio
-/// del caso `source = interno` di `CandidatiTable.edizioneId`). Parallelo a
-/// [StringListConverter] ma per `List<int>`.
-class IntListConverter extends TypeConverter<List<int>, String> {
-  const IntListConverter();
-
-  @override
-  List<int> fromSql(String fromDb) =>
-      (jsonDecode(fromDb) as List<dynamic>).cast<int>();
-
-  @override
-  String toSql(List<int> value) => jsonEncode(value);
-}
-
 /// `Opera`: la storia/testata a prescindere da come è stata pubblicata.
 /// Separata da `Edizione` fin dalla v1 (§36), anche se oggi popolata quasi
 /// 1:1 — evita una migrazione quando servirà collegare più edizioni alla
 /// stessa opera.
 class Opere extends Table {
-  IntColumn get id => integer().autoIncrement()();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
   TextColumn get title => text()();
   DateTimeColumn get createdAt => dateTime()();
 }
@@ -62,7 +50,10 @@ class SerieTable extends Table {
   @override
   String get tableName => 'serie';
 
-  IntColumn get id => integer().autoIncrement()();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
   TextColumn get name => text()();
   IntColumn get totalIssues => integer().nullable()();
 
@@ -82,9 +73,12 @@ class SerieTable extends Table {
 
 /// `Edizione`: la pubblicazione specifica di un'opera — l'unità catalogata.
 class Edizioni extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get operaId => integer().references(Opere, #id)();
-  IntColumn get serieId => integer().nullable().references(SerieTable, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get operaId => text().references(Opere, #id)();
+  TextColumn get serieId => text().nullable().references(SerieTable, #id)();
   TextColumn get publisher => text().nullable()();
 
   /// Numero come intero, per il CTE dei numeri mancanti (§17).
@@ -155,8 +149,11 @@ class Edizioni extends Table {
 /// `Copia`: un esemplare fisico posseduto di un'edizione. `status` guida
 /// tutti i KPI di volume della Dashboard (#2); `readingStatus` non li tocca.
 class Copie extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get edizioneId => integer().references(Edizioni, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get edizioneId => text().references(Edizioni, #id)();
   TextColumn get status => textEnum<StatoCopia>()();
   TextColumn get readingStatus => textEnum<StatoLettura>().nullable()();
   TextColumn get condition => textEnum<CondizioneCopia>().nullable()();
@@ -165,8 +162,7 @@ class Copie extends Table {
   /// Valuta di [purchasePrice] (`null` = EUR, vedi `ValutaPrezzo`) — un
   /// fumetto americano confermato da Scansione (§6.3) arriva con un prezzo
   /// di copertina in dollari, rilevato da `ComicsRepository._prezzoDaAnalisi`.
-  TextColumn get purchasePriceCurrency =>
-      textEnum<ValutaPrezzo>().nullable()();
+  TextColumn get purchasePriceCurrency => textEnum<ValutaPrezzo>().nullable()();
   DateTimeColumn get purchaseDate => dateTime().nullable()();
   TextColumn get seller => text().nullable()();
 
@@ -191,8 +187,7 @@ class Copie extends Table {
   /// inserimento manuale (§6.3, deciso su #53). Nullable: le fixture dei test
   /// create direttamente con `ComicsRepository.aggiungiCopia` non passano da
   /// una Scansione.
-  IntColumn get scansioneId =>
-      integer().nullable().references(Scansioni, #id)();
+  TextColumn get scansioneId => text().nullable().references(Scansioni, #id)();
 
   /// "In vendita" (§9, deciso su #164): l'intenzione del proprietario di
   /// cedere questa copia — indipendente da [status]/[readingStatus], vedi
@@ -208,7 +203,10 @@ class Copie extends Table {
 /// #32: l'Analisi Copertina vive ora nella propria tabella, vedi
 /// `AnalisiCopertinaTable`.
 class Scansioni extends Table {
-  IntColumn get id => integer().autoIncrement()();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
   IntColumn get userId => integer().nullable()();
 
   /// Percorso filesystem dell'immagine salvata (vedi `ScansioneStorage`).
@@ -232,8 +230,11 @@ class AnalisiCopertinaTable extends Table {
   @override
   String get tableName => 'analisi_copertina';
 
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get scansioneId => integer().references(Scansioni, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get scansioneId => text().references(Scansioni, #id)();
   TextColumn get title => text().nullable()();
   TextColumn get issueNumberLabel => text().nullable()();
   TextColumn get publisher => text().nullable()();
@@ -329,8 +330,11 @@ class IdentificazioneTable extends Table {
   @override
   String get tableName => 'identificazione';
 
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get scansioneId => integer().references(Scansioni, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get scansioneId => text().references(Scansioni, #id)();
   TextColumn get status => textEnum<StatoIdentificazione>().withDefault(
     Constant(StatoIdentificazione.pending.name),
   )();
@@ -355,11 +359,14 @@ class CandidatiTable extends Table {
   @override
   String get tableName => 'candidati';
 
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get identificazioneId =>
-      integer().references(IdentificazioneTable, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get identificazioneId =>
+      text().references(IdentificazioneTable, #id)();
   TextColumn get source => textEnum<FonteCandidato>()();
-  IntColumn get edizioneId => integer().nullable().references(Edizioni, #id)();
+  TextColumn get edizioneId => text().nullable().references(Edizioni, #id)();
   TextColumn get title => text().nullable()();
   TextColumn get seriesName => text().nullable()();
   TextColumn get issueNumberLabel => text().nullable()();
@@ -385,7 +392,10 @@ class CandidatiTable extends Table {
 /// ricerca/autocomplete (vedi "Not yet specified" sulla mappa #63), non
 /// dello schema.
 class Creator extends Table {
-  IntColumn get id => integer().autoIncrement()();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
   TextColumn get name => text()();
 }
 
@@ -397,9 +407,12 @@ class Creator extends Table {
 /// disegnatori). Blocca solo il duplicato esatto (stesso autore, stesso
 /// ruolo, stessa edizione, due volte).
 class ComicCreator extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get edizioneId => integer().references(Edizioni, #id)();
-  IntColumn get creatorId => integer().references(Creator, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get edizioneId => text().references(Edizioni, #id)();
+  TextColumn get creatorId => text().references(Creator, #id)();
   TextColumn get ruolo => textEnum<RuoloCreator>()();
 
   @override
@@ -417,15 +430,21 @@ class TagTable extends Table {
   @override
   String get tableName => 'tag';
 
-  IntColumn get id => integer().autoIncrement()();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
   TextColumn get name => text()();
 }
 
 /// Relazione many-to-many fra Edizione e Tag (§9, deciso su #82).
 class EdizioneTag extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get edizioneId => integer().references(Edizioni, #id)();
-  IntColumn get tagId => integer().references(TagTable, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get edizioneId => text().references(Edizioni, #id)();
+  TextColumn get tagId => text().references(TagTable, #id)();
 
   @override
   List<Set<Column>> get uniqueKeys => [
@@ -441,16 +460,22 @@ class EdizioneTag extends Table {
 /// collegamento automatico fra i due, stesso principio già valido per gli
 /// autori (vedi `ComicsRepository._creaEdizioneDaCandidato`).
 class Character extends Table {
-  IntColumn get id => integer().autoIncrement()();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
   TextColumn get name => text()();
 }
 
 /// Relazione many-to-many fra Edizione e Character (§9, deciso su #84) —
 /// parallela a [ComicCreator] ma senza `ruolo`.
 class ComicCharacter extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get edizioneId => integer().references(Edizioni, #id)();
-  IntColumn get characterId => integer().references(Character, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get edizioneId => text().references(Edizioni, #id)();
+  TextColumn get characterId => text().references(Character, #id)();
 
   @override
   List<Set<Column>> get uniqueKeys => [
@@ -463,8 +488,11 @@ class ComicCharacter extends Table {
 /// direttamente il valore enum all'Edizione, senza una tabella `Genere` a
 /// sé (a differenza di [Character]/[TagTable], che sono liberi).
 class EdizioneGenere extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get edizioneId => integer().references(Edizioni, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get edizioneId => text().references(Edizioni, #id)();
   TextColumn get genere => textEnum<GenereEdizione>()();
 
   @override
@@ -507,7 +535,7 @@ class MessaggioTable extends Table {
   TextColumn get sottotipoSistema => textEnum<SottotipoSistema>().nullable()();
   TextColumn get testo => text()();
   TextColumn get edizioneIds =>
-      text().nullable().map(const IntListConverter())();
+      text().nullable().map(const StringListConverter())();
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -527,8 +555,11 @@ class ValoreStimatoTable extends Table {
   @override
   String get tableName => 'valore_stimato';
 
-  IntColumn get id => integer().autoIncrement()();
-  IntColumn get copiaId => integer().references(Copie, #id)();
+  TextColumn get id => text().clientDefault(uuidV7)();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get copiaId => text().references(Copie, #id)();
   TextColumn get status => textEnum<StatoValoreStimato>()();
 
   /// Sempre in EUR (§35) — la conversione dalla valuta nativa della fonte
@@ -575,11 +606,107 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onUpgrade: stepByStep(
+      from15To16: (m, schema) async {
+        // Id interi → uuid v7 (ADR-0008, #204). Ogni vecchio id diventa un
+        // uuid deterministico: istante 2020-09-13 + id millisecondi (prima
+        // di ogni riga nuova, nello stesso ordine), poi l'indice della
+        // tabella e l'id nella coda per l'unicità fra tabelle. Le chiavi
+        // esterne si convertono con l'indice della tabella riferita.
+        const indice = {
+          'opere': 1,
+          'serie': 2,
+          'edizioni': 3,
+          'copie': 4,
+          'scansioni': 5,
+          'analisi_copertina': 6,
+          'identificazione': 7,
+          'candidati': 8,
+          'creator': 9,
+          'comic_creator': 10,
+          'tag': 11,
+          'edizione_tag': 12,
+          'character': 13,
+          'comic_character': 14,
+          'edizione_genere': 15,
+          'valore_stimato': 16,
+        };
+        String uuid(String tabella, String colonna) =>
+            'CASE WHEN $colonna IS NULL THEN NULL ELSE '
+            "printf('%08x-%04x-7000-8%03x-%012x', "
+            '(1600000000000 + $colonna) >> 16, '
+            '(1600000000000 + $colonna) & 65535, '
+            '${indice[tabella]}, $colonna) END';
+        Future<void> converti(
+          TableInfo<Table, dynamic> tabella,
+          Map<String, String> chiaviEsterne,
+        ) async {
+          final colonne = {
+            for (final c in tabella.$columns) c.$name: c,
+          };
+          await m.alterTable(
+            TableMigration(
+              tabella,
+              columnTransformer: {
+                colonne['id']!: CustomExpression<String>(
+                  uuid(tabella.actualTableName, 'id'),
+                ),
+                for (final MapEntry(key: colonna, value: riferita)
+                    in chiaviEsterne.entries)
+                  colonne[colonna]!: CustomExpression<String>(
+                    uuid(riferita, colonna),
+                  ),
+              },
+            ),
+          );
+        }
+
+        await converti(schema.opere, {});
+        await converti(schema.serie, {});
+        await converti(schema.edizioni, {
+          'opera_id': 'opere',
+          'serie_id': 'serie',
+        });
+        await converti(schema.scansioni, {});
+        await converti(schema.copie, {
+          'edizione_id': 'edizioni',
+          'scansione_id': 'scansioni',
+        });
+        await converti(schema.valoreStimato, {'copia_id': 'copie'});
+        await converti(schema.analisiCopertina, {'scansione_id': 'scansioni'});
+        await converti(schema.identificazione, {'scansione_id': 'scansioni'});
+        await converti(schema.candidati, {
+          'identificazione_id': 'identificazione',
+          'edizione_id': 'edizioni',
+        });
+        await converti(schema.creator, {});
+        await converti(schema.comicCreator, {
+          'edizione_id': 'edizioni',
+          'creator_id': 'creator',
+        });
+        await converti(schema.tag, {});
+        await converti(schema.edizioneTag, {
+          'edizione_id': 'edizioni',
+          'tag_id': 'tag',
+        });
+        await converti(schema.character, {});
+        await converti(schema.comicCharacter, {
+          'edizione_id': 'edizioni',
+          'character_id': 'character',
+        });
+        await converti(schema.edizioneGenere, {'edizione_id': 'edizioni'});
+        await m.database.customStatement(
+          'UPDATE messaggio SET edizione_ids = ( '
+          'SELECT json_group_array(nuovo) FROM ( '
+          "SELECT ${uuid('edizioni', 'value')} AS nuovo "
+          'FROM json_each(messaggio.edizione_ids) ORDER BY key)) '
+          'WHERE edizione_ids IS NOT NULL',
+        );
+      },
       from14To15: (m, schema) async {
         await m.addColumn(schema.copie, schema.copie.forSale);
       },
