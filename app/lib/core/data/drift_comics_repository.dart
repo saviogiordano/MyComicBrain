@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart';
+import 'package:mycomicbrain/core/data/archivio_conversazione.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/conferma_candidato.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
@@ -34,13 +35,20 @@ class DriftComicsRepository implements ComicsRepository {
     this._db, {
     CopertinaDownloader? copertinaDownloader,
     ExchangeRateClient? exchangeRateClient,
+    ArchivioConversazione? conversazione,
   }) : _copertinaDownloader = copertinaDownloader ?? CopertinaDownloader(),
        _exchangeRateClient =
-           exchangeRateClient ?? FrankfurterExchangeRateClient();
+           exchangeRateClient ?? FrankfurterExchangeRateClient(),
+       _conversazione = conversazione ?? ArchivioConversazioneDrift(_db);
 
   final AppDatabase _db;
   final CopertinaDownloader _copertinaDownloader;
   final ExchangeRateClient _exchangeRateClient;
+
+  /// Nel database stesso per la Modalità locale; su Supabase per la Replica
+  /// di un Profilo autenticato, che non contiene la Conversazione
+  /// (ADR-0008).
+  final ArchivioConversazione _conversazione;
 
   /// Cache in-process del tasso USD→EUR per [watchDashboardKpis]: una sola
   /// chiamata di rete ogni [_validitaCacheTasso], non una ad ogni emissione
@@ -2202,14 +2210,7 @@ ORDER BY o.title, e.issue_number
   // --- Conversazione dell'Assistente (§10/§24, deciso su #122/#124/#128). ---
 
   @override
-  Future<int> getOrCreaConversazione() async {
-    final esistente = await _db.select(_db.conversazioneTable).get();
-    if (esistente.isNotEmpty) return esistente.single.id;
-
-    return _db
-        .into(_db.conversazioneTable)
-        .insert(ConversazioneTableCompanion.insert(createdAt: DateTime.now()));
-  }
+  Future<int> getOrCreaConversazione() => _conversazione.getOrCrea();
 
   @override
   Future<int> aggiungiMessaggio({
@@ -2219,33 +2220,23 @@ ORDER BY o.title, e.issue_number
     SottotipoSistema? sottotipoSistema,
     List<String> edizioneIds = const [],
     DateTime? createdAt,
-  }) {
-    return _db
-        .into(_db.messaggioTable)
-        .insert(
-          MessaggioTableCompanion.insert(
-            conversazioneId: conversazioneId,
-            ruolo: ruolo,
-            testo: testo,
-            sottotipoSistema: Value(sottotipoSistema),
-            edizioneIds: edizioneIds.isEmpty
-                ? const Value.absent()
-                : Value(edizioneIds),
-            createdAt: createdAt ?? DateTime.now(),
-          ),
-        );
-  }
+  }) => _conversazione.aggiungiMessaggio(
+    conversazioneId: conversazioneId,
+    ruolo: ruolo,
+    testo: testo,
+    sottotipoSistema: sottotipoSistema,
+    edizioneIds: edizioneIds,
+    createdAt: createdAt,
+  );
 
   @override
   Stream<List<Messaggio>> watchMessaggi(int conversazioneId) {
-    final query = _db.select(_db.messaggioTable)
-      ..where((m) => m.conversazioneId.equals(conversazioneId))
-      ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]);
-
-    return query.watch().asyncMap((righe) async {
+    return _conversazione.watchMessaggi(conversazioneId).asyncMap((
+      righe,
+    ) async {
       if (righe.isEmpty) return const <Messaggio>[];
 
-      final tuttiGliId = {for (final riga in righe) ...?riga.edizioneIds};
+      final tuttiGliId = {for (final riga in righe) ...riga.edizioneIds};
       final edizioniPerId = tuttiGliId.isEmpty
           ? const <String, EdizioneCollezioneIndice>{}
           : {
@@ -2263,8 +2254,7 @@ ORDER BY o.title, e.issue_number
             testo: riga.testo,
             createdAt: riga.createdAt,
             edizioni: [
-              for (final id in riga.edizioneIds ?? const <String>[])
-                ?edizioniPerId[id],
+              for (final id in riga.edizioneIds) ?edizioniPerId[id],
             ],
           ),
       ];
@@ -2272,16 +2262,8 @@ ORDER BY o.title, e.issue_number
   }
 
   @override
-  Future<void> eliminaConversazione(int conversazioneId) {
-    return _db.transaction(() async {
-      await (_db.delete(
-        _db.messaggioTable,
-      )..where((m) => m.conversazioneId.equals(conversazioneId))).go();
-      await (_db.delete(
-        _db.conversazioneTable,
-      )..where((c) => c.id.equals(conversazioneId))).go();
-    });
-  }
+  Future<void> eliminaConversazione(int conversazioneId) =>
+      _conversazione.elimina(conversazioneId);
 
   // --- Export/import (§16, deciso su #139/#140). ---
 

@@ -22,8 +22,7 @@ class ScansioneStorage {
   final Future<Directory> Function() _baseDirectory;
 
   /// La directory in cui [salva] mette le Scansioni confermate (non la
-  /// crea). L'adapter Supabase la usa per ritrovare il file locale di una
-  /// Scansione dalla sua chiave Storage (ADR-0007, #178).
+  /// crea).
   Future<Directory> cartella() async =>
       Directory(p.join((await _baseDirectory()).path, _cartellaScansioni));
 

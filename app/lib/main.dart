@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/auth/auth_config.dart';
@@ -43,6 +44,9 @@ Future<List<Override>> _overridesAccount(
     AuthConfig.supabasePublishableKey.isNotEmpty,
     'Manca --dart-define=SUPABASE_PUBLISHABLE_KEY (vedi app/README.md)',
   );
+  // La Replica del Profilo (ADR-0008) è un secondo `AppDatabase`, aperto
+  // insieme a quello della Modalità locale su un file diverso.
+  driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   final supabase = await Supabase.initialize(
     url: AuthConfig.supabaseUrl,
     publishableKey: AuthConfig.supabasePublishableKey,
@@ -61,6 +65,12 @@ Future<List<Override>> _overridesAccount(
     haDatiLocaliProvider.overrideWith(
       (ref) => ref.watch(driftComicsRepositoryProvider).haDatiDaImportare,
     ),
+    cancellazioneProfiloProvider.overrideWith((ref) {
+      final userId = ref.watch(idUtenteSupabaseProvider);
+      if (userId == null) return null;
+      final repliche = ref.watch(replicheProfiloProvider);
+      return () => repliche.cancella(userId);
+    }),
     importatoreModalitaLocaleProvider.overrideWith(
       (ref) => ImportazioneModalitaLocale(
         db: ref.watch(appDatabaseProvider),
