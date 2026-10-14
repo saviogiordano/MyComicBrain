@@ -27,9 +27,8 @@ class IdentificazionePipeline {
   /// Avvia l'Identificazione per la Scansione con questo id, la cui Analisi
   /// Copertina deve già essere `completata`. Un fallimento tecnico (es.
   /// ComicVine o il database irraggiungibili) porta l'Identificazione a
-  /// `fallita` — nessun
-  /// retry automatico, come `AnalisiCopertinaPipeline`. Idempotente rispetto
-  /// alla Scansione: se un'Identificazione esiste già (rieseguita dopo una
+  /// `fallita` — nessun retry automatico, come `AnalisiCopertinaPipeline`.
+  /// Idempotente rispetto alla Scansione: se un'Identificazione esiste già (rieseguita dopo una
   /// richiesta di nuova Analisi Copertina su una riga già `completata`,
   /// riepilogo), riprende quella riga invece di inserirne una seconda — la
   /// relazione con `scansioneId` è 1:1.
