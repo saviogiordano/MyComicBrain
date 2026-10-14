@@ -668,7 +668,7 @@ Requisiti:
 - se l'account è nuovo, i dati locali migrano nella Collezione appena creata; se l'account esiste già (login da un altro device), i dati locali si uniscono (merge) alla Collezione remota esistente, senza deduplica automatica;
 - solo il primo account creato su un device eredita i suoi dati locali: un secondo Profilo (§17.1) creato sullo stesso device parte con una Collezione vuota;
 - migrano il catalogo confermato (Opere/Edizioni/Copie/Serie/Creator/Personaggi/Tag) e le Scansioni/Analisi Copertina/Identificazione/Candidati non ancora risolti in una Copia, comprese le immagini (caricate su Supabase Storage); la Conversazione con l'Assistente non migra;
-- a migrazione riuscita, i dati locali vengono svuotati: da quel momento l'app opera online-only per quel Profilo (nessuna cache locale di lettura, in attesa di §18/§19);
+- a migrazione riuscita, i dati della Modalità locale vengono svuotati: da quel momento il Profilo lavora sulla propria Replica locale, sincronizzata con Supabase (§18/§19, [ADR-0008](docs/adr/0008-replica-locale-e-sincronizzazione.md));
 - un errore di migrazione blocca l'accesso pieno all'account finché l'utente non completa un nuovo tentativo (mai un fallimento silenzioso in background).
 
 ---
@@ -705,7 +705,7 @@ Le funzioni AI e il recupero dei metadati possono richiedere connessione.
 
 Le operazioni effettuate offline devono essere sincronizzate successivamente.
 
-Questo requisito riguarda i Profili già autenticati e resta da progettare (fuori scope della mappa [#149](https://github.com/saviogiordano/MyComicBrain/issues/149)) — distinto dalla Modalità locale di §17.4, che copre solo l'uso *prima* di qualunque autenticazione e non lascia una cache locale dopo la migrazione.
+Questo requisito riguarda i Profili già autenticati, distinto dalla Modalità locale di §17.4 che copre l'uso *prima* di qualunque autenticazione. Ogni Profilo autenticato lavora su una Replica locale della propria Collezione: senza rete si vedono collezione e cover, si modifica, si aggiunge a mano e si scattano Scansioni, analizzate al ritorno della rete dal device che le ha scattate. I conflitti si risolvono campo per campo (vince l'ultima modifica fatta) e l'eliminazione prevale. Il logout cancella la Replica, avvisando se ci sono modifiche non sincronizzate. Architettura in [ADR-0008](docs/adr/0008-replica-locale-e-sincronizzazione.md).
 
 ---
 
