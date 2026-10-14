@@ -34,6 +34,7 @@ void main() {
   Future<GoRouter> pumpConfermaCandidato(
     WidgetTester tester, {
     required int scansioneId,
+    List<Override> overrides = const [],
   }) async {
     final router = GoRouter(
       initialLocation: '/base',
@@ -71,7 +72,10 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [comicsRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          comicsRepositoryProvider.overrideWithValue(repository),
+          ...overrides,
+        ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
     );
@@ -94,6 +98,30 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
+
+  testWidgets(
+    "un errore nel leggere l'Identificazione mostra l'errore, non uno "
+    'spinner infinito (bug osservato su Supabase)',
+    (tester) async {
+      final scansioneId = await scansione();
+
+      await pumpConfermaCandidato(
+        tester,
+        scansioneId: scansioneId,
+        overrides: [
+          identificazioneProvider(
+            scansioneId,
+          ).overrideWith((ref) => Stream.error(StateError('rete assente'))),
+        ],
+      );
+      await tester.pump();
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Identificazione non riuscita'), findsOneWidget);
+      expect(find.textContaining('rete assente'), findsOneWidget);
+      expect(find.text('Inserisci manualmente'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'mostra i Candidati ordinati per confidenza, il migliore preselezionato',

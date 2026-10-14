@@ -5,8 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
+import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
-import 'package:path/path.dart' as p;
 
 import 'contratto/adapter_sotto_contratto.dart';
 
@@ -28,19 +28,72 @@ class _FakeCoverHttpClient extends http.BaseClient {
 
 void main() => contrattoIdentificazione(creaAdapterDriftInMemoria);
 
-/// Area Identificazione della suite di contratto di `ComicsRepository` (ADR-0007).
+/// Area Identificazione della suite di contratto di `ComicsRepository`
+/// (ADR-0007): Identificazione e Candidati, la conferma di un Candidato, la
+/// cover presa da una Scansione e i dati del motore di matching. Le verifiche
+/// passano solo dall'interfaccia, così la stessa area gira su ogni adapter.
 void contrattoIdentificazione(CreaAdapter crea) {
   late AdapterSottoContratto adapter;
   late ComicsRepository repo;
+  late Directory tempBase;
+
+  /// Il percorso immagine di ogni Scansione creata da [scansione], per
+  /// `watchScansioneConfermata`.
+  final immagini = <int, String>{};
 
   setUp(() async {
     adapter = await crea();
     repo = adapter.repo;
+    tempBase = await Directory.systemTemp.createTemp(
+      'contratto_identificazione_',
+    );
+    immagini.clear();
   });
 
-  tearDown(() => adapter.chiudi());
+  tearDown(() async {
+    await adapter.chiudi();
+    await tempBase.delete(recursive: true);
+  });
 
-  Future<int> scansione() => repo.aggiungiScansione(image: '/scansioni/1.jpg');
+  /// Un repository sugli stessi dati con le cover in [tempBase], per i test
+  /// che salvano o risolvono cover (`path_provider` non è disponibile nei
+  /// test).
+  ComicsRepository repoConCover({http.Client? httpClient}) => adapter.repoCon(
+    copertinaDownloader: CopertinaDownloader(
+      httpClient: httpClient,
+      baseDirectory: () async => tempBase,
+    ),
+  );
+
+  Future<int> scansione() async {
+    final immagine = await adapter.immagineScansione(
+      '${immagini.length + 1}.jpg',
+    );
+    final id = await repo.aggiungiScansione(image: immagine);
+    immagini[id] = immagine;
+    return id;
+  }
+
+  Future<bool> confermata(int scansioneId) =>
+      repo.watchScansioneConfermata(immagini[scansioneId]!).first;
+
+  Future<List<Candidato>> candidati(int scansioneId) async =>
+      (await repo.watchIdentificazione(scansioneId).first).candidati;
+
+  /// L'Edizione a cui appartiene la Copia [copiaId], con le sue Copie. Letta
+  /// con [repoConCover]: `watchEdizione` risolve anche la cover.
+  Future<(EdizioneDettaglio, CopiaDettaglio)> edizioneDiCopia(
+    int copiaId,
+  ) async {
+    final lettore = repoConCover();
+    for (final e in await lettore.catalogoPerMatching()) {
+      final dettaglio = (await lettore.watchEdizione(e.edizioneId).first)!;
+      for (final copia in dettaglio.copie) {
+        if (copia.id == copiaId) return (dettaglio, copia);
+      }
+    }
+    throw StateError('Copia $copiaId non trovata');
+  }
 
   /// Una Scansione con un'Analisi Copertina già `completata` — invariante
   /// richiesto da `confermaCandidato` per un Candidato `esterno` (deciso su
@@ -98,13 +151,47 @@ void contrattoIdentificazione(CreaAdapter crea) {
       scansioneId: scansioneId,
     );
 
-    final riga = await (adapter.drift.select(
-      adapter.drift.identificazioneTable,
-    )..where((i) => i.id.equals(identificazioneId))).getSingle();
-    expect(riga.scansioneId, scansioneId);
-    expect(riga.status, StatoIdentificazione.inCorso);
-    expect(riga.errorMessage, isNull);
-    expect(riga.completedAt, isNull);
+    expect(
+      await repo.idIdentificazionePerScansione(scansioneId),
+      identificazioneId,
+    );
+    final esito = await repo.watchIdentificazione(scansioneId).first;
+    expect(esito.stato, StatoIdentificazione.inCorso);
+    expect(esito.errorMessage, isNull);
+    expect(esito.candidati, isEmpty);
+  });
+
+  test(
+    "idIdentificazionePerScansione è null finché l'Identificazione non esiste",
+    () async {
+      final scansioneId = await scansione();
+
+      expect(await repo.idIdentificazionePerScansione(scansioneId), isNull);
+    },
+  );
+
+  test('riavviaIdentificazione torna inCorso e scarta i Candidati del giro '
+      'precedente', () async {
+    final scansioneId = await scansione();
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    await repo.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.esterno,
+      punteggio: 80,
+    );
+    await repo.fallisciIdentificazione(
+      id: identificazioneId,
+      errorMessage: 'ComicVine offline',
+    );
+
+    await repo.riavviaIdentificazione(id: identificazioneId);
+
+    final esito = await repo.watchIdentificazione(scansioneId).first;
+    expect(esito.stato, StatoIdentificazione.inCorso);
+    expect(esito.errorMessage, isNull);
+    expect(esito.candidati, isEmpty);
   });
 
   test(
@@ -127,10 +214,8 @@ void contrattoIdentificazione(CreaAdapter crea) {
         edizioneId: edizioneId,
       );
 
-      final riga = await (adapter.drift.select(
-        adapter.drift.candidatiTable,
-      )..where((c) => c.id.equals(candidatoId))).getSingle();
-      expect(riga.identificazioneId, identificazioneId);
+      final riga = (await candidati(scansioneId)).single;
+      expect(riga.id, candidatoId);
       expect(riga.source, FonteCandidato.interno);
       expect(riga.edizioneId, edizioneId);
       expect(riga.punteggio, 92.5);
@@ -139,45 +224,37 @@ void contrattoIdentificazione(CreaAdapter crea) {
     },
   );
 
-  test(
-    'watchIdentificazione risolve il coverImageUrl locale di un Candidato '
-    'interno sulla cartella base corrente (bug osservato: la cover del '
-    'candidato "già in collezione" non si vedeva mai in "Possibile '
-    'corrispondenza")',
-    () async {
-      final tempBase = await Directory.systemTemp.createTemp(
-        'watchIdentificazione_cover_interno_test_',
-      );
-      addTearDown(() => tempBase.delete(recursive: true));
-      final repoConBase = adapter.repoCon(
-        copertinaDownloader: CopertinaDownloader(
-          baseDirectory: () async => tempBase,
-        ),
-      );
+  test('watchIdentificazione risolve il coverImageUrl di un Candidato interno '
+      "come la cover dell'Edizione catalogata (bug osservato: la cover del "
+      'candidato "già in collezione" non si vedeva mai in "Possibile '
+      'corrispondenza")', () async {
+    final repoConBase = repoConCover();
+    final sorgente = File('${tempBase.path}/sorgente.jpg')
+      ..writeAsBytesSync([7, 8, 9]);
+    final cover = await repoConBase.salvaCoverLocale(sorgente);
 
-      final scansioneId = await repoConBase.aggiungiScansione(
-        image: '/scansioni/1.jpg',
-      );
-      final identificazioneId = await repoConBase.avviaIdentificazione(
-        scansioneId: scansioneId,
-      );
-      final operaId = await repoConBase.aggiungiOpera(title: 'Batman');
-      final edizioneId = await repoConBase.aggiungiEdizione(operaId: operaId);
-      await repoConBase.aggiungiCandidato(
-        identificazioneId: identificazioneId,
-        source: FonteCandidato.interno,
-        punteggio: 96,
-        edizioneId: edizioneId,
-        coverImageUrl: p.join('copertine', '1.jpg'),
-      );
+    final scansioneId = await scansione();
+    final identificazioneId = await repoConBase.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    final operaId = await repoConBase.aggiungiOpera(title: 'Batman');
+    final edizioneId = await repoConBase.aggiungiEdizione(
+      operaId: operaId,
+      coverImage: cover,
+    );
+    await repoConBase.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.interno,
+      punteggio: 96,
+      edizioneId: edizioneId,
+      coverImageUrl: cover,
+    );
 
-      final esito = await repoConBase.watchIdentificazione(scansioneId).first;
-      expect(
-        esito.candidati.single.coverImageUrl,
-        p.join(tempBase.path, 'copertine', '1.jpg'),
-      );
-    },
-  );
+    final esito = await repoConBase.watchIdentificazione(scansioneId).first;
+    final risolta = esito.candidati.single.coverImageUrl;
+    expect(risolta, await repoConBase.risolviCoverImage(cover));
+    expect(File(risolta!).readAsBytesSync(), [7, 8, 9]);
+  });
 
   test(
     'aggiungiCandidato persiste un candidato esterno con i campi grezzi ComicVine',
@@ -199,9 +276,8 @@ void contrattoIdentificazione(CreaAdapter crea) {
         coverImageUrl: 'https://comicvine.example/1.jpg',
       );
 
-      final riga = await (adapter.drift.select(
-        adapter.drift.candidatiTable,
-      )..where((c) => c.id.equals(candidatoId))).getSingle();
+      final riga = (await candidati(scansioneId)).single;
+      expect(riga.id, candidatoId);
       expect(riga.source, FonteCandidato.esterno);
       expect(riga.edizioneId, isNull);
       expect(riga.title, 'Amazing Spider-Man');
@@ -223,15 +299,10 @@ void contrattoIdentificazione(CreaAdapter crea) {
 
       await repo.completaIdentificazione(id: identificazioneId);
 
-      final riga = await (adapter.drift.select(
-        adapter.drift.identificazioneTable,
-      )..where((i) => i.id.equals(identificazioneId))).getSingle();
-      expect(riga.status, StatoIdentificazione.completata);
-      expect(riga.completedAt, isNotNull);
-      final candidati = await (adapter.drift.select(
-        adapter.drift.candidatiTable,
-      )..where((c) => c.identificazioneId.equals(identificazioneId))).get();
-      expect(candidati, isEmpty);
+      final esito = await repo.watchIdentificazione(scansioneId).first;
+      expect(esito.stato, StatoIdentificazione.completata);
+      expect(esito.errorMessage, isNull);
+      expect(esito.candidati, isEmpty);
     },
   );
 
@@ -248,12 +319,9 @@ void contrattoIdentificazione(CreaAdapter crea) {
         errorMessage: 'ComicVine offline',
       );
 
-      final riga = await (adapter.drift.select(
-        adapter.drift.identificazioneTable,
-      )..where((i) => i.id.equals(identificazioneId))).getSingle();
-      expect(riga.status, StatoIdentificazione.fallita);
-      expect(riga.errorMessage, 'ComicVine offline');
-      expect(riga.completedAt, isNotNull);
+      final esito = await repo.watchIdentificazione(scansioneId).first;
+      expect(esito.stato, StatoIdentificazione.fallita);
+      expect(esito.errorMessage, 'ComicVine offline');
     },
   );
 
@@ -277,14 +345,9 @@ void contrattoIdentificazione(CreaAdapter crea) {
 
       await repo.marcaCandidatoScelto(id: scelto);
 
-      final rigaScelta = await (adapter.drift.select(
-        adapter.drift.candidatiTable,
-      )..where((c) => c.id.equals(scelto))).getSingle();
-      final rigaAltro = await (adapter.drift.select(
-        adapter.drift.candidatiTable,
-      )..where((c) => c.id.equals(altro))).getSingle();
-      expect(rigaScelta.scelto, isTrue);
-      expect(rigaAltro.scelto, isFalse);
+      final righe = {for (final c in await candidati(scansioneId)) c.id: c};
+      expect(righe[scelto]!.scelto, isTrue);
+      expect(righe[altro]!.scelto, isFalse);
     },
   );
 
@@ -471,8 +534,7 @@ void contrattoIdentificazione(CreaAdapter crea) {
         punteggio: 96,
         edizioneId: edizioneId,
       );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+      final candidato = (await candidati(scansioneId)).single;
       expect(candidato.id, candidatoId);
 
       final copiaId = await repo.confermaCandidato(
@@ -480,24 +542,18 @@ void contrattoIdentificazione(CreaAdapter crea) {
         scansioneId: scansioneId,
       );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      expect(copia.edizioneId, edizioneId);
+      final (edizione, copia) = await edizioneDiCopia(copiaId);
+      expect(edizione.edizioneId, edizioneId);
       expect(copia.status, StatoCopia.posseduta);
-      expect(copia.scansioneId, scansioneId);
       expect(copia.condition, CondizioneCopia.fine);
       expect(copia.purchasePrice, isNull);
-      final edizioni = await adapter.drift.select(adapter.drift.edizioni).get();
+      expect(await confermata(scansioneId), isTrue);
       expect(
-        edizioni,
+        await repo.catalogoPerMatching(),
         hasLength(1),
         reason: 'nessuna nuova Edizione creata per un candidato interno',
       );
-      final rigaCandidato = await (adapter.drift.select(
-        adapter.drift.candidatiTable,
-      )..where((c) => c.id.equals(candidatoId))).getSingle();
-      expect(rigaCandidato.scelto, isTrue);
+      expect((await candidati(scansioneId)).single.scelto, isTrue);
     },
   );
 
@@ -524,17 +580,14 @@ void contrattoIdentificazione(CreaAdapter crea) {
         punteggio: 96,
         edizioneId: edizioneId,
       );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+      final candidato = (await candidati(scansioneId)).single;
 
       await repo.confermaCandidato(
         candidato: candidato,
         scansioneId: scansioneId,
       );
 
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(edizioneId))).getSingle();
+      final edizione = (await repo.watchEdizione(edizioneId).first)!;
       expect(edizione.description, 'Peter Parker affronta il Green Goblin.');
     },
   );
@@ -562,140 +615,113 @@ void contrattoIdentificazione(CreaAdapter crea) {
         punteggio: 96,
         edizioneId: edizioneId,
       );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+      final candidato = (await candidati(scansioneId)).single;
 
       await repo.confermaCandidato(
         candidato: candidato,
         scansioneId: scansioneId,
       );
 
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(edizioneId))).getSingle();
+      final edizione = (await repo.watchEdizione(edizioneId).first)!;
       expect(edizione.description, 'Trama già presente in catalogo.');
     },
   );
 
-  test(
-    'confermaCandidato aggiunge la Copia con condizione di default "Fine" e '
-    'prezzo di acquisto pre-compilato dal prezzo di copertina letto '
-    "dall'AI (bug osservato: la Copia veniva creata senza condizione né "
-    'prezzo)',
-    () async {
-      final scansioneId = await scansioneConAnalisi(price: '€ 5,30');
-      final identificazioneId = await repo.avviaIdentificazione(
-        scansioneId: scansioneId,
-      );
-      final operaId = await repo.aggiungiOpera(title: 'Batman');
-      final edizioneId = await repo.aggiungiEdizione(
-        operaId: operaId,
-        issueNumberLabel: '42',
-      );
-      await repo.aggiungiCandidato(
-        identificazioneId: identificazioneId,
-        source: FonteCandidato.interno,
-        punteggio: 96,
-        edizioneId: edizioneId,
-      );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+  test('confermaCandidato aggiunge la Copia con condizione di default "Fine" e '
+      'prezzo di acquisto pre-compilato dal prezzo di copertina letto '
+      "dall'AI (bug osservato: la Copia veniva creata senza condizione né "
+      'prezzo)', () async {
+    final scansioneId = await scansioneConAnalisi(price: '€ 5,30');
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    final operaId = await repo.aggiungiOpera(title: 'Batman');
+    final edizioneId = await repo.aggiungiEdizione(
+      operaId: operaId,
+      issueNumberLabel: '42',
+    );
+    await repo.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.interno,
+      punteggio: 96,
+      edizioneId: edizioneId,
+    );
+    final candidato = (await candidati(scansioneId)).single;
 
-      final copiaId = await repo.confermaCandidato(
-        candidato: candidato,
-        scansioneId: scansioneId,
-      );
+    final copiaId = await repo.confermaCandidato(
+      candidato: candidato,
+      scansioneId: scansioneId,
+    );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      expect(copia.condition, CondizioneCopia.fine);
-      expect(copia.purchasePrice, 5.30);
-    },
-  );
+    final (_, copia) = await edizioneDiCopia(copiaId);
+    expect(copia.condition, CondizioneCopia.fine);
+    expect(copia.purchasePrice, 5.30);
+  });
 
-  test(
-    'confermaCandidato riconosce un prezzo di copertina in dollari (fumetto '
-    'americano) dal simbolo "\$" letto dall\'AI, e lo marca come tale sulla '
-    'Copia',
-    () async {
-      final scansioneId = await scansioneConAnalisi(price: r'$3.99');
-      final identificazioneId = await repo.avviaIdentificazione(
-        scansioneId: scansioneId,
-      );
-      final operaId = await repo.aggiungiOpera(title: 'Batman');
-      final edizioneId = await repo.aggiungiEdizione(
-        operaId: operaId,
-        issueNumberLabel: '42',
-      );
-      await repo.aggiungiCandidato(
-        identificazioneId: identificazioneId,
-        source: FonteCandidato.interno,
-        punteggio: 96,
-        edizioneId: edizioneId,
-      );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+  test('confermaCandidato riconosce un prezzo di copertina in dollari (fumetto '
+      'americano) dal simbolo "\$" letto dall\'AI, e lo marca come tale sulla '
+      'Copia', () async {
+    final scansioneId = await scansioneConAnalisi(price: r'$3.99');
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    final operaId = await repo.aggiungiOpera(title: 'Batman');
+    final edizioneId = await repo.aggiungiEdizione(
+      operaId: operaId,
+      issueNumberLabel: '42',
+    );
+    await repo.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.interno,
+      punteggio: 96,
+      edizioneId: edizioneId,
+    );
+    final candidato = (await candidati(scansioneId)).single;
 
-      final copiaId = await repo.confermaCandidato(
-        candidato: candidato,
-        scansioneId: scansioneId,
-      );
+    final copiaId = await repo.confermaCandidato(
+      candidato: candidato,
+      scansioneId: scansioneId,
+    );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      expect(copia.purchasePrice, 3.99);
-      expect(copia.purchasePriceCurrency, ValutaPrezzo.usd);
-    },
-  );
+    final (_, copia) = await edizioneDiCopia(copiaId);
+    expect(copia.purchasePrice, 3.99);
+    expect(copia.purchasePriceCurrency, ValutaPrezzo.usd);
+  });
 
-  test(
-    'confermaCandidato assume EUR quando il prezzo di copertina letto '
-    "dall'AI non riporta il simbolo del dollaro",
-    () async {
-      final scansioneId = await scansioneConAnalisi(price: '€ 5,30');
-      final identificazioneId = await repo.avviaIdentificazione(
-        scansioneId: scansioneId,
-      );
-      final operaId = await repo.aggiungiOpera(title: 'Batman');
-      final edizioneId = await repo.aggiungiEdizione(
-        operaId: operaId,
-        issueNumberLabel: '42',
-      );
-      await repo.aggiungiCandidato(
-        identificazioneId: identificazioneId,
-        source: FonteCandidato.interno,
-        punteggio: 96,
-        edizioneId: edizioneId,
-      );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+  test('confermaCandidato assume EUR quando il prezzo di copertina letto '
+      "dall'AI non riporta il simbolo del dollaro", () async {
+    final scansioneId = await scansioneConAnalisi(price: '€ 5,30');
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    final operaId = await repo.aggiungiOpera(title: 'Batman');
+    final edizioneId = await repo.aggiungiEdizione(
+      operaId: operaId,
+      issueNumberLabel: '42',
+    );
+    await repo.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.interno,
+      punteggio: 96,
+      edizioneId: edizioneId,
+    );
+    final candidato = (await candidati(scansioneId)).single;
 
-      final copiaId = await repo.confermaCandidato(
-        candidato: candidato,
-        scansioneId: scansioneId,
-      );
+    final copiaId = await repo.confermaCandidato(
+      candidato: candidato,
+      scansioneId: scansioneId,
+    );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      expect(copia.purchasePriceCurrency, ValutaPrezzo.eur);
-    },
-  );
+    final (_, copia) = await edizioneDiCopia(copiaId);
+    expect(copia.purchasePriceCurrency, ValutaPrezzo.eur);
+  });
 
   test(
-    'confermaCandidato esterno crea Opera/Serie/Edizione/Copia da zero e scarica la cover in locale',
+    'confermaCandidato esterno crea Opera/Serie/Edizione/Copia da zero e '
+    'conserva una copia propria della cover invece del solo URL remoto',
     () async {
-      final tempBase = await Directory.systemTemp.createTemp(
-        'confermaCandidato_esterno_test_',
-      );
-      addTearDown(() => tempBase.delete(recursive: true));
-      final repoConDownload = adapter.repoCon(
-        copertinaDownloader: CopertinaDownloader(
-          httpClient: _FakeCoverHttpClient(bytes: [1, 2, 3]),
-          baseDirectory: () async => tempBase,
-        ),
+      final repoConDownload = repoConCover(
+        httpClient: _FakeCoverHttpClient(bytes: [1, 2, 3]),
       );
 
       final scansioneId = await scansioneConAnalisi();
@@ -712,102 +738,74 @@ void contrattoIdentificazione(CreaAdapter crea) {
         publisher: 'Marvel',
         coverImageUrl: 'https://comicvine.example/1.jpg',
       );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+      final candidato = (await candidati(scansioneId)).single;
 
       final copiaId = await repoConDownload.confermaCandidato(
         candidato: candidato,
         scansioneId: scansioneId,
       );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
+      final (edizione, copia) = await edizioneDiCopia(copiaId);
       expect(copia.status, StatoCopia.posseduta);
-      expect(copia.scansioneId, scansioneId);
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      expect(await confermata(scansioneId), isTrue);
       expect(edizione.publisher, 'Marvel');
       expect(edizione.issueNumberLabel, '1');
       expect(edizione.issueNumber, 1);
-      // La cover è stata scaricata in locale (§6.3): non più l'URL remoto
-      // ma un file dentro la directory `copertine/`. Salvato *relativo*
-      // alla cartella base, non assoluto: il container dell'app cambia
-      // UUID a ogni reinstallazione/aggiornamento su iOS, un percorso
-      // assoluto persistito in DB non sarebbe più valido al riavvio
-      // successivo (bug osservato: cover sparita dopo un nuovo `flutter
-      // run`) — vedi `percorso_locale.dart`.
-      final coverImage = edizione.coverImage;
+      expect(edizione.titolo, 'Amazing Spider-Man');
+      expect(edizione.serieName, 'The Amazing Spider-Man');
+      // La cover è stata scaricata (§6.3): in DB non c'è più l'URL remoto
+      // ma un valore dell'adapter che si risolve nel file scaricato.
+      final coverImage = await repoConDownload.coverImageGrezzoDi(
+        edizione.edizioneId,
+      );
       expect(coverImage, isNotNull);
       expect(coverImage, isNot('https://comicvine.example/1.jpg'));
-      expect(p.isRelative(coverImage!), isTrue);
-      expect(p.dirname(coverImage), 'copertine');
-      final fileCopertina = File(p.join(tempBase.path, coverImage));
-      expect(fileCopertina.existsSync(), isTrue);
+      final fileCopertina = File(
+        (await repoConDownload.risolviCoverImage(coverImage))!,
+      );
       expect(fileCopertina.readAsBytesSync(), [1, 2, 3]);
-      final opera = await (adapter.drift.select(
-        adapter.drift.opere,
-      )..where((o) => o.id.equals(edizione.operaId))).getSingle();
-      expect(opera.title, 'Amazing Spider-Man');
-      final serie = await (adapter.drift.select(
-        adapter.drift.serieTable,
-      )..where((s) => s.id.equals(edizione.serieId!))).getSingle();
-      expect(serie.name, 'The Amazing Spider-Man');
-      final rigaCandidato = await (adapter.drift.select(
-        adapter.drift.candidatiTable,
-      )..where((c) => c.id.equals(candidatoId))).getSingle();
-      expect(rigaCandidato.scelto, isTrue);
+      final righe = await candidati(scansioneId);
+      expect(righe.single.id, candidatoId);
+      expect(righe.single.scelto, isTrue);
     },
   );
 
-  test(
-    'confermaCandidato esterno con numero decimale ("679.1") salva '
-    "l'Edizione con issueNumber sulla parte intera — bug osservato: "
-    '`int.tryParse` falliva sul decimale lasciando `issueNumber` `null`, '
-    'e la Copia spariva dalla griglia numerica di Serie (#99) pur essendo '
-    'stata salvata correttamente',
-    () async {
-      final scansioneId = await scansioneConAnalisi();
-      final identificazioneId = await repo.avviaIdentificazione(
-        scansioneId: scansioneId,
-      );
-      await repo.aggiungiCandidato(
-        identificazioneId: identificazioneId,
-        source: FonteCandidato.esterno,
-        punteggio: 78,
-        title: 'Amazing Spider-Man',
-        seriesName: 'The Amazing Spider-Man',
-        issueNumberLabel: '679.1',
-        publisher: 'Marvel',
-        coverImageUrl: 'https://comicvine.example/679.1.jpg',
-      );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+  test('confermaCandidato esterno con numero decimale ("679.1") salva '
+      "l'Edizione con issueNumber sulla parte intera — bug osservato: "
+      '`int.tryParse` falliva sul decimale lasciando `issueNumber` `null`, '
+      'e la Copia spariva dalla griglia numerica di Serie (#99) pur essendo '
+      'stata salvata correttamente', () async {
+    final scansioneId = await scansioneConAnalisi();
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    await repo.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.esterno,
+      punteggio: 78,
+      title: 'Amazing Spider-Man',
+      seriesName: 'The Amazing Spider-Man',
+      issueNumberLabel: '679.1',
+      publisher: 'Marvel',
+      coverImageUrl: 'https://comicvine.example/679.1.jpg',
+    );
+    final candidato = (await candidati(scansioneId)).single;
 
-      final copiaId = await repo.confermaCandidato(
-        candidato: candidato,
-        scansioneId: scansioneId,
-      );
+    final copiaId = await repo.confermaCandidato(
+      candidato: candidato,
+      scansioneId: scansioneId,
+    );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
-      expect(edizione.issueNumberLabel, '679.1');
-      expect(edizione.issueNumber, 679);
-    },
-  );
+    final (edizione, _) = await edizioneDiCopia(copiaId);
+    expect(edizione.issueNumberLabel, '679.1');
+    expect(edizione.issueNumber, 679);
+  });
 
   test(
     "confermaCandidato esterno: download cover fallito ricade sull'URL remoto",
     () async {
-      final repoDownloadFallito = adapter.repoCon(
-        copertinaDownloader: CopertinaDownloader(
-          httpClient: _FakeCoverHttpClient(),
-        ),
+      final repoDownloadFallito = repoConCover(
+        httpClient: _FakeCoverHttpClient(),
       );
 
       final scansioneId = await scansioneConAnalisi();
@@ -821,119 +819,98 @@ void contrattoIdentificazione(CreaAdapter crea) {
         title: 'Amazing Spider-Man',
         coverImageUrl: 'https://comicvine.example/1.jpg',
       );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+      final candidato = (await candidati(scansioneId)).single;
 
       final copiaId = await repoDownloadFallito.confermaCandidato(
         candidato: candidato,
         scansioneId: scansioneId,
       );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
-      expect(edizione.coverImage, 'https://comicvine.example/1.jpg');
+      final (edizione, _) = await edizioneDiCopia(copiaId);
+      expect(
+        await repo.coverImageGrezzoDi(edizione.edizioneId),
+        'https://comicvine.example/1.jpg',
+      );
     },
   );
 
-  test(
-    "confermaCandidato esterno: i campi bibliografici vengono dall'Analisi "
-    'Copertina (AI), non da ComicVine — deciso su #70: la risorsa `issue` '
-    'di ComicVine non espone editore/data/prezzo/pagine/lingua/colore/EAN, '
-    "solo l'AI che ha letto la copertina scansionata li fornisce",
-    () async {
-      final scansioneId = await scansioneConAnalisi(
-        publisher: 'Marvel Worldwide Inc.',
-        releaseDate: 'febbraio 2013',
-        price: r'$7,99',
-        pageCount: 104,
-        language: 'inglese',
-        color: 'a colori',
-        barcode: '75960604716170011',
-      );
-      final identificazioneId = await repo.avviaIdentificazione(
-        scansioneId: scansioneId,
-      );
-      await repo.aggiungiCandidato(
-        identificazioneId: identificazioneId,
-        source: FonteCandidato.esterno,
-        punteggio: 78,
-        title: 'The Amazing Spider-Man',
-        issueNumberLabel: '700',
-        coverImageUrl: 'https://comicvine.example/700.jpg',
-      );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+  test("confermaCandidato esterno: i campi bibliografici vengono dall'Analisi "
+      'Copertina (AI), non da ComicVine — deciso su #70: la risorsa `issue` '
+      'di ComicVine non espone editore/data/prezzo/pagine/lingua/colore/EAN, '
+      "solo l'AI che ha letto la copertina scansionata li fornisce", () async {
+    final scansioneId = await scansioneConAnalisi(
+      publisher: 'Marvel Worldwide Inc.',
+      releaseDate: 'febbraio 2013',
+      price: r'$7,99',
+      pageCount: 104,
+      language: 'inglese',
+      color: 'a colori',
+      barcode: '75960604716170011',
+    );
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    await repo.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.esterno,
+      punteggio: 78,
+      title: 'The Amazing Spider-Man',
+      issueNumberLabel: '700',
+      coverImageUrl: 'https://comicvine.example/700.jpg',
+    );
+    final candidato = (await candidati(scansioneId)).single;
 
-      final copiaId = await repo.confermaCandidato(
-        candidato: candidato,
-        scansioneId: scansioneId,
-      );
+    final copiaId = await repo.confermaCandidato(
+      candidato: candidato,
+      scansioneId: scansioneId,
+    );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
-      expect(edizione.publisher, 'Marvel Worldwide Inc.');
-      expect(edizione.releaseDate, 'febbraio 2013');
-      expect(edizione.coverPrice, r'$7,99');
-      expect(edizione.pageCount, 104);
-      expect(edizione.language, 'inglese');
-      expect(edizione.color, 'a colori');
-      expect(edizione.ean, '75960604716170011');
-      // Titolo/numero: nessun conflitto in questo caso, ma verificati per
-      // completezza — arrivano comunque dal Candidato quando l'AI non li
-      // sovrascrive con un valore proprio.
-      expect(edizione.issueNumberLabel, '700');
-    },
-  );
+    final (edizione, _) = await edizioneDiCopia(copiaId);
+    expect(edizione.publisher, 'Marvel Worldwide Inc.');
+    expect(edizione.releaseDate, 'febbraio 2013');
+    expect(edizione.coverPrice, r'$7,99');
+    expect(edizione.pageCount, 104);
+    expect(edizione.language, 'inglese');
+    expect(edizione.color, 'a colori');
+    expect(edizione.ean, '75960604716170011');
+    // Titolo/numero: nessun conflitto in questo caso, ma verificati per
+    // completezza — arrivano comunque dal Candidato quando l'AI non li
+    // sovrascrive con un valore proprio.
+    expect(edizione.issueNumberLabel, '700');
+  });
 
-  test(
-    'confermaCandidato esterno: Tipo di stampa/Classificazione/Descrizione '
-    "vengono dall'Analisi Copertina (AI), nessun ripiego sul Candidato — "
-    'deciso su #71/#74: la risorsa `issue` di ComicVine non espone questi '
-    "campi, l'AI è l'unica fonte",
-    () async {
-      final scansioneId = await scansioneConAnalisi(
-        printingType: 'Direct Edition',
-        classificazione: 'Rated T+',
-        description: 'Peter Parker affronta il Green Goblin.',
-      );
-      final identificazioneId = await repo.avviaIdentificazione(
-        scansioneId: scansioneId,
-      );
-      await repo.aggiungiCandidato(
-        identificazioneId: identificazioneId,
-        source: FonteCandidato.esterno,
-        punteggio: 78,
-        title: 'The Amazing Spider-Man',
-        issueNumberLabel: '700',
-        coverImageUrl: 'https://comicvine.example/700.jpg',
-      );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+  test('confermaCandidato esterno: Tipo di stampa/Classificazione/Descrizione '
+      "vengono dall'Analisi Copertina (AI), nessun ripiego sul Candidato — "
+      'deciso su #71/#74: la risorsa `issue` di ComicVine non espone questi '
+      "campi, l'AI è l'unica fonte", () async {
+    final scansioneId = await scansioneConAnalisi(
+      printingType: 'Direct Edition',
+      classificazione: 'Rated T+',
+      description: 'Peter Parker affronta il Green Goblin.',
+    );
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    await repo.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.esterno,
+      punteggio: 78,
+      title: 'The Amazing Spider-Man',
+      issueNumberLabel: '700',
+      coverImageUrl: 'https://comicvine.example/700.jpg',
+    );
+    final candidato = (await candidati(scansioneId)).single;
 
-      final copiaId = await repo.confermaCandidato(
-        candidato: candidato,
-        scansioneId: scansioneId,
-      );
+    final copiaId = await repo.confermaCandidato(
+      candidato: candidato,
+      scansioneId: scansioneId,
+    );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
-      expect(edizione.printingType, 'Direct Edition');
-      expect(edizione.classificazione, 'Rated T+');
-      expect(edizione.description, 'Peter Parker affronta il Green Goblin.');
-    },
-  );
+    final (edizione, _) = await edizioneDiCopia(copiaId);
+    expect(edizione.printingType, 'Direct Edition');
+    expect(edizione.classificazione, 'Rated T+');
+    expect(edizione.description, 'Peter Parker affronta il Green Goblin.');
+  });
 
   test(
     'confermaCandidato esterno: Tipo di stampa/Classificazione/Descrizione '
@@ -952,20 +929,14 @@ void contrattoIdentificazione(CreaAdapter crea) {
         issueNumberLabel: '700',
         coverImageUrl: 'https://comicvine.example/700.jpg',
       );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+      final candidato = (await candidati(scansioneId)).single;
 
       final copiaId = await repo.confermaCandidato(
         candidato: candidato,
         scansioneId: scansioneId,
       );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      final (edizione, _) = await edizioneDiCopia(copiaId);
       expect(edizione.printingType, isNull);
       expect(edizione.classificazione, isNull);
       expect(edizione.description, isNull);
@@ -993,28 +964,16 @@ void contrattoIdentificazione(CreaAdapter crea) {
         issueNumberLabel: '015',
         coverImageUrl: 'https://comicvine.example/15.jpg',
       );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+      final candidato = (await candidati(scansioneId)).single;
 
       final copiaId = await repo.confermaCandidato(
         candidato: candidato,
         scansioneId: scansioneId,
       );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
-      final opera = await (adapter.drift.select(
-        adapter.drift.opere,
-      )..where((o) => o.id.equals(edizione.operaId))).getSingle();
-      final serie = await (adapter.drift.select(
-        adapter.drift.serieTable,
-      )..where((s) => s.id.equals(edizione.serieId!))).getSingle();
-      expect(opera.title, 'Amazing Fantasy 15');
-      expect(serie.name, 'Amazing Fantasy');
+      final (edizione, _) = await edizioneDiCopia(copiaId);
+      expect(edizione.titolo, 'Amazing Fantasy 15');
+      expect(edizione.serieName, 'Amazing Fantasy');
       expect(edizione.issueNumberLabel, '15');
     },
   );
@@ -1035,91 +994,67 @@ void contrattoIdentificazione(CreaAdapter crea) {
         title: 'Some Comic',
         coverImageUrl: 'https://comicvine.example/12.jpg',
       );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+      final candidato = (await candidati(scansioneId)).single;
 
       final copiaId = await repo.confermaCandidato(
         candidato: candidato,
         scansioneId: scansioneId,
       );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
+      final (edizione, _) = await edizioneDiCopia(copiaId);
       expect(edizione.issueNumberLabel, '12');
       expect(edizione.issueNumber, 12);
     },
   );
 
-  test(
-    "confermaCandidato esterno: l'anno letto dall'AI (campo strutturato a "
-    'sé, deciso su #81) viene salvato sull\'Edizione',
-    () async {
-      final scansioneId = await scansioneConAnalisi(year: 1988);
-      final identificazioneId = await repo.avviaIdentificazione(
-        scansioneId: scansioneId,
-      );
-      await repo.aggiungiCandidato(
-        identificazioneId: identificazioneId,
-        source: FonteCandidato.esterno,
-        punteggio: 78,
-        title: 'Some Comic',
-        coverImageUrl: 'https://comicvine.example/12.jpg',
-      );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+  test("confermaCandidato esterno: l'anno letto dall'AI (campo strutturato a "
+      'sé, deciso su #81) viene salvato sull\'Edizione', () async {
+    final scansioneId = await scansioneConAnalisi(year: 1988);
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    await repo.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.esterno,
+      punteggio: 78,
+      title: 'Some Comic',
+      coverImageUrl: 'https://comicvine.example/12.jpg',
+    );
+    final candidato = (await candidati(scansioneId)).single;
 
-      final copiaId = await repo.confermaCandidato(
-        candidato: candidato,
-        scansioneId: scansioneId,
-      );
+    final copiaId = await repo.confermaCandidato(
+      candidato: candidato,
+      scansioneId: scansioneId,
+    );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
-      expect(edizione.year, 1988);
-    },
-  );
+    final (edizione, _) = await edizioneDiCopia(copiaId);
+    expect(edizione.year, 1988);
+  });
 
-  test(
-    "confermaCandidato esterno: l'anno del Candidato è il ripiego quando "
-    "l'AI non l'ha letto",
-    () async {
-      final scansioneId = await scansioneConAnalisi();
-      final identificazioneId = await repo.avviaIdentificazione(
-        scansioneId: scansioneId,
-      );
-      await repo.aggiungiCandidato(
-        identificazioneId: identificazioneId,
-        source: FonteCandidato.esterno,
-        punteggio: 78,
-        title: 'Some Comic',
-        year: 1988,
-        coverImageUrl: 'https://comicvine.example/12.jpg',
-      );
-      final candidato =
-          (await repo.watchIdentificazione(scansioneId).first).candidati.single;
+  test("confermaCandidato esterno: l'anno del Candidato è il ripiego quando "
+      "l'AI non l'ha letto", () async {
+    final scansioneId = await scansioneConAnalisi();
+    final identificazioneId = await repo.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    await repo.aggiungiCandidato(
+      identificazioneId: identificazioneId,
+      source: FonteCandidato.esterno,
+      punteggio: 78,
+      title: 'Some Comic',
+      year: 1988,
+      coverImageUrl: 'https://comicvine.example/12.jpg',
+    );
+    final candidato = (await candidati(scansioneId)).single;
 
-      final copiaId = await repo.confermaCandidato(
-        candidato: candidato,
-        scansioneId: scansioneId,
-      );
+    final copiaId = await repo.confermaCandidato(
+      candidato: candidato,
+      scansioneId: scansioneId,
+    );
 
-      final copia = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      final edizione = await (adapter.drift.select(
-        adapter.drift.edizioni,
-      )..where((e) => e.id.equals(copia.edizioneId))).getSingle();
-      expect(edizione.year, 1988);
-    },
-  );
+    final (edizione, _) = await edizioneDiCopia(copiaId);
+    expect(edizione.year, 1988);
+  });
 
   test(
     'aggiungiCopia con scansioneId collega la Copia alla Scansione di origine',
@@ -1128,16 +1063,65 @@ void contrattoIdentificazione(CreaAdapter crea) {
       final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
       final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
 
-      final copiaId = await repo.aggiungiCopia(
+      await repo.aggiungiCopia(
         edizioneId: edizioneId,
         status: StatoCopia.posseduta,
         scansioneId: scansioneId,
       );
 
-      final riga = await (adapter.drift.select(
-        adapter.drift.copie,
-      )..where((c) => c.id.equals(copiaId))).getSingle();
-      expect(riga.scansioneId, scansioneId);
+      expect(await confermata(scansioneId), isTrue);
     },
   );
+
+  test(
+    'coverImagePerScansione restituisce una cover per aggiungiEdizione che '
+    "si risolve nell'immagine della Scansione (inserimento manuale, #63)",
+    () async {
+      final repoConBase = repoConCover();
+      final scansioneId = await scansione();
+
+      final cover = await repoConBase.coverImagePerScansione(scansioneId);
+      final operaId = await repoConBase.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repoConBase.aggiungiEdizione(
+        operaId: operaId,
+        coverImage: cover,
+      );
+
+      expect(await repoConBase.coverImageGrezzoDi(edizioneId), cover);
+      final risolta = await repoConBase.risolviCoverImage(cover);
+      expect(File(risolta!).readAsBytesSync(), bytesImmagineScansione);
+    },
+  );
+
+  test('ripristinaCoverMancantiDaScansione ridà la cover della Scansione alle '
+      'sole Edizioni senza cover con una Copia scansionata', () async {
+    final repoConBase = repoConCover();
+    final operaId = await repo.aggiungiOpera(title: 'Batman');
+    final senzaCover = await repo.aggiungiEdizione(operaId: operaId);
+    final conCover = await repo.aggiungiEdizione(
+      operaId: operaId,
+      coverImage: 'https://example/42.jpg',
+    );
+    final senzaScansione = await repo.aggiungiEdizione(operaId: operaId);
+    for (final edizioneId in [senzaCover, conCover]) {
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+        scansioneId: await scansione(),
+      );
+    }
+    await repo.aggiungiCopia(
+      edizioneId: senzaScansione,
+      status: StatoCopia.posseduta,
+    );
+
+    final ripristinate = await repoConBase.ripristinaCoverMancantiDaScansione();
+
+    expect(ripristinate, 1);
+    final cover = await repoConBase.coverImageGrezzoDi(senzaCover);
+    final risolta = await repoConBase.risolviCoverImage(cover);
+    expect(File(risolta!).readAsBytesSync(), bytesImmagineScansione);
+    expect(await repo.coverImageGrezzoDi(conCover), 'https://example/42.jpg');
+    expect(await repo.coverImageGrezzoDi(senzaScansione), isNull);
+  });
 }

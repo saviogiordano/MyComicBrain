@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,7 +18,7 @@ class _FakeComicVineClient implements ComicVineClient {
   _FakeComicVineClient({this.risultati = const [], this.eccezione});
 
   final List<ComicVineIssueMatch> risultati;
-  final ComicVineException? eccezione;
+  final Exception? eccezione;
   bool chiamato = false;
 
   @override
@@ -174,6 +176,29 @@ void main() {
   );
 
   test(
+    'un errore imprevisto (es. rete verso il database) porta lo stato a '
+    'fallita invece di lasciarlo inCorso: lo schermo di conferma resterebbe '
+    'in attesa per sempre (bug osservato su Supabase)',
+    () async {
+      final scansioneId = await scansioneConAnalisiCompletata(
+        title: 'Un fumetto mai visto',
+      );
+      final pipeline = IdentificazionePipeline(
+        repository: repo,
+        comicVineClient: _FakeComicVineClient(
+          eccezione: const SocketException('connessione persa'),
+        ),
+      );
+
+      await pipeline.identifica(scansioneId: scansioneId);
+
+      final identificazione = await unicaIdentificazione();
+      expect(identificazione.status, StatoIdentificazione.fallita);
+      expect(identificazione.errorMessage, contains('connessione persa'));
+    },
+  );
+
+  test(
     'un fallimento tecnico di ComicVine porta lo stato a fallita, nessuna eccezione propagata',
     () async {
       final scansioneId = await scansioneConAnalisiCompletata(
@@ -233,11 +258,13 @@ void main() {
             'la relazione con scansioneId è 1:1: una seconda riga la '
             'romperebbe (stesso meccanismo del bug #86 su AnalisiCopertina)',
       );
-      final candidati = await (db.select(
-        db.candidatiTable,
-      )..where(
-        (c) => c.identificazioneId.equals(secondaIdentificazione.id),
-      )).get();
+      final candidati =
+          await (db.select(
+                db.candidatiTable,
+              )..where(
+                (c) => c.identificazioneId.equals(secondaIdentificazione.id),
+              ))
+              .get();
       expect(
         candidati,
         hasLength(1),

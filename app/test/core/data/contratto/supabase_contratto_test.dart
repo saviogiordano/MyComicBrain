@@ -4,6 +4,7 @@ import '../analisi_copertina_repository_test.dart';
 import '../collezione_repository_test.dart';
 import '../cover_repository_test.dart';
 import '../creator_repository_test.dart';
+import '../identificazione_repository_test.dart';
 import '../scheda_repository_test.dart';
 import 'adapter_supabase_locale.dart';
 
@@ -25,6 +26,7 @@ void main() {
       group('Scheda', () => contrattoScheda(factory));
       group('Collezione', () => contrattoCollezione(factory));
       group('AnalisiCopertina', () => contrattoAnalisiCopertina(factory));
+      group('Identificazione', () => contrattoIdentificazione(factory));
     },
     skip: crea == null
         ? 'Stack Supabase locale non configurato: '

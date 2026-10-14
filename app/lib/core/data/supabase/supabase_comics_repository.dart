@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
+import 'package:mycomicbrain/core/data/conferma_candidato.dart';
+import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/supabase/invalidazione_tabelle.dart';
@@ -8,10 +10,12 @@ import 'package:mycomicbrain/core/data/supabase/uuid_v4.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/creator.dart';
+import 'package:mycomicbrain/core/domain/edizione_catalogo.dart';
 import 'package:mycomicbrain/core/domain/edizione_collezione.dart';
 import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
 import 'package:mycomicbrain/core/domain/genere.dart';
+import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:mycomicbrain/core/domain/ricerca_assistente.dart';
 import 'package:mycomicbrain/core/domain/valore_stimato.dart';
 import 'package:path/path.dart' as p;
@@ -20,6 +24,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 part 'supabase_catalogo.dart';
 part 'supabase_collezione.dart';
+part 'supabase_identificazione.dart';
 part 'supabase_scansioni.dart';
 
 /// I bucket Storage privati di ADR-0007, con la cartella della cache su
@@ -40,13 +45,18 @@ enum _Bucket {
 /// barriera di autorizzazione.
 ///
 /// Le aree portate stanno in file `part` (`supabase_catalogo.dart`,
-/// `supabase_collezione.dart`, `supabase_scansioni.dart`).
+/// `supabase_collezione.dart`, `supabase_scansioni.dart`,
+/// `supabase_identificazione.dart`).
 /// Il porting procede per fette (mappa #165): i metodi non ancora portati
 /// lanciano [UnimplementedError] tramite [noSuchMethod]. Il login resta
 /// dietro `ACCOUNT_LOGIN` finché la suite di contratto non passa per intero
 /// anche qui.
 class SupabaseComicsRepository
-    with _CatalogoSupabase, _CollezioneSupabase, _ScansioniSupabase
+    with
+        _CatalogoSupabase,
+        _CollezioneSupabase,
+        _ScansioniSupabase,
+        _IdentificazioneSupabase
     implements ComicsRepository {
   SupabaseComicsRepository(
     this._client, {
@@ -54,9 +64,11 @@ class SupabaseComicsRepository
     Future<Directory> Function()? cartellaCache,
     Future<Directory> Function()? cartellaScansioni,
     InvalidazioneTabelle? invalidazione,
+    CopertinaDownloader? copertinaDownloader,
   }) : _cartellaCache = cartellaCache ?? getApplicationCacheDirectory,
        _cartellaScansioni = cartellaScansioni ?? ScansioneStorage().cartella,
-       _invalidazione = invalidazione ?? InvalidazioneTabelle();
+       _invalidazione = invalidazione ?? InvalidazioneTabelle(),
+       _copertinaDownloader = copertinaDownloader ?? CopertinaDownloader();
 
   @override
   final SupabaseClient _client;
@@ -69,6 +81,11 @@ class SupabaseComicsRepository
   final Future<Directory> Function() _cartellaScansioni;
   @override
   final InvalidazioneTabelle _invalidazione;
+
+  /// Scarica le cover ComicVine dei Candidati esterni prima di caricarle in
+  /// `covers/`; il file scaricato è temporaneo.
+  @override
+  final CopertinaDownloader _copertinaDownloader;
 
   Future<String>? _collectionId;
   final _downloadInCorso = <String, Future<String?>>{};

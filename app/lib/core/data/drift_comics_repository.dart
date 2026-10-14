@@ -2,13 +2,12 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
+import 'package:mycomicbrain/core/data/conferma_candidato.dart';
 import 'package:mycomicbrain/core/data/copertina_downloader.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/exchange_rate_client.dart';
 import 'package:mycomicbrain/core/data/importazione_schema.dart';
-import 'package:mycomicbrain/core/data/numero_pulito.dart';
 import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
-import 'package:mycomicbrain/core/data/prezzo_pulito.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/catalogo_stampabile.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
@@ -807,115 +806,67 @@ class DriftComicsRepository implements ComicsRepository {
       // Un candidato `esterno` presuppone un'Analisi Copertina completata
       // (l'Identificazione parte solo dopo, vedi commento su
       // `analisiCopertinaPerScansione`).
-      edizioneId = await _creaEdizioneDaCandidato(
-        candidato,
-        scansioneId,
-        analisi!,
-      );
+      edizioneId = await _creaEdizioneDaCandidato(candidato, analisi!);
     }
 
-    final prezzo = prezzoDaTesto(analisi?.price);
+    final prezzo = prezzoCopiaConfermata(analisi);
     return aggiungiCopia(
       edizioneId: edizioneId,
       status: StatoCopia.posseduta,
-      condition: CondizioneCopia.fine,
+      condition: condizioneCopiaConfermata,
       purchasePrice: prezzo?.importo,
       purchasePriceCurrency: prezzo?.valuta,
       scansioneId: scansioneId,
     );
   }
 
-  /// Crea Opera/Serie/Edizione per un Candidato `esterno` (ComicVine). I
-  /// campi bibliografici (§8.1) vengono presi dall'Analisi Copertina di
-  /// questa Scansione quando disponibili — l'estrazione AI (OCR §6.1 /
-  /// computer vision §6.2) legge la copertina scansionata stessa, mentre la
-  /// risorsa `issue` di ComicVine non espone quasi nessuno di questi campi
-  /// (nemmeno l'editore, vedi commento su `MatchingEngine.candidatiEsterni`)
-  /// — usarla come unica fonte lasciava l'Edizione quasi vuota (bug
-  /// osservato, deciso su #70). ComicVine resta la fonte per titolo/serie/
-  /// numero solo come ripiego quando l'AI non li ha letti, e per la cover
-  /// (sempre, [_coverImagePerCandidato]). Descrizione/Tipo di stampa/
-  /// Classificazione (deciso su #71/#74) non hanno ripiego su `candidato`:
-  /// la risorsa `issue` di ComicVine non li espone comunque, l'AI è l'unica
-  /// fonte.
+  /// Crea Opera/Serie/Edizione per un Candidato `esterno` (ComicVine) con i
+  /// campi di [nuovaEdizioneDaCandidato] e la cover di
+  /// [_coverImagePerCandidato].
   Future<int> _creaEdizioneDaCandidato(
     Candidato candidato,
-    int scansioneId,
     AnalisiCopertinaTableData analisi,
   ) async {
-    final title =
-        _nonVuoto(analisi.title) ??
-        candidato.title ??
-        candidato.seriesName ??
-        'Senza titolo';
-    final operaId = await aggiungiOpera(title: title);
-
-    final seriesName = _nonVuoto(analisi.seriesName) ?? candidato.seriesName;
-    int? serieId;
-    if (seriesName != null) {
-      serieId = await aggiungiSerie(name: seriesName);
-    }
-
-    final issueNumberLabel =
-        numeroPulito(analisi.issueNumberLabel) ?? candidato.issueNumberLabel;
-    // `barcode` prima di `isbn`, stessa priorità di
-    // `InserisciManualmentePage._prefill`: sulle edizioni italiane da
-    // edicola è quasi sempre l'EAN periodico quello riportato in copertina.
-    final ean = _nonVuoto(analisi.barcode) ?? _nonVuoto(analisi.isbn);
-
+    final e = nuovaEdizioneDaCandidato(candidato, analisi);
+    final operaId = await aggiungiOpera(title: e.title);
+    final seriesName = e.seriesName;
+    final serieId = seriesName == null
+        ? null
+        : await aggiungiSerie(name: seriesName);
     return aggiungiEdizione(
       operaId: operaId,
       serieId: serieId,
-      publisher: _nonVuoto(analisi.publisher) ?? candidato.publisher,
-      issueNumber: numeroIntero(issueNumberLabel),
-      issueNumberLabel: issueNumberLabel,
+      publisher: e.publisher,
+      issueNumber: e.issueNumber,
+      issueNumberLabel: e.issueNumberLabel,
       coverImage: await _coverImagePerCandidato(candidato),
-      releaseDate: _nonVuoto(analisi.releaseDate),
-      year: analisi.year ?? candidato.year,
-      coverPrice: _nonVuoto(analisi.price),
-      pageCount: analisi.pageCount,
-      language: _nonVuoto(analisi.language),
-      color: _nonVuoto(analisi.color),
-      ean: ean,
-      description: _nonVuoto(analisi.description),
-      printingType: _nonVuoto(analisi.printingType),
-      classificazione: _nonVuoto(analisi.classificazione),
+      releaseDate: e.releaseDate,
+      year: e.year,
+      coverPrice: e.coverPrice,
+      pageCount: e.pageCount,
+      language: e.language,
+      color: e.color,
+      ean: e.ean,
+      description: e.description,
+      printingType: e.printingType,
+      classificazione: e.classificazione,
     );
   }
 
-  /// Un candidato `interno` conferma una seconda Copia su un'Edizione già
-  /// catalogata (richiesta utente): normalmente [confermaCandidato] non
-  /// tocca più nessun campo bibliografico di quell'Edizione, ma se questa
-  /// non ha ancora una Descrizione — creata prima che l'AI la generasse, o
-  /// da un'Analisi Copertina che allora non l'aveva letta — e la nuova
-  /// Analisi Copertina di questa Scansione sì, la si applica invece di
-  /// scartarla: una trama già disponibile non deve andare persa dietro una
-  /// seconda copia confermata come `interno`. Non sovrascrive mai una
-  /// Descrizione già presente (stesso principio "primo valore buono vince"
-  /// già in vigore su [_creaEdizioneDaCandidato], qui applicato in un punto
-  /// dove l'Edizione normalmente non verrebbe toccata affatto).
+  /// Completa la Descrizione di un'Edizione già catalogata con quella di
+  /// [descrizioneDaCompletare], senza mai sovrascriverne una presente.
   Future<void> _completaDescrizioneMancante(
     int edizioneId,
     AnalisiCopertinaTableData? analisi,
   ) async {
-    final descrizioneAi = _nonVuoto(analisi?.description);
+    final descrizioneAi = descrizioneDaCompletare(analisi);
     if (descrizioneAi == null) return;
     final edizione = await (_db.select(
       _db.edizioni,
     )..where((e) => e.id.equals(edizioneId))).getSingleOrNull();
-    if (edizione == null || _nonVuoto(edizione.description) != null) return;
+    if (edizione == null || nonVuoto(edizione.description) != null) return;
     await (_db.update(_db.edizioni)..where((e) => e.id.equals(edizioneId)))
         .write(EdizioniCompanion(description: Value(descrizioneAi)));
-  }
-
-  /// `null`/stringa vuota o di soli spazi normalizzati a `null` — stesso
-  /// trattamento di `InserisciManualmentePage._valore`: Claude a volte
-  /// restituisce una stringa vuota invece di `null` nonostante il prompt
-  /// (osservato empiricamente), che altrimenti scavalcherebbe il ripiego su
-  /// ComicVine come se fosse un valore valido.
-  String? _nonVuoto(String? v) {
-    final t = v?.trim();
-    return (t == null || t.isEmpty) ? null : t;
   }
 
   /// La cover da salvare sull'Edizione creata da un Candidato esterno: una
