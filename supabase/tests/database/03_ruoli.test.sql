@@ -11,16 +11,16 @@ select tests.collection_of(:'owner') as col \gset
 insert into public.collection_members (collection_id, user_id, role) values
   (:'col', :'editor', 'editor'),
   (:'col', :'viewer', 'viewer');
-insert into public.opere (id, collection_id, title) values (101, :'col', 'Martin Mystère');
-insert into public.edizioni (id, collection_id, opera_id, issue_number) values (101, :'col', 101, 1);
-insert into public.copie (id, collection_id, edizione_id, status) values (101, :'col', 101, 'posseduta');
+insert into public.opere (id, collection_id, title) values (tests.id(101), :'col', 'Martin Mystère');
+insert into public.edizioni (id, collection_id, opera_id, issue_number) values (tests.id(101), :'col', tests.id(101), 1);
+insert into public.copie (id, collection_id, edizione_id, status) values (tests.id(101), :'col', tests.id(101), 'posseduta');
 
 -- Visualizzatore: legge, non scrive.
 select tests.authenticate_as(:'viewer');
-select results_eq($$ select id from public.copie $$, $$ values (101::bigint) $$,
+select results_eq($$ select id from public.copie $$, $$ values (tests.id(101)) $$,
   'il Visualizzatore legge le Copie della Collezione');
 select throws_ok(
-  format($$ insert into public.copie (collection_id, edizione_id, status) values (%L, 101, 'posseduta') $$, :'col'),
+  format($$ insert into public.copie (collection_id, edizione_id, status) values (%L, tests.id(101), 'posseduta') $$, :'col'),
   '42501', null, 'il Visualizzatore non inserisce Copie');
 select is(tests.affected($$ update public.copie set notes = 'x' $$), 0,
   'il Visualizzatore non modifica Copie');
@@ -31,13 +31,13 @@ reset role;
 -- Editor: legge e scrive.
 select tests.authenticate_as(:'editor');
 select lives_ok(
-  format($$ insert into public.copie (id, collection_id, edizione_id, status) values (102, %L, 101, 'prestata') $$, :'col'),
+  format($$ insert into public.copie (id, collection_id, edizione_id, status) values (tests.id(102), %L, tests.id(101), 'prestata') $$, :'col'),
   'l''Editor inserisce Copie');
-select is(tests.affected($$ update public.copie set notes = 'riletto' where id = 101 $$), 1,
+select is(tests.affected($$ update public.copie set notes = 'riletto' where id = tests.id(101) $$), 1,
   'l''Editor modifica Copie');
-select is(tests.affected($$ delete from public.copie where id = 102 $$), 1,
+select is(tests.affected($$ delete from public.copie where id = tests.id(102) $$), 1,
   'l''Editor cancella Copie');
-select is((select created_by from public.opere where id = 101), null::uuid,
+select is((select created_by from public.opere where id = tests.id(101)), null::uuid,
   'righe inserite come postgres non hanno autore');
 select throws_ok(
   format($$ insert into public.collection_members (collection_id, user_id, role) values (%L, %L, 'editor') $$, :'col', :'editor'),
