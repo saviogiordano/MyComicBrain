@@ -300,7 +300,7 @@ class _ModificaSerieSheetState extends ConsumerState<_ModificaSerieSheet> {
               : ComicCoverImage(
                   coverImage: _coverPreview,
                   titolo: widget.serie.nome,
-                  numero: widget.serie.serieId,
+                  numero: semeCopertina(widget.serie.serieId),
                   etichetta: '',
                   compatto: true,
                 ),

@@ -25,7 +25,7 @@ class CandidatoProposto {
 
   final FonteCandidato source;
   final double punteggio;
-  final int? edizioneId;
+  final String? edizioneId;
   final String? title;
   final String? seriesName;
   final String? issueNumberLabel;
@@ -82,7 +82,7 @@ class MatchingEngine {
   List<CandidatoProposto> candidatiInterni({
     required AnalisiCopertinaTableData analisi,
     required List<EdizioneCatalogo> catalogo,
-    required Map<int, Set<int>> numeriPossedutiPerSerie,
+    required Map<String, Set<int>> numeriPossedutiPerSerie,
   }) {
     final candidati = <CandidatoProposto>[];
     for (final edizione in catalogo) {
@@ -122,7 +122,7 @@ class MatchingEngine {
     required AnalisiCopertinaTableData analisi,
     required List<ComicVineIssueMatch> risultati,
     required List<EdizioneCatalogo> catalogo,
-    required Map<int, Set<int>> numeriPossedutiPerSerie,
+    required Map<String, Set<int>> numeriPossedutiPerSerie,
   }) {
     final candidati = <CandidatoProposto>[];
     for (final issue in risultati) {
@@ -159,9 +159,9 @@ class MatchingEngine {
     required String? seriesName,
     required String? issueNumberLabel,
     required String? publisher,
-    required int? serieId,
+    required String? serieId,
     required int? issueNumero,
-    required Map<int, Set<int>> numeriPossedutiPerSerie,
+    required Map<String, Set<int>> numeriPossedutiPerSerie,
   }) {
     // Titolo e nome Serie sono identici per *ogni* albo della stessa
     // testata — non possono da soli discriminare fra numeri diversi.
@@ -266,9 +266,9 @@ class MatchingEngine {
   /// adiacente ai numeri già posseduti in quella Serie (es. si possiedono i
   /// numeri 1-3, il candidato è il 4).
   double _bonusDiContesto({
-    required int? serieId,
+    required String? serieId,
     required int? issueNumero,
-    required Map<int, Set<int>> numeriPossedutiPerSerie,
+    required Map<String, Set<int>> numeriPossedutiPerSerie,
   }) {
     if (serieId == null || issueNumero == null) return 0;
     final posseduti = numeriPossedutiPerSerie[serieId];
@@ -283,12 +283,12 @@ class MatchingEngine {
   /// (sopra [_sogliaMatchSerie]), usata per collegare un candidato esterno
   /// al contesto della collezione (Livello 5) prima che esista una sua
   /// Edizione. `null` se nessuna Serie combacia abbastanza.
-  int? _risolviSerieId(String? seriesName, List<EdizioneCatalogo> catalogo) {
+  String? _risolviSerieId(String? seriesName, List<EdizioneCatalogo> catalogo) {
     if (seriesName == null || seriesName.trim().isEmpty) return null;
 
-    int? migliorId;
+    String? migliorId;
     var miglioreSimilarita = 0.0;
-    final visti = <int>{};
+    final visti = <String>{};
     for (final edizione in catalogo) {
       final serieId = edizione.serieId;
       final nomeSerie = edizione.seriesName;

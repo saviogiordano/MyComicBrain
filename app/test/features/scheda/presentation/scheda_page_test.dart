@@ -41,9 +41,9 @@ void main() {
     await tempBase.delete(recursive: true);
   });
 
-  Future<int> operaEdizione({
+  Future<String> operaEdizione({
     String titolo = 'Batman',
-    int? serieId,
+    String? serieId,
     String? volume,
     String? description,
     String? printingType,
@@ -62,7 +62,7 @@ void main() {
 
   Future<void> pumpScheda(
     WidgetTester tester, {
-    required int edizioneId,
+    required String edizioneId,
   }) async {
     tester.view.physicalSize = const Size(800, 3000);
     tester.view.devicePixelRatio = 1;
@@ -75,7 +75,7 @@ void main() {
         GoRoute(
           path: '/scheda/:id',
           builder: (context, state) =>
-              SchedaPage(edizioneId: int.parse(state.pathParameters['id']!)),
+              SchedaPage(edizioneId: state.pathParameters['id']!),
         ),
       ],
     );
@@ -261,7 +261,7 @@ void main() {
           GoRoute(
             path: '/scheda/:id',
             builder: (context, state) =>
-                SchedaPage(edizioneId: int.parse(state.pathParameters['id']!)),
+                SchedaPage(edizioneId: state.pathParameters['id']!),
           ),
         ],
       );

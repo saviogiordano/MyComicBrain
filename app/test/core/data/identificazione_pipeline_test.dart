@@ -63,7 +63,7 @@ void main() {
 
   tearDown(() => db.close());
 
-  Future<int> scansioneConAnalisiCompletata({
+  Future<String> scansioneConAnalisiCompletata({
     String? title,
     String? seriesName,
     String? issueNumberLabel,

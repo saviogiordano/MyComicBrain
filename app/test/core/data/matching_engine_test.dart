@@ -17,8 +17,8 @@ AnalisiCopertinaTableData _analisi({
   String? recognizedPublisherLogo,
   String? recognizedSeriesLogo,
 }) => AnalisiCopertinaTableData(
-  id: 1,
-  scansioneId: 1,
+  id: '1',
+  scansioneId: '1',
   title: title,
   seriesName: seriesName,
   issueNumberLabel: issueNumberLabel,
@@ -33,9 +33,9 @@ AnalisiCopertinaTableData _analisi({
 );
 
 EdizioneCatalogo _edizione({
-  int edizioneId = 1,
+  String edizioneId = '1',
   String title = 'Batman',
-  int? serieId,
+  String? serieId,
   String? seriesName,
   String? publisher,
   int? issueNumber,
@@ -100,18 +100,21 @@ void main() {
       expect(candidati.single.punteggio, 100);
     });
 
-    test('nessun campo comparabile su nessun lato produce punteggio zero, escluso', () {
-      final analisi = _analisi();
-      final edizione = _edizione(seriesName: 'Batman (1940)');
+    test(
+      'nessun campo comparabile su nessun lato produce punteggio zero, escluso',
+      () {
+        final analisi = _analisi();
+        final edizione = _edizione(seriesName: 'Batman (1940)');
 
-      final candidati = motore.candidatiInterni(
-        analisi: analisi,
-        catalogo: [edizione],
-        numeriPossedutiPerSerie: const {},
-      );
+        final candidati = motore.candidatiInterni(
+          analisi: analisi,
+          catalogo: [edizione],
+          numeriPossedutiPerSerie: const {},
+        );
 
-      expect(candidati, isEmpty);
-    });
+        expect(candidati, isEmpty);
+      },
+    );
 
     test('sotto la soglia minima il candidato non viene proposto', () {
       final analisi = _analisi(title: 'Batman', seriesName: 'Batman (1940)');
@@ -126,69 +129,84 @@ void main() {
       expect(candidati, isEmpty);
     });
 
-    test('il boost CV corrobora un match testuale parziale senza ribaltarlo da solo', () {
-      final analisiSenzaBoost = _analisi(title: 'Batman', seriesName: 'Detective Comic');
-      final analisiConBoost = _analisi(
-        title: 'Batman',
-        seriesName: 'Detective Comic',
-        characters: const ['Batman', 'Joker'],
-        recognizedPublisherLogo: 'DC Comics',
-      );
-      final edizione = _edizione(seriesName: 'Detective Comics', publisher: 'DC Comics');
+    test(
+      'il boost CV corrobora un match testuale parziale senza ribaltarlo da solo',
+      () {
+        final analisiSenzaBoost = _analisi(
+          title: 'Batman',
+          seriesName: 'Detective Comic',
+        );
+        final analisiConBoost = _analisi(
+          title: 'Batman',
+          seriesName: 'Detective Comic',
+          characters: const ['Batman', 'Joker'],
+          recognizedPublisherLogo: 'DC Comics',
+        );
+        final edizione = _edizione(
+          seriesName: 'Detective Comics',
+          publisher: 'DC Comics',
+        );
 
-      final senzaBoost = motore.candidatiInterni(
-        analisi: analisiSenzaBoost,
-        catalogo: [edizione],
-        numeriPossedutiPerSerie: const {},
-      );
-      final conBoost = motore.candidatiInterni(
-        analisi: analisiConBoost,
-        catalogo: [edizione],
-        numeriPossedutiPerSerie: const {},
-      );
+        final senzaBoost = motore.candidatiInterni(
+          analisi: analisiSenzaBoost,
+          catalogo: [edizione],
+          numeriPossedutiPerSerie: const {},
+        );
+        final conBoost = motore.candidatiInterni(
+          analisi: analisiConBoost,
+          catalogo: [edizione],
+          numeriPossedutiPerSerie: const {},
+        );
 
-      expect(senzaBoost, hasLength(1));
-      expect(conBoost, hasLength(1));
-      expect(conBoost.single.punteggio, greaterThan(senzaBoost.single.punteggio));
-      // Il boost da solo (nessun segnale testuale) non basta a superare la soglia.
-      final soloTag = motore.candidatiInterni(
-        analisi: _analisi(characters: const ['Batman']),
-        catalogo: [_edizione(title: 'Qualcosa di completamente diverso')],
-        numeriPossedutiPerSerie: const {},
-      );
-      expect(soloTag, isEmpty);
-    });
+        expect(senzaBoost, hasLength(1));
+        expect(conBoost, hasLength(1));
+        expect(
+          conBoost.single.punteggio,
+          greaterThan(senzaBoost.single.punteggio),
+        );
+        // Il boost da solo (nessun segnale testuale) non basta a superare la soglia.
+        final soloTag = motore.candidatiInterni(
+          analisi: _analisi(characters: const ['Batman']),
+          catalogo: [_edizione(title: 'Qualcosa di completamente diverso')],
+          numeriPossedutiPerSerie: const {},
+        );
+        expect(soloTag, isEmpty);
+      },
+    );
 
-    test('il bonus di contesto scatta solo per un numero adiacente a quelli posseduti', () {
-      // Nome OCR leggermente diverso, così il punteggio testuale resta
-      // sotto 100 e lascia spazio al bonus di contesto per differenziare.
-      final analisi = _analisi(seriesName: 'Spiderman');
-      final edizioneAdiacente = _edizione(
-        title: 'Spider-Man',
-        seriesName: 'Spider-Man',
-        serieId: 10,
-        issueNumber: 4,
-      );
-      final edizioneLontana = _edizione(
-        edizioneId: 2,
-        title: 'Spider-Man',
-        seriesName: 'Spider-Man',
-        serieId: 10,
-        issueNumber: 40,
-      );
+    test(
+      'il bonus di contesto scatta solo per un numero adiacente a quelli posseduti',
+      () {
+        // Nome OCR leggermente diverso, così il punteggio testuale resta
+        // sotto 100 e lascia spazio al bonus di contesto per differenziare.
+        final analisi = _analisi(seriesName: 'Spiderman');
+        final edizioneAdiacente = _edizione(
+          title: 'Spider-Man',
+          seriesName: 'Spider-Man',
+          serieId: '10',
+          issueNumber: 4,
+        );
+        final edizioneLontana = _edizione(
+          edizioneId: '2',
+          title: 'Spider-Man',
+          seriesName: 'Spider-Man',
+          serieId: '10',
+          issueNumber: 40,
+        );
 
-      final candidati = motore.candidatiInterni(
-        analisi: analisi,
-        catalogo: [edizioneAdiacente, edizioneLontana],
-        numeriPossedutiPerSerie: {
-          10: {1, 2, 3},
-        },
-      );
+        final candidati = motore.candidatiInterni(
+          analisi: analisi,
+          catalogo: [edizioneAdiacente, edizioneLontana],
+          numeriPossedutiPerSerie: {
+            '10': {1, 2, 3},
+          },
+        );
 
-      final adiacente = candidati.firstWhere((c) => c.edizioneId == 1);
-      final lontana = candidati.firstWhere((c) => c.edizioneId == 2);
-      expect(adiacente.punteggio, greaterThan(lontana.punteggio));
-    });
+        final adiacente = candidati.firstWhere((c) => c.edizioneId == '1');
+        final lontana = candidati.firstWhere((c) => c.edizioneId == '2');
+        expect(adiacente.punteggio, greaterThan(lontana.punteggio));
+      },
+    );
 
     test(
       'un numero chiaramente diverso azzera il punteggio anche con serie/titolo identici',
@@ -250,7 +268,11 @@ void main() {
       final analisi = _analisi(title: 'Batman', seriesName: 'Batman');
       final catalogo = [
         for (var i = 0; i < MatchingEngine.massimoCandidati + 3; i++)
-          _edizione(edizioneId: i, seriesName: 'Batman', title: 'Batman${'x' * i}'),
+          _edizione(
+            edizioneId: '$i',
+            seriesName: 'Batman',
+            title: 'Batman${'x' * i}',
+          ),
       ];
 
       final candidati = motore.candidatiInterni(
@@ -260,16 +282,22 @@ void main() {
       );
 
       expect(candidati.length, MatchingEngine.massimoCandidati);
-      expect(candidati.first.edizioneId, 0, reason: 'il titolo identico vince');
+      expect(candidati.first.edizioneId, '0', reason: 'il titolo identico vince');
       for (var i = 1; i < candidati.length; i++) {
-        expect(candidati[i - 1].punteggio, greaterThanOrEqualTo(candidati[i].punteggio));
+        expect(
+          candidati[i - 1].punteggio,
+          greaterThanOrEqualTo(candidati[i].punteggio),
+        );
       }
     });
   });
 
   group('candidatiEsterni', () {
     test('genera un candidato esterno senza edizioneId', () {
-      final analisi = _analisi(title: 'Amazing Fantasy', seriesName: 'Amazing Fantasy');
+      final analisi = _analisi(
+        title: 'Amazing Fantasy',
+        seriesName: 'Amazing Fantasy',
+      );
       const issue = ComicVineIssueMatch(
         id: 111,
         name: 'Amazing Fantasy',
@@ -289,7 +317,10 @@ void main() {
       expect(candidati, hasLength(1));
       expect(candidati.single.source, FonteCandidato.esterno);
       expect(candidati.single.edizioneId, isNull);
-      expect(candidati.single.coverImageUrl, 'https://comicvine.example/15.jpg');
+      expect(
+        candidati.single.coverImageUrl,
+        'https://comicvine.example/15.jpg',
+      );
       expect(candidati.single.punteggio, 100);
     });
 
@@ -316,18 +347,20 @@ void main() {
           coverImageUrl: null,
           siteDetailUrl: 'https://comicvine.example/2',
         );
-        final catalogo = [_edizione(seriesName: 'Spider-Man', serieId: 10)];
+        final catalogo = [_edizione(seriesName: 'Spider-Man', serieId: '10')];
 
         final candidati = motore.candidatiEsterni(
           analisi: analisi,
           risultati: const [issueAdiacente, issueLontana],
           catalogo: catalogo,
           numeriPossedutiPerSerie: {
-            10: {1, 2, 3},
+            '10': {1, 2, 3},
           },
         );
 
-        final adiacente = candidati.firstWhere((c) => c.issueNumberLabel == '4');
+        final adiacente = candidati.firstWhere(
+          (c) => c.issueNumberLabel == '4',
+        );
         final lontana = candidati.firstWhere((c) => c.issueNumberLabel == '40');
         expect(adiacente.punteggio, greaterThan(lontana.punteggio));
       },

@@ -20,7 +20,7 @@ import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 class ModificaSchedaPage extends ConsumerStatefulWidget {
   const ModificaSchedaPage({required this.edizioneId, super.key});
 
-  final int edizioneId;
+  final String edizioneId;
 
   @override
   ConsumerState<ModificaSchedaPage> createState() => _ModificaSchedaPageState();
@@ -46,7 +46,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
   bool _faParteDiSerie = false;
   bool _prefillFatto = false;
   bool _salvando = false;
-  int? _serieIdOriginale;
+  String? _serieIdOriginale;
   String? _serieNomeOriginale;
   RuoloCreator _nuovoAutoreRuolo = RuoloCreator.sceneggiatore;
 
@@ -200,7 +200,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     if (nome.isEmpty) return;
 
     final repository = ref.read(comicsRepositoryProvider);
-    int creatorId;
+    String creatorId;
     if (_autoreSelezionato != null && _autoreSelezionato!.name == nome) {
       // Suggerimento toccato in #78: collega il Creator selezionato,
       // saltando aggiungiCreator.
@@ -260,7 +260,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
       title: _titolo.text.trim(),
     );
 
-    int? serieId;
+    String? serieId;
     final nomeSerie = _serie.text.trim();
     if (_faParteDiSerie && nomeSerie.isNotEmpty) {
       serieId = (nomeSerie == _serieNomeOriginale && _serieIdOriginale != null)
@@ -310,7 +310,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     context.pop();
   }
 
-  int? _operaId;
+  String? _operaId;
 
   @override
   Widget build(BuildContext context) {

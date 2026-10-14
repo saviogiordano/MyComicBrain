@@ -28,12 +28,12 @@ void main() {
 
   tearDown(() => db.close());
 
-  Future<int> scansione() =>
+  Future<String> scansione() =>
       repository.aggiungiScansione(image: '/scansioni/1.jpg');
 
   Future<GoRouter> pumpConfermaCandidato(
     WidgetTester tester, {
-    required int scansioneId,
+    required String scansioneId,
     List<Override> overrides = const [],
   }) async {
     final router = GoRouter(
@@ -56,7 +56,7 @@ void main() {
         GoRoute(
           path: '/scansione/conferma-candidato',
           builder: (context, state) =>
-              ConfermaCandidatoPage(scansioneId: state.extra! as int),
+              ConfermaCandidatoPage(scansioneId: state.extra! as String),
         ),
         GoRoute(
           path: '/scansione/inserisci-manualmente',

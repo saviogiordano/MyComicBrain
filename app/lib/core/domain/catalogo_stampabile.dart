@@ -26,7 +26,7 @@ class RigaCatalogoStampabile {
     this.coverImage,
   });
 
-  final int copiaId;
+  final String copiaId;
   final String operaTitolo;
   final String? serieName;
   final String? issueNumberLabel;

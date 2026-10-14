@@ -22,8 +22,8 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
   // --- Identificazione e Candidati ---
 
   @override
-  Future<int> avviaIdentificazione({
-    required int scansioneId,
+  Future<String> avviaIdentificazione({
+    required String scansioneId,
     DateTime? createdAt,
   }) async {
     final riga = await _client
@@ -36,21 +36,21 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
         .select('id')
         .single();
     _invalidazione.segnala({TabellaSupabase.identificazione});
-    return riga['id'] as int;
+    return riga['id'] as String;
   }
 
   @override
-  Future<int?> idIdentificazionePerScansione(int scansioneId) async {
+  Future<String?> idIdentificazionePerScansione(String scansioneId) async {
     final riga = await _client
         .from(TabellaSupabase.identificazione.nome)
         .select('id')
         .eq('scansione_id', scansioneId)
         .maybeSingle();
-    return riga?['id'] as int?;
+    return riga?['id'] as String?;
   }
 
   @override
-  Future<void> riavviaIdentificazione({required int id}) async {
+  Future<void> riavviaIdentificazione({required String id}) async {
     await _client
         .from(TabellaSupabase.candidati.nome)
         .delete()
@@ -70,11 +70,11 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
   }
 
   @override
-  Future<int> aggiungiCandidato({
-    required int identificazioneId,
+  Future<String> aggiungiCandidato({
+    required String identificazioneId,
     required FonteCandidato source,
     required double punteggio,
-    int? edizioneId,
+    String? edizioneId,
     String? title,
     String? seriesName,
     String? issueNumberLabel,
@@ -99,12 +99,12 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
         .select('id')
         .single();
     _invalidazione.segnala({TabellaSupabase.candidati});
-    return riga['id'] as int;
+    return riga['id'] as String;
   }
 
   @override
   Future<void> completaIdentificazione({
-    required int id,
+    required String id,
     DateTime? completedAt,
   }) => _aggiornaIdentificazione(id, {
     'status': StatoIdentificazione.completata.name,
@@ -113,7 +113,7 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
 
   @override
   Future<void> fallisciIdentificazione({
-    required int id,
+    required String id,
     required String errorMessage,
     DateTime? completedAt,
   }) => _aggiornaIdentificazione(id, {
@@ -123,7 +123,7 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
   });
 
   @override
-  Future<void> marcaCandidatoScelto({required int id}) async {
+  Future<void> marcaCandidatoScelto({required String id}) async {
     await _client
         .from(TabellaSupabase.candidati.nome)
         .update({'scelto': true})
@@ -136,7 +136,7 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
   /// Candidato `interno` è una chiave di `covers/` (da
   /// [catalogoPerMatching]) e si risolve come quella dell'Edizione.
   @override
-  Stream<EsitoIdentificazione> watchIdentificazione(int scansioneId) =>
+  Stream<EsitoIdentificazione> watchIdentificazione(String scansioneId) =>
       _invalidazione.osserva(
         {TabellaSupabase.identificazione, TabellaSupabase.candidati},
         () async {
@@ -160,7 +160,7 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
                   );
                   return perPunteggio != 0
                       ? perPunteggio
-                      : (a['id'] as int).compareTo(b['id'] as int);
+                      : (a['id'] as String).compareTo(b['id'] as String);
                 });
           return (
             stato: StatoIdentificazione.values.byName(
@@ -173,11 +173,11 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
       );
 
   Future<Candidato> _candidato(Map<String, dynamic> c) async => Candidato(
-    id: c['id'] as int,
+    id: c['id'] as String,
     source: FonteCandidato.values.byName(c['source'] as String),
     punteggio: (c['punteggio'] as num).toDouble(),
     scelto: c['scelto'] as bool,
-    edizioneId: c['edizione_id'] as int?,
+    edizioneId: c['edizione_id'] as String?,
     title: c['title'] as String?,
     seriesName: c['series_name'] as String?,
     issueNumberLabel: c['issue_number_label'] as String?,
@@ -187,7 +187,7 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
   );
 
   Future<void> _aggiornaIdentificazione(
-    int id,
+    String id,
     Map<String, Object?> valori,
   ) async {
     await _client
@@ -200,14 +200,14 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
   // --- Conferma ---
 
   @override
-  Future<int> confermaCandidato({
+  Future<String> confermaCandidato({
     required Candidato candidato,
-    required int scansioneId,
+    required String scansioneId,
   }) async {
     final analisi = await _analisiOrNull(scansioneId);
     final interno = candidato.source == FonteCandidato.interno;
     final prezzo = prezzoCopiaConfermata(analisi);
-    final copiaId = await _client.rpc<int>(
+    final copiaId = await _client.rpc<String>(
       'conferma_candidato',
       params: {
         'target_collection_id': await collectionId(),
@@ -279,7 +279,7 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
     }
   }
 
-  Future<AnalisiCopertinaTableData?> _analisiOrNull(int scansioneId) async {
+  Future<AnalisiCopertinaTableData?> _analisiOrNull(String scansioneId) async {
     final esiste = await _client
         .from(TabellaSupabase.analisiCopertina.nome)
         .select('id')
@@ -296,7 +296,7 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
   /// all'utente. La copia è lato server; il file della Scansione, già sul
   /// device, finisce anche nella cache delle cover.
   @override
-  Future<String> coverImagePerScansione(int scansioneId) async {
+  Future<String> coverImagePerScansione(String scansioneId) async {
     final riga = await _client
         .from(TabellaSupabase.scansioni.nome)
         .select('image')
@@ -335,13 +335,13 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
     var ripristinate = 0;
     for (final e in righe) {
       final copie = (e['copie'] as List).cast<Map<String, dynamic>>().toList()
-        ..sort((a, b) => (a['id'] as int).compareTo(b['id'] as int));
+        ..sort((a, b) => (a['id'] as String).compareTo(b['id'] as String));
       final scansione = _unaONessuna(copie.first['scansioni'])!;
       final cover = await _copiaInCover(scansione['image'] as String);
       await _client
           .from(TabellaSupabase.edizioni.nome)
           .update({'cover_image': cover})
-          .eq('id', e['id'] as int);
+          .eq('id', e['id'] as String);
       ripristinate++;
     }
     if (ripristinate > 0) {
@@ -367,9 +367,9 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
     return [
       for (final e in righe)
         EdizioneCatalogo(
-          edizioneId: e['id'] as int,
+          edizioneId: e['id'] as String,
           title: (e['opere'] as Map<String, dynamic>)['title'] as String,
-          serieId: (e['serie'] as Map<String, dynamic>?)?['id'] as int?,
+          serieId: (e['serie'] as Map<String, dynamic>?)?['id'] as String?,
           seriesName: (e['serie'] as Map<String, dynamic>?)?['name'] as String?,
           publisher: e['publisher'] as String?,
           issueNumber: e['issue_number'] as int?,
@@ -380,7 +380,7 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
   }
 
   @override
-  Future<Map<int, Set<int>>> numeriPossedutiPerSerie() async {
+  Future<Map<String, Set<int>>> numeriPossedutiPerSerie() async {
     final collezione = await collectionId();
     final righe = await _tutteLeRighe(
       () => _client
@@ -394,10 +394,10 @@ mixin _IdentificazioneSupabase implements ComicsRepository {
             StatoCopia.prestata.name,
           ]),
     );
-    final risultato = <int, Set<int>>{};
+    final risultato = <String, Set<int>>{};
     for (final e in righe) {
       risultato
-          .putIfAbsent(e['serie_id'] as int, () => <int>{})
+          .putIfAbsent(e['serie_id'] as String, () => <int>{})
           .add(e['issue_number'] as int);
     }
     return risultato;

@@ -42,7 +42,7 @@ void main() {
   }
 
   RigaCatalogoStampabile riga({
-    int copiaId = 1,
+    String copiaId = '1',
     String operaTitolo = 'Dylan Dog',
     String? serieName = 'Dylan Dog',
     String? issueNumberLabel = '1',
@@ -59,8 +59,8 @@ void main() {
     format: FormatoEdizione.spillato,
     autori: const [
       (
-        comicCreatorId: 1,
-        creatorId: 1,
+        comicCreatorId: '1',
+        creatorId: '1',
         name: 'Tiziano Sclavi',
         ruolo: RuoloCreator.sceneggiatore,
       ),
@@ -80,12 +80,15 @@ void main() {
     expectPdfValido(await genera([riga()]));
   });
 
-  test('campi opzionali assenti: non lancia (celle vuote in tabella)', () async {
-    final righeMinime = [
-      const RigaCatalogoStampabile(copiaId: 1, operaTitolo: 'Volume unico'),
-    ];
-    expectPdfValido(await genera(righeMinime));
-  });
+  test(
+    'campi opzionali assenti: non lancia (celle vuote in tabella)',
+    () async {
+      final righeMinime = [
+        const RigaCatalogoStampabile(copiaId: '1', operaTitolo: 'Volume unico'),
+      ];
+      expectPdfValido(await genera(righeMinime));
+    },
+  );
 
   test(
     "un'Opera senza Serie finisce nel gruppo Volumi unici, senza lanciare",
@@ -155,7 +158,7 @@ void main() {
         for (var s = 0; s < 5; s++)
           for (var n = 0; n < 8; n++)
             riga(
-              copiaId: s * 8 + n,
+              copiaId: '${s * 8 + n}',
               serieName: 'Serie $s',
               operaTitolo: 'Serie $s',
               issueNumberLabel: '$n',

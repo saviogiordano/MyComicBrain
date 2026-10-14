@@ -19,7 +19,7 @@ void contrattoValoreStimato(CreaAdapter crea) {
 
   tearDown(() => adapter.chiudi());
 
-  Future<int> copia({CondizioneCopia? condition}) async {
+  Future<String> copia({CondizioneCopia? condition}) async {
     final operaId = await repo.aggiungiOpera(title: 'Amazing Spider-Man');
     final edizioneId = await repo.aggiungiEdizione(
       operaId: operaId,

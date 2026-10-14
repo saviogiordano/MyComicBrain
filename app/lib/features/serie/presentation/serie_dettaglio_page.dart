@@ -22,7 +22,7 @@ import 'package:mycomicbrain/features/serie/presentation/modifica_serie_sheet.da
 class SerieDettaglioPage extends ConsumerWidget {
   const SerieDettaglioPage({required this.serieId, super.key});
 
-  final int serieId;
+  final String serieId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -107,7 +107,9 @@ class _Corpo extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final vistaNumeri = ref.watch(vistaNumeriSerieProvider);
     final edizioniPossedute =
-        ref.watch(edizioniPosseduteDiSerieProvider(serie.serieId)).valueOrNull ??
+        ref
+            .watch(edizioniPosseduteDiSerieProvider(serie.serieId))
+            .valueOrNull ??
         const [];
     final pct = serie.numeriTotali == null
         ? null
@@ -130,7 +132,7 @@ class _Corpo extends ConsumerWidget {
               child: ComicCoverImage(
                 coverImage: serie.coverImage,
                 titolo: serie.nome,
-                numero: serie.serieId,
+                numero: semeCopertina(serie.serieId),
                 etichetta: '',
                 compatto: true,
               ),
@@ -312,13 +314,19 @@ class _SenzaTotale extends StatelessWidget {
                 edizioni: edizioniPossedute,
               ))
                 if (cella.numero case final n?)
-                  AppChip(label: '#$n', selected: true, onTap: () => onNumero(n))
+                  AppChip(
+                    label: '#$n',
+                    selected: true,
+                    onTap: () => onNumero(n),
+                  )
                 else
                   AppChip(
                     label: '#${cella.edizioneDecimale!.issueNumberLabel}',
                     selected: true,
-                    onTap: () =>
-                        _apriEdizione(context, cella.edizioneDecimale!.edizioneId),
+                    onTap: () => _apriEdizione(
+                      context,
+                      cella.edizioneDecimale!.edizioneId,
+                    ),
                   ),
             ],
           )
@@ -789,7 +797,7 @@ String _missingLabel(List<int> numeri) {
 /// Tap su una cella decimale (es. "699.1") della griglia — l'Edizione è già
 /// risolta da [_celleGriglia], nessun selettore necessario a differenza di
 /// [_apriNumero].
-void _apriEdizione(BuildContext context, int edizioneId) {
+void _apriEdizione(BuildContext context, String edizioneId) {
   unawaited(context.push('/scheda/$edizioneId'));
 }
 
@@ -848,7 +856,7 @@ List<_CellaGriglia> _celleGriglia({
 Future<void> _apriNumero(
   BuildContext context,
   WidgetRef ref,
-  int serieId,
+  String serieId,
   int numero,
 ) async {
   final edizioni = await ref

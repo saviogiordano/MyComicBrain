@@ -130,7 +130,7 @@ class _SerieRigaCard extends StatelessWidget {
             child: ComicCoverImage(
               coverImage: item.coverImage,
               titolo: item.nome,
-              numero: item.serieId,
+              numero: semeCopertina(item.serieId),
               etichetta: '',
               compatto: true,
             ),
