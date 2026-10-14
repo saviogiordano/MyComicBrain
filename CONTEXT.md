@@ -128,7 +128,7 @@ _Avoid_: Offline mode (l'uso senza rete di un Profilo autenticato è la Replica 
 
 **Replica locale**:
 La copia completa, sul device, della Collezione di un Profilo autenticato, su cui l'app lavora sempre, con o senza rete (§19): si vedono collezione e cover, si modifica, si aggiunge a mano, si scattano Scansioni. Ogni Profilo ha la propria, distinta dalla Modalità locale. Nasce con il primo download al login o dopo una reinstallazione e il logout la cancella. Deciso su [Decisione — architettura della Replica locale e della Sincronizzazione](https://github.com/saviogiordano/MyComicBrain/issues/200), dettagli in [ADR-0008](docs/adr/0008-replica-locale-e-sincronizzazione.md).
-_Avoid_: Cache (la Replica non è una cache: è ciò che l'app legge e scrive), Offline mode
+_Avoid_: Copia locale (Copia è la copia fisica di un fumetto), cache (la Replica non è una cache: è ciò che l'app legge e scrive), Modalità locale (che esiste solo prima di un account), Offline mode
 
 **Sincronizzazione**:
 Lo scambio automatico fra le Repliche locali e la Collezione su Supabase (§18): carica le Modifiche in sospeso e scarica ciò che è cambiato altrove. Nei conflitti vince, campo per campo, l'ultima modifica fatta (non l'ultima arrivata), e l'eliminazione prevale, anche sui figli aggiunti o modificati altrove sotto la riga eliminata. Deciso su [#200](https://github.com/saviogiordano/MyComicBrain/issues/200).
