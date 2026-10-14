@@ -26,7 +26,8 @@ class IdentificazionePipeline {
 
   /// Avvia l'Identificazione per la Scansione con questo id, la cui Analisi
   /// Copertina deve già essere `completata`. Un fallimento tecnico (es.
-  /// ComicVine irraggiungibile) porta l'Identificazione a `fallita` — nessun
+  /// ComicVine o il database irraggiungibili) porta l'Identificazione a
+  /// `fallita` — nessun
   /// retry automatico, come `AnalisiCopertinaPipeline`. Idempotente rispetto
   /// alla Scansione: se un'Identificazione esiste già (rieseguita dopo una
   /// richiesta di nuova Analisi Copertina su una riga già `completata`,
@@ -86,7 +87,10 @@ class IdentificazionePipeline {
       }
 
       await _repository.completaIdentificazione(id: identificazioneId);
-    } on ComicVineException catch (e) {
+      // Qualunque errore, non solo `ComicVineException`: un'Identificazione
+      // lasciata `inCorso` (rete verso Supabase, errore del database) terrebbe
+      // lo schermo di conferma in attesa per sempre (bug osservato).
+    } on Object catch (e) {
       await _repository.fallisciIdentificazione(
         id: identificazioneId,
         errorMessage: e.toString(),

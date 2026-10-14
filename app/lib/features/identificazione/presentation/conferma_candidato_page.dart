@@ -50,9 +50,9 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
 
   @override
   Widget build(BuildContext context) {
-    final esito = ref
-        .watch(identificazioneProvider(widget.scansioneId))
-        .valueOrNull;
+    final identificazione = ref.watch(
+      identificazioneProvider(widget.scansioneId),
+    );
     final descrizioneAi = ref
         .watch(analisiCopertinaProvider(widget.scansioneId))
         .valueOrNull
@@ -64,7 +64,16 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
         backgroundColor: AppColors.surfaceDeepest,
         title: const Text('Possibile corrispondenza'),
       ),
-      body: SafeArea(child: _corpo(esito, descrizioneAi)),
+      body: SafeArea(
+        // Un errore di lettura (rete, database) va mostrato: con il solo
+        // `valueOrNull` resterebbe lo spinner per sempre (bug osservato).
+        child: identificazione.hasError && !identificazione.hasValue
+            ? _ErroreIdentificazione(
+                errorMessage: '${identificazione.error}',
+                onInserisciManualmente: _inserisciManualmente,
+              )
+            : _corpo(identificazione.valueOrNull, descrizioneAi),
+      ),
     );
   }
 
