@@ -1,5 +1,7 @@
 # Seam del layer dati: un'interfaccia `ComicsRepository`, due adapter (drift / Supabase)
 
+> **Superato in parte da [ADR-0008](0008-replica-locale-e-sincronizzazione.md)**: per i Profili autenticati la UI usa `DriftComicsRepository` sulla Replica locale. Di `SupabaseComicsRepository` restano Storage, importazione e Conversazione; la lettura via PostgREST, l'invalidazione interna e la suite di contratto su Supabase si ritirano.
+
 ADR-0003 fissa l'accesso diretto a Supabase con autorizzazione via RLS, ADR-0004 lo schema, ADR-0005 che la Modalità locale resta su drift e che i profili autenticati lavorano online-only su Supabase. Nessuno dei tre dice come il codice dell'app passa da un backend all'altro. Oggi `ComicsRepository` (`app/lib/core/data/comics_repository.dart`) è una classe concreta su drift (~97 metodi pubblici, 14 stream `watch*`, 6 transazioni) usata in ~40 file tramite `comicsRepositoryProvider`; `AppDatabase` non è usato da nessun altro. Decisioni prese in sessione di grilling sul ticket [#166](https://github.com/saviogiordano/MyComicBrain/issues/166) (mappa [#165](https://github.com/saviogiordano/MyComicBrain/issues/165)).
 
 Decisione, in sintesi:

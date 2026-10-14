@@ -102,7 +102,7 @@ const etichettaColonnaCopertina = 'Copertina';
 /// ha cover o se non è stato possibile leggerla. [fileCopertine] è quello
 /// di [CopertineEsportazione.fileCopertine].
 List<ColonnaEsportazione> _colonneConCopertina(
-  Map<int, String> fileCopertine,
+  Map<String, String> fileCopertine,
 ) => [
   ...colonneEsportazione,
   ColonnaEsportazione(
@@ -115,7 +115,7 @@ List<ColonnaEsportazione> _colonneConCopertina(
 /// etichette di [colonneEsportazione], una riga per [RigaEsportazioneCopia].
 String generaCsvEsportazione(
   List<RigaEsportazioneCopia> righe, {
-  Map<int, String> fileCopertine = const {},
+  Map<String, String> fileCopertine = const {},
 }) {
   final colonne = _colonneConCopertina(fileCopertine);
   final tabella = [
@@ -133,7 +133,7 @@ String generaCsvEsportazione(
 /// condivisione/ispezione manuale, non a un canale ad alto volume.
 String generaJsonEsportazione(
   List<RigaEsportazioneCopia> righe, {
-  Map<int, String> fileCopertine = const {},
+  Map<String, String> fileCopertine = const {},
 }) {
   final colonne = _colonneConCopertina(fileCopertine);
   final documento = {
@@ -161,7 +161,7 @@ String generaJsonEsportazione(
 /// specifica) — evita ambiguità di parsing fra locali diversi di Excel.
 Uint8List generaExcelEsportazione(
   List<RigaEsportazioneCopia> righe, {
-  Map<int, String> fileCopertine = const {},
+  Map<String, String> fileCopertine = const {},
 }) {
   final colonne = _colonneConCopertina(fileCopertine);
   final libro = excel_pkg.Excel.createExcel();
@@ -197,7 +197,7 @@ class CopertineEsportazione {
     required this.bytesPerFile,
   });
 
-  final Map<int, String> fileCopertine;
+  final Map<String, String> fileCopertine;
   final Map<String, Uint8List> bytesPerFile;
 }
 
@@ -212,9 +212,9 @@ Future<CopertineEsportazione> raccogliCopertineEsportazione(
   Future<Uint8List?> Function(String coverImage)? caricaBytesCopertina,
 }) async {
   final carica = caricaBytesCopertina ?? copertina_bytes.caricaBytesCopertina;
-  final fileCopertine = <int, String>{};
+  final fileCopertine = <String, String>{};
   final bytesPerFile = <String, Uint8List>{};
-  final edizioniViste = <int>{};
+  final edizioniViste = <String>{};
 
   for (final riga in righe) {
     final coverImage = riga.coverImage;

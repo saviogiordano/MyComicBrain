@@ -50,7 +50,7 @@ Future<Uint8List> generaPdfCatalogoStampabile(
 }) async {
   final carica = caricaBytesCopertina ?? copertina_bytes.caricaBytesCopertina;
 
-  final copertine = <int, Uint8List>{};
+  final copertine = <String, Uint8List>{};
   for (final riga in righe) {
     final coverImage = riga.coverImage;
     if (coverImage == null) continue;
@@ -61,25 +61,32 @@ Future<Uint8List> generaPdfCatalogoStampabile(
   final gruppi = _raggruppaPerSerieEOpera(righe);
   final dataGenerazione = DateTime.now();
 
-  final documento = pw.Document(
-    theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
-  )..addPage(
-    pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.symmetric(
-        horizontal: 14 * PdfPageFormat.mm,
-        vertical: 16 * PdfPageFormat.mm,
-      ),
-      header: (context) => context.pageNumber == 1
-          ? _intestazioneDocumento(righe.length, dataGenerazione, fontMono)
-          : pw.SizedBox(),
-      footer: (context) => _piePagina(context, fontMono),
-      build: (context) => [
-        for (final gruppo in gruppi)
-          ..._sezioneSerie(gruppo, fontRegular, fontBold, fontMono, copertine),
-      ],
-    ),
-  );
+  final documento =
+      pw.Document(
+        theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
+      )..addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.symmetric(
+            horizontal: 14 * PdfPageFormat.mm,
+            vertical: 16 * PdfPageFormat.mm,
+          ),
+          header: (context) => context.pageNumber == 1
+              ? _intestazioneDocumento(righe.length, dataGenerazione, fontMono)
+              : pw.SizedBox(),
+          footer: (context) => _piePagina(context, fontMono),
+          build: (context) => [
+            for (final gruppo in gruppi)
+              ..._sezioneSerie(
+                gruppo,
+                fontRegular,
+                fontBold,
+                fontMono,
+                copertine,
+              ),
+          ],
+        ),
+      );
 
   return documento.save();
 }
@@ -217,7 +224,7 @@ List<pw.Widget> _sezioneSerie(
   pw.Font fontRegular,
   pw.Font fontBold,
   pw.Font fontMono,
-  Map<int, Uint8List> copertine,
+  Map<String, Uint8List> copertine,
 ) {
   return [
     pw.Container(
@@ -252,7 +259,13 @@ List<pw.Widget> _sezioneSerie(
     ),
     for (final opera in gruppo.opere)
       for (final copia in opera.copie)
-        _scheda(copia, fontRegular, fontBold, fontMono, copertine[copia.copiaId]),
+        _scheda(
+          copia,
+          fontRegular,
+          fontBold,
+          fontMono,
+          copertine[copia.copiaId],
+        ),
   ];
 }
 

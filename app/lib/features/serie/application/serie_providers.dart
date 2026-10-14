@@ -20,9 +20,9 @@ final vistaNumeriSerieProvider =
 
 /// Le Edizioni possedute di una Serie — usate dalla vista "cover" del
 /// dettaglio Serie per risolvere la copertina di ciascun numero posseduto.
-final FutureProviderFamily<List<EdizioneCatalogo>, int>
+final FutureProviderFamily<List<EdizioneCatalogo>, String>
 edizioniPosseduteDiSerieProvider =
-    FutureProvider.family<List<EdizioneCatalogo>, int>((ref, serieId) {
+    FutureProvider.family<List<EdizioneCatalogo>, String>((ref, serieId) {
       return ref
           .watch(comicsRepositoryProvider)
           .edizioniPosseduteDiSerie(serieId);

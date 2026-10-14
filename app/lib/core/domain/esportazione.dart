@@ -44,8 +44,8 @@ class RigaEsportazioneCopia {
     this.coverImage,
   });
 
-  final int copiaId;
-  final int edizioneId;
+  final String copiaId;
+  final String edizioneId;
   final String operaTitolo;
   final String? serieName;
   final String? publisher;

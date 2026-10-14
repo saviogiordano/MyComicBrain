@@ -43,7 +43,7 @@ abstract interface class ComicsRepository {
   // --- Scrittura (usata dai test per costruire fixture; superficie minima
   // per il catalogo — nessuna schermata di questa mappa scrive dati). ---
 
-  Future<int> aggiungiOpera({required String title, DateTime? createdAt});
+  Future<String> aggiungiOpera({required String title, DateTime? createdAt});
 
   /// Riusa una Serie esistente con lo stesso nome (case-insensitive, a meno
   /// di spazi iniziali/finali) se c'è, altrimenti ne crea una nuova — a
@@ -52,7 +52,7 @@ abstract interface class ComicsRepository {
   /// "serie"/"serie complete"/"numeri mancanti" la contano per riga, quindi
   /// una riga duplicata per scansione (es. più numeri della stessa collana)
   /// gonfiava il conteggio serie invece di aggregarle.
-  Future<int> aggiungiSerie({
+  Future<String> aggiungiSerie({
     required String name,
     int? totalIssues,
     String? issn,
@@ -67,9 +67,9 @@ abstract interface class ComicsRepository {
   /// una volta".
   Future<void> unisciSerieDuplicate();
 
-  Future<int> aggiungiEdizione({
-    required int operaId,
-    int? serieId,
+  Future<String> aggiungiEdizione({
+    required String operaId,
+    String? serieId,
     String? publisher,
     int? issueNumber,
     String? issueNumberLabel,
@@ -89,8 +89,8 @@ abstract interface class ComicsRepository {
     DateTime? createdAt,
   });
 
-  Future<int> aggiungiCopia({
-    required int edizioneId,
+  Future<String> aggiungiCopia({
+    required String edizioneId,
     required StatoCopia status,
     StatoLettura? readingStatus,
     CondizioneCopia? condition,
@@ -103,7 +103,7 @@ abstract interface class ComicsRepository {
     double? valutazione,
     DateTime? createdAt,
     DateTime? updatedAt,
-    int? scansioneId,
+    String? scansioneId,
   });
 
   /// Cerca Creator esistenti per nome (match parziale, per l'autocomplete
@@ -111,23 +111,23 @@ abstract interface class ComicsRepository {
   Future<List<CreatorData>> cercaCreator(String query);
 
   /// Crea un nuovo Creator. Nessun controllo di univocità sul nome (#64).
-  Future<int> aggiungiCreator(String name);
+  Future<String> aggiungiCreator(String name);
 
   /// Collega un Creator a un'Edizione con un ruolo. Ammessi più Creator con
   /// lo stesso ruolo sulla stessa Edizione e lo stesso Creator con ruoli
   /// diversi (#64).
   Future<void> collegaCreatorAEdizione({
-    required int edizioneId,
-    required int creatorId,
+    required String edizioneId,
+    required String creatorId,
     required RuoloCreator ruolo,
   });
 
   /// Rimuove un collegamento Creator↔Edizione (riga ComicCreator).
-  Future<void> rimuoviCreatorDaEdizione(int comicCreatorId);
+  Future<void> rimuoviCreatorDaEdizione(String comicCreatorId);
 
   /// Legge tutti i Creator collegati a un'Edizione con il relativo ruolo,
   /// per il rendering della Scheda (§8.1).
-  Future<List<CreatorConRuolo>> autoriDiEdizione(int edizioneId);
+  Future<List<CreatorConRuolo>> autoriDiEdizione(String edizioneId);
 
   // --- Personaggio (§9, deciso su #84) — stesso pattern di Creator/#64. ---
 
@@ -137,16 +137,16 @@ abstract interface class ComicsRepository {
 
   /// Crea un nuovo Personaggio. Nessun controllo di univocità sul nome
   /// (#84, stesso pattern di [aggiungiCreator]).
-  Future<int> aggiungiCharacter(String name);
+  Future<String> aggiungiCharacter(String name);
 
   /// Collega un Personaggio a un'Edizione.
   Future<void> collegaCharacterAEdizione({
-    required int edizioneId,
-    required int characterId,
+    required String edizioneId,
+    required String characterId,
   });
 
   /// Rimuove un collegamento Personaggio↔Edizione (riga ComicCharacter).
-  Future<void> rimuoviCharacterDaEdizione(int comicCharacterId);
+  Future<void> rimuoviCharacterDaEdizione(String comicCharacterId);
 
   // --- Tag personalizzati (§9, deciso su #82) — stesso pattern di Creator/#64. ---
 
@@ -155,16 +155,16 @@ abstract interface class ComicsRepository {
   Future<List<TagTableData>> cercaTag(String query);
 
   /// Crea un nuovo Tag. Nessun vincolo di univocità sul nome (#82).
-  Future<int> aggiungiTag(String name);
+  Future<String> aggiungiTag(String name);
 
   /// Collega un Tag a un'Edizione.
   Future<void> collegaTagAEdizione({
-    required int edizioneId,
-    required int tagId,
+    required String edizioneId,
+    required String tagId,
   });
 
   /// Rimuove un collegamento Tag↔Edizione (riga EdizioneTag).
-  Future<void> rimuoviTagDaEdizione(int edizioneTagId);
+  Future<void> rimuoviTagDaEdizione(String edizioneTagId);
 
   // --- Genere (§9, deciso su #84) — enum multi-valore, sostituzione intera. ---
 
@@ -174,7 +174,7 @@ abstract interface class ComicsRepository {
   /// come un insieme di chip selezionate, non come voci con un proprio id da
   /// tracciare singolarmente.
   Future<void> impostaGeneriEdizione({
-    required int edizioneId,
+    required String edizioneId,
     required Set<GenereEdizione> generi,
   });
 
@@ -182,12 +182,15 @@ abstract interface class ComicsRepository {
   /// Il riconoscimento (§6.3, collegamento a un'edizione) resta fuori scope
   /// di questa mappa — l'Analisi Copertina (§6.1, §6.2) parte separatamente,
   /// vedi [idScansionePerImmagine]/[avviaAnalisiCopertina].
-  Future<int> aggiungiScansione({required String image, DateTime? createdAt});
+  Future<String> aggiungiScansione({
+    required String image,
+    DateTime? createdAt,
+  });
 
   /// L'id della Scansione salvata con questo percorso immagine — usato dalla
   /// pipeline di analisi OCR (#32) per collegare il batch di file in uscita
   /// dal riepilogo alla riga già persistita in `Scansioni` da [aggiungiScansione].
-  Future<int> idScansionePerImmagine(String image);
+  Future<String> idScansionePerImmagine(String image);
 
   /// Il valore da passare come `coverImage` di [aggiungiEdizione] per usare
   /// la cover scansionata di questa Scansione (§6.3, deciso su #63) —
@@ -198,20 +201,20 @@ abstract interface class ComicsRepository {
   /// percorso *assoluto* (sotto `scansioni/`, riconosciuto comunque da
   /// [percorso_locale.risolvi] anche non relativizzato), ma le nuove righe
   /// devono restare coerenti col formato relativo usato da qui in avanti.
-  Future<String> coverImagePerScansione(int scansioneId);
+  Future<String> coverImagePerScansione(String scansioneId);
 
   /// Rimuove una Scansione non ancora inviata alla pipeline (swipe-to-delete
   /// nel riepilogo, prima di "Fine") — solo la riga `Scansioni`: a questo
   /// punto del flusso non esiste ancora nessuna `AnalisiCopertina` collegata
   /// da ripulire. Il file immagine salvato va eliminato a parte con
   /// `ScansioneStorage.elimina`, non è responsabilità del repository.
-  Future<void> eliminaScansione({required int id});
+  Future<void> eliminaScansione({required String id});
 
   /// Crea la riga `AnalisiCopertina` di una Scansione, in stato `inCorso` —
   /// la pipeline (#32) la crea appena prende in carico la Scansione, prima
   /// di chiamare Claude.
-  Future<int> avviaAnalisiCopertina({
-    required int scansioneId,
+  Future<String> avviaAnalisiCopertina({
+    required String scansioneId,
     DateTime? createdAt,
   });
 
@@ -219,7 +222,7 @@ abstract interface class ComicsRepository {
   /// campi grezzi e non parsati (#31, #48), `rawResponse` preserva l'intera
   /// risposta strutturata di Claude.
   Future<void> completaAnalisiCopertina({
-    required int id,
+    required String id,
     required String rawResponse,
     String? title,
     String? issueNumberLabel,
@@ -249,7 +252,7 @@ abstract interface class ComicsRepository {
   /// (destinazione della mappa #27): lo stato resta `fallita`, `errorMessage`
   /// cattura il motivo per capirlo a posteriori.
   Future<void> fallisciAnalisiCopertina({
-    required int id,
+    required String id,
     required String errorMessage,
     DateTime? completedAt,
   });
@@ -258,12 +261,12 @@ abstract interface class ComicsRepository {
   /// usato dal retry manuale (riepilogo) per riprendere la riga esistente
   /// invece di crearne una seconda, che romperebbe la relazione 1:1 con la
   /// Scansione.
-  Future<int> idAnalisiCopertinaPerScansione(int scansioneId);
+  Future<String> idAnalisiCopertinaPerScansione(String scansioneId);
 
   /// Riporta un'Analisi Copertina `fallita` in stato `inCorso` per un nuovo
   /// tentativo — retry manuale dall'utente (nessun retry automatico, #27):
   /// azzera `errorMessage`/`completedAt` della riga esistente.
-  Future<void> riavviaAnalisiCopertina({required int id});
+  Future<void> riavviaAnalisiCopertina({required String id});
 
   /// Lo stato osservabile dell'Analisi Copertina per la Scansione con questo
   /// percorso immagine — usato dal riepilogo per riflettere lo stato reale
@@ -302,8 +305,8 @@ abstract interface class ComicsRepository {
   /// la pipeline (§6.3, deciso su #53) la crea appena prende in carico la
   /// Scansione dopo il completamento dell'Analisi Copertina, sul modello di
   /// [avviaAnalisiCopertina].
-  Future<int> avviaIdentificazione({
-    required int scansioneId,
+  Future<String> avviaIdentificazione({
+    required String scansioneId,
     DateTime? createdAt,
   });
 
@@ -312,7 +315,7 @@ abstract interface class ComicsRepository {
   /// seconda, che romperebbe la relazione 1:1 con la Scansione (stesso
   /// motivo di [idAnalisiCopertinaPerScansione]). `null` se l'Analisi
   /// Copertina non ha ancora agganciato l'Identificazione (#58).
-  Future<int?> idIdentificazionePerScansione(int scansioneId);
+  Future<String?> idIdentificazionePerScansione(String scansioneId);
 
   /// Riporta un'Identificazione già esistente in stato `inCorso` per un
   /// nuovo giro (richiesta utente dal riepilogo: rieseguire l'Analisi
@@ -321,16 +324,16 @@ abstract interface class ComicsRepository {
   /// precedente: [watchIdentificazione] raggruppa per `scansioneId`, non per
   /// riga, quindi lasciarli mescolerebbe i Candidati vecchi a quelli nuovi.
   /// Sul modello di [riavviaAnalisiCopertina].
-  Future<void> riavviaIdentificazione({required int id});
+  Future<void> riavviaIdentificazione({required String id});
 
   /// Persiste un Candidato proposto per un'Identificazione — una riga per
   /// candidato, non appena proposto (deciso su #53), indipendentemente da
   /// quale verrà poi confermato con [marcaCandidatoScelto].
-  Future<int> aggiungiCandidato({
-    required int identificazioneId,
+  Future<String> aggiungiCandidato({
+    required String identificazioneId,
     required FonteCandidato source,
     required double punteggio,
-    int? edizioneId,
+    String? edizioneId,
     String? title,
     String? seriesName,
     String? issueNumberLabel,
@@ -343,7 +346,7 @@ abstract interface class ComicsRepository {
   /// Candidati trovati" (nessuno stato speciale, deciso su #53): la tabella
   /// `Candidati` resta semplicemente senza righe per questa Identificazione.
   Future<void> completaIdentificazione({
-    required int id,
+    required String id,
     DateTime? completedAt,
   });
 
@@ -351,21 +354,21 @@ abstract interface class ComicsRepository {
   /// irraggiungibile) — nessun retry automatico, sul modello di
   /// [fallisciAnalisiCopertina].
   Future<void> fallisciIdentificazione({
-    required int id,
+    required String id,
     required String errorMessage,
     DateTime? completedAt,
   });
 
   /// Marca il Candidato confermato dall'utente (schermo di conferma, #54) —
   /// la riga scelta fra quelle proposte per la stessa Identificazione.
-  Future<void> marcaCandidatoScelto({required int id});
+  Future<void> marcaCandidatoScelto({required String id});
 
   /// L'esito osservabile dell'Identificazione di una Scansione — stato più
   /// Candidati ordinati per punteggio decrescente (schermo di conferma,
   /// #54/#59). `pending` finché la pipeline (§6.3, agganciata su #58) non ha
   /// ancora creato la riga `Identificazione` per questa Scansione, stesso
   /// significato di `watchStatoAnalisiCopertina`.
-  Stream<EsitoIdentificazione> watchIdentificazione(int scansioneId);
+  Stream<EsitoIdentificazione> watchIdentificazione(String scansioneId);
 
   /// Conferma un Candidato (schermo di conferma, §6.3, deciso su #54/#59):
   /// marca la riga scelta e collega/crea la Copia risultante. Se `interno`
@@ -379,9 +382,9 @@ abstract interface class ComicsRepository {
   /// di partenza modificabile dalla Scheda, non un dato definitivo — bug
   /// osservato: la Copia veniva creata senza condizione né prezzo). Ritorna
   /// l'id della Copia creata.
-  Future<int> confermaCandidato({
+  Future<String> confermaCandidato({
     required Candidato candidato,
-    required int scansioneId,
+    required String scansioneId,
   });
 
   /// La riga `AnalisiCopertina` completata di questa Scansione — letta dal
@@ -390,7 +393,7 @@ abstract interface class ComicsRepository {
   /// `completata`: la pipeline (§6.3) avvia l'Identificazione solo dopo,
   /// stesso ordine del requisito.
   Future<AnalisiCopertinaTableData> analisiCopertinaPerScansione(
-    int scansioneId,
+    String scansioneId,
   );
 
   /// Il catalogo interno (Opere/Serie/Edizioni) con Opera/Serie già risolte
@@ -404,7 +407,7 @@ abstract interface class ComicsRepository {
   /// — usati dal bonus di contesto del motore di matching (Livello 5,
   /// #52/#57): il numero di una Serie senza `issueNumber` non è comparabile
   /// e viene escluso.
-  Future<Map<int, Set<int>>> numeriPossedutiPerSerie();
+  Future<Map<String, Set<int>>> numeriPossedutiPerSerie();
 
   // --- Valore stimato (§35, deciso su #157/#161). ---
 
@@ -422,7 +425,7 @@ abstract interface class ComicsRepository {
       CondizioneCopia? condition,
     })
   >
-  copiaConEdizionePerId(int copiaId);
+  copiaConEdizionePerId(String copiaId);
 
   /// Crea la riga `ValoreStimato` di una Copia al primo calcolo, oppure la
   /// riporta a `inCorso` per un ricalcolo successivo (creazione, cambio
@@ -434,15 +437,15 @@ abstract interface class ComicsRepository {
   /// comunque). `value`/`completedAt` di un calcolo precedente non vengono
   /// toccati qui: restano finché [completaValoreStimato] o
   /// [segnaValoreStimatoNonDisponibile] non li aggiornano.
-  Future<int> avviaOrRiavviaValoreStimato({
-    required int copiaId,
+  Future<String> avviaOrRiavviaValoreStimato({
+    required String copiaId,
     DateTime? createdAt,
   });
 
   /// Registra un Valore stimato calcolato con successo, sempre in EUR
   /// (§35) — la conversione dalla valuta della fonte avviene nel client.
   Future<void> completaValoreStimato({
-    required int id,
+    required String id,
     required double value,
     DateTime? completedAt,
   });
@@ -453,7 +456,7 @@ abstract interface class ComicsRepository {
   /// azzerato: un'assenza di dati non deve mostrare un valore residuo di
   /// un calcolo precedente come se fosse ancora valido.
   Future<void> segnaValoreStimatoNonDisponibile({
-    required int id,
+    required String id,
     DateTime? completedAt,
   });
 
@@ -465,7 +468,7 @@ abstract interface class ComicsRepository {
   /// anche se non più freschissimo, mentre lo stato `fallita` segnala
   /// comunque che l'ultimo tentativo non è riuscito.
   Future<void> fallisciValoreStimato({
-    required int id,
+    required String id,
     required String errorMessage,
   });
 
@@ -500,7 +503,7 @@ abstract interface class ComicsRepository {
   /// dalla prima Edizione posseduta per numero, non per data di
   /// catalogazione). Null se la Serie non esiste (più cancellata nel
   /// frattempo).
-  Stream<SerieDettaglio?> watchSerieDettaglio(int serieId);
+  Stream<SerieDettaglio?> watchSerieDettaglio(String serieId);
 
   /// Aggiorna nome/numero totale/ISSN/cover di una Serie (§11, deciso su
   /// #99; cover aggiunta in sessione successiva) — unica scrittura UI su
@@ -512,7 +515,7 @@ abstract interface class ComicsRepository {
   /// sheet lo passa esplicitamente a null — stesso comportamento
   /// "sovrascrivi sempre" degli altri campi di questo metodo.
   Future<void> aggiornaSerie({
-    required int id,
+    required String id,
     required String name,
     int? totalIssues,
     String? issn,
@@ -525,7 +528,7 @@ abstract interface class ComicsRepository {
   /// selettore quando più Edizioni condividono lo stesso `issueNumber`,
   /// es. variant) sia dal selettore "scegli da un'edizione della serie"
   /// nell'edit della cover.
-  Future<List<EdizioneCatalogo>> edizioniPosseduteDiSerie(int serieId);
+  Future<List<EdizioneCatalogo>> edizioniPosseduteDiSerie(String serieId);
 
   /// La cover della prima Edizione posseduta di una Serie per numero (a
   /// parità di numero, per data di catalogazione) — stessa derivazione
@@ -533,7 +536,7 @@ abstract interface class ComicsRepository {
   /// quando non c'è override, usata da `ModificaSerieSheet` per
   /// l'anteprima dopo "torna al default" (l'override appena rimosso in UI
   /// non è ancora stato salvato, quindi il default va richiesto a parte).
-  Future<String?> coverDefaultDiSerie(int serieId);
+  Future<String?> coverDefaultDiSerie(String serieId);
 
   /// Le ultime copie possedute aggiunte al catalogo (§4.1, carosello
   /// "Aggiunti di recente"), le più recenti per prime.
@@ -557,14 +560,14 @@ abstract interface class ComicsRepository {
   /// cartesiano raggruppato per id in Dart, stesso pattern di
   /// [watchIdentificazione]) invece di combinare più stream: nessuna
   /// dipendenza da rxdart in questo repository.
-  Stream<EdizioneDettaglio?> watchEdizione(int edizioneId);
+  Stream<EdizioneDettaglio?> watchEdizione(String edizioneId);
 
   /// Il valore grezzo (relativo, non risolto) di `Edizioni.coverImage` — a
   /// differenza di [watchEdizione]/[risolviCoverImage] (che lo risolvono
   /// assoluto per la visualizzazione), serve alla modifica bibliografica
   /// (#67) per non alterare la cover quando l'utente non ne sceglie una
   /// nuova dalla galleria.
-  Future<String?> coverImageGrezzoDi(int edizioneId);
+  Future<String?> coverImageGrezzoDi(String edizioneId);
 
   /// Ripristina `Edizioni.coverImage` per le righe rimaste a `null` per la
   /// race fra il salvataggio della modifica bibliografica e il fetch
@@ -587,7 +590,7 @@ abstract interface class ComicsRepository {
   /// titolo vive su `Opere`, non su `Edizioni` (§36, distinzione Opera/
   /// Edizione).
   Future<void> aggiornaTitoloOpera({
-    required int operaId,
+    required String operaId,
     required String title,
   });
 
@@ -595,8 +598,8 @@ abstract interface class ComicsRepository {
   /// #67) — esclusi titolo ([aggiornaTitoloOpera]) e Autori
   /// ([collegaCreatorAEdizione]/[rimuoviCreatorDaEdizione]).
   Future<void> aggiornaEdizione({
-    required int id,
-    int? serieId,
+    required String id,
+    String? serieId,
     String? publisher,
     int? issueNumber,
     String? issueNumberLabel,
@@ -617,7 +620,7 @@ abstract interface class ComicsRepository {
   /// esclusi `status`/`readingStatus` (§8.3, [cambiaStatoCopia]): scrive
   /// solo le colonne qui elencate, lasciando lo stato invariato.
   Future<void> aggiornaCopia({
-    required int id,
+    required String id,
     CondizioneCopia? condition,
     double? purchasePrice,
     ValutaPrezzo? purchasePriceCurrency,
@@ -632,7 +635,7 @@ abstract interface class ComicsRepository {
   /// esclusivo — deciso in apertura della mappa #63, vedi `voce_stato.dart`):
   /// scrive solo `status`/`readingStatus`, lasciando invariati i campi §8.2.
   Future<void> cambiaStatoCopia({
-    required int id,
+    required String id,
     required StatoCopia status,
     StatoLettura? readingStatus,
   });
@@ -640,7 +643,7 @@ abstract interface class ComicsRepository {
   /// Imposta "In vendita" di una singola Copia (§8.4, deciso su #163/#164)
   /// — asse a sé come [cambiaStatoCopia]: scrive solo `forSale`, lasciando
   /// invariati gli altri campi §8.2/§8.3.
-  Future<void> impostaInVendita({required int id, required bool inVendita});
+  Future<void> impostaInVendita({required String id, required bool inVendita});
 
   /// Azione in blocco "Segna come in vendita" dalla Collezione (§9, variante
   /// B decisa su #164): marca `forSale = true` su tutte le Copie possedute
@@ -649,17 +652,17 @@ abstract interface class ComicsRepository {
   /// copie marca tutte le copie possedute" decisa in fase di destinazione su
   /// #163. Ritorna il numero di Copie effettivamente scritte, per il
   /// feedback banner della UI.
-  Future<int> segnaEdizioniInVendita(List<int> edizioneIds);
+  Future<int> segnaEdizioniInVendita(List<String> edizioneIds);
 
   /// Rimuove una singola Copia (§8.4). Se era l'ultima Copia della sua
   /// Edizione, elimina anche l'Edizione (deciso su #68: nessuno stato
   /// "orfana, 0 copie") — ritorna `true` in quel caso, così il chiamante
   /// (la Scheda) sa di dover navigare via.
-  Future<bool> rimuoviCopia(int id);
+  Future<bool> rimuoviCopia(String id);
 
   /// Elimina un'intera Edizione con tutte le sue Copie (§8.4) — il bottone
   /// "Elimina edizione" sempre visibile deciso su #65/#68.
-  Future<void> eliminaEdizione(int edizioneId);
+  Future<void> eliminaEdizione(String edizioneId);
 
   // --- Collezione (§9, deciso su #79/#90, split indice/hydration #113). ---
 
@@ -688,7 +691,9 @@ abstract interface class ComicsRepository {
   /// Un id il cui Edizione non è (più) posseduta è **omesso** dalla mappa
   /// risultante, mai presente con valore `null` (che significa invece
   /// "nessuna cover" per un'Edizione posseduta senza cover impostata).
-  Stream<Map<int, String?>> watchHydratazioneCollezione(List<int> edizioneIds);
+  Stream<Map<String, String?>> watchHydratazioneCollezione(
+    List<String> edizioneIds,
+  );
 
   // --- Tool-calling dell'Assistente (§10, schema deciso su ADR-0002). ---
 
@@ -755,7 +760,7 @@ abstract interface class ComicsRepository {
     required RuoloMessaggio ruolo,
     required String testo,
     SottotipoSistema? sottotipoSistema,
-    List<int> edizioneIds = const [],
+    List<String> edizioneIds = const [],
     DateTime? createdAt,
   });
 

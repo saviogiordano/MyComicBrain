@@ -89,6 +89,13 @@ class _PlaceholderCompatto extends StatelessWidget {
   }
 }
 
+/// Seme di [ComicCoverImage.numero] per una riga senza numero proprio (es.
+/// una Serie): le ultime 8 cifre esadecimali del suo uuid. Per le righe
+/// convertite dagli id interi (ADR-0008) coincide con il vecchio id, quindi
+/// la copertina procedurale resta quella di prima.
+int semeCopertina(String id) =>
+    int.parse(id.substring(id.length - 8), radix: 16);
+
 /// Copertina segnaposto generata dal titolo e dal numero, per le Edizioni
 /// senza cover nota (prototipo `cover()`/`shape`): colore di sfondo scelto
 /// da `(titolo.length + numero) % palette`, forma (cerchio/quadrato

@@ -28,7 +28,7 @@ class _RepositoryConFetchCoverLento extends DriftComicsRepository {
   final gate = Completer<void>();
 
   @override
-  Future<String?> coverImageGrezzoDi(int edizioneId) async {
+  Future<String?> coverImageGrezzoDi(String edizioneId) async {
     await gate.future;
     return super.coverImageGrezzoDi(edizioneId);
   }
@@ -63,7 +63,7 @@ void main() {
     await tempBase.delete(recursive: true);
   });
 
-  Future<int> edizioneConCover() async {
+  Future<String> edizioneConCover() async {
     final operaId = await repository.aggiungiOpera(title: 'Batman');
     return repository.aggiungiEdizione(
       operaId: operaId,
@@ -73,7 +73,10 @@ void main() {
     );
   }
 
-  Future<void> pumpModifica(WidgetTester tester, {required int edizioneId}) async {
+  Future<void> pumpModifica(
+    WidgetTester tester, {
+    required String edizioneId,
+  }) async {
     tester.view.physicalSize = const Size(800, 3000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -96,7 +99,7 @@ void main() {
         GoRoute(
           path: '/scheda/:id/modifica',
           builder: (context, state) => ModificaSchedaPage(
-            edizioneId: int.parse(state.pathParameters['id']!),
+            edizioneId: state.pathParameters['id']!,
           ),
         ),
       ],

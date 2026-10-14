@@ -20,14 +20,14 @@ import 'package:mycomicbrain/features/scheda/presentation/modifica_copia_sheet.d
 class SchedaPage extends ConsumerStatefulWidget {
   const SchedaPage({required this.edizioneId, super.key});
 
-  final int edizioneId;
+  final String edizioneId;
 
   @override
   ConsumerState<SchedaPage> createState() => _SchedaPageState();
 }
 
 class _SchedaPageState extends ConsumerState<SchedaPage> {
-  final Set<int> _espanse = {};
+  final Set<String> _espanse = {};
   bool _espanseInizializzate = false;
 
   Future<void> _scegliStato(CopiaDettaglio copia) async {

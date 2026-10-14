@@ -18,7 +18,7 @@ import 'package:mycomicbrain/core/domain/identificazione.dart';
 class ConfermaCandidatoPage extends ConsumerStatefulWidget {
   const ConfermaCandidatoPage({required this.scansioneId, super.key});
 
-  final int scansioneId;
+  final String scansioneId;
 
   @override
   ConsumerState<ConfermaCandidatoPage> createState() =>

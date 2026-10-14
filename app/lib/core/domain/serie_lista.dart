@@ -11,7 +11,7 @@ class SerieRiga {
     this.numeriTotali,
   });
 
-  final int serieId;
+  final String serieId;
   final String nome;
   final int numeriPosseduti;
 

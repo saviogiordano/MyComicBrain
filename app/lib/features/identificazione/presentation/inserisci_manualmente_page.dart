@@ -27,7 +27,7 @@ import 'package:mycomicbrain/core/domain/copia.dart';
 class InserisciManualmentePage extends ConsumerStatefulWidget {
   const InserisciManualmentePage({required this.scansioneId, super.key});
 
-  final int scansioneId;
+  final String scansioneId;
 
   @override
   ConsumerState<InserisciManualmentePage> createState() =>
@@ -157,7 +157,7 @@ class _InserisciManualmentePageState
       title: _titolo.text.trim(),
     );
 
-    int? serieId;
+    String? serieId;
     final nomeSerie = _serie.text.trim();
     if (_faParteDiSerie && nomeSerie.isNotEmpty) {
       serieId = await repository.aggiungiSerie(name: nomeSerie);

@@ -32,10 +32,10 @@ void contrattoCatalogo(CreaAdapter crea) {
   /// Crea un'opera + un'edizione (opzionalmente in una serie, con un
   /// numero) e vi aggiunge una copia con lo [status] dato. Ritorna l'id
   /// dell'edizione.
-  Future<int> edizioneConCopia({
+  Future<String> edizioneConCopia({
     required String titolo,
     required StatoCopia status,
-    int? serieId,
+    String? serieId,
     int? issueNumber,
     String? issueNumberLabel,
     String? coverImage,
@@ -165,15 +165,17 @@ void contrattoCatalogo(CreaAdapter crea) {
         // deduplica ora in `aggiungiSerie`).
         final serieVecchia = await adapter.drift
             .into(adapter.drift.serieTable)
-            .insert(SerieTableCompanion.insert(name: 'Batman'));
+            .insertReturning(SerieTableCompanion.insert(name: 'Batman'))
+            .then((r) => r.id);
         final serieNuova = await adapter.drift
             .into(adapter.drift.serieTable)
-            .insert(
+            .insertReturning(
               SerieTableCompanion.insert(
                 name: 'batman', // case diverso, stesso nome
                 totalIssues: const Value(12),
               ),
-            );
+            )
+            .then((r) => r.id);
 
         final edizioneVecchia = await edizioneConCopia(
           titolo: 'Batman #1',
@@ -190,7 +192,9 @@ void contrattoCatalogo(CreaAdapter crea) {
 
         await repo.unisciSerieDuplicate();
 
-        final serieRimaste = await adapter.drift.select(adapter.drift.serieTable).get();
+        final serieRimaste = await adapter.drift
+            .select(adapter.drift.serieTable)
+            .get();
         expect(serieRimaste, hasLength(1));
         expect(serieRimaste.single.id, serieVecchia);
         expect(
@@ -198,7 +202,9 @@ void contrattoCatalogo(CreaAdapter crea) {
           12,
         ); // recuperato dalla duplicata
 
-        final edizioni = await adapter.drift.select(adapter.drift.edizioni).get();
+        final edizioni = await adapter.drift
+            .select(adapter.drift.edizioni)
+            .get();
         expect(
           edizioni.map((e) => e.serieId),
           everyElement(serieVecchia),
@@ -218,11 +224,14 @@ void contrattoCatalogo(CreaAdapter crea) {
       final serieA = await repo.aggiungiSerie(name: 'Batman');
       final serieB = await adapter.drift
           .into(adapter.drift.serieTable)
-          .insert(SerieTableCompanion.insert(name: 'Superman'));
+          .insertReturning(SerieTableCompanion.insert(name: 'Superman'))
+          .then((r) => r.id);
 
       await repo.unisciSerieDuplicate();
 
-      final serieRimaste = await adapter.drift.select(adapter.drift.serieTable).get();
+      final serieRimaste = await adapter.drift
+          .select(adapter.drift.serieTable)
+          .get();
       expect(serieRimaste.map((s) => s.id), containsAll([serieA, serieB]));
       expect(serieRimaste, hasLength(2));
     });
@@ -238,7 +247,9 @@ void contrattoCatalogo(CreaAdapter crea) {
       await repo.unisciSerieDuplicate();
       await repo.unisciSerieDuplicate();
 
-      final serieRimaste = await adapter.drift.select(adapter.drift.serieTable).get();
+      final serieRimaste = await adapter.drift
+          .select(adapter.drift.serieTable)
+          .get();
       expect(serieRimaste, hasLength(1));
     });
   });
@@ -564,7 +575,7 @@ void contrattoCatalogo(CreaAdapter crea) {
 
   group('watchSerieDettaglio (§11)', () {
     test('serie inesistente: null', () async {
-      expect(await repo.watchSerieDettaglio(999999).first, isNull);
+      expect(await repo.watchSerieDettaglio('00000000-0000-7000-8000-000000999999').first, isNull);
     });
 
     test('numeri posseduti, editore/anno derivati e duplicati', () async {
@@ -951,7 +962,7 @@ void contrattoCatalogo(CreaAdapter crea) {
   });
 
   group('Valore stimato della collezione (§35.5)', () {
-    Future<int> copiaConCondizione(StatoCopia status) async {
+    Future<String> copiaConCondizione(StatoCopia status) async {
       final operaId = await repo.aggiungiOpera(title: 'Opera');
       final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
       return repo.aggiungiCopia(edizioneId: edizioneId, status: status);
@@ -1790,7 +1801,9 @@ void contrattoCatalogo(CreaAdapter crea) {
           ),
         ]);
 
-        final serie = await adapter.drift.select(adapter.drift.serieTable).get();
+        final serie = await adapter.drift
+            .select(adapter.drift.serieTable)
+            .get();
         expect(serie, hasLength(1));
       },
     );

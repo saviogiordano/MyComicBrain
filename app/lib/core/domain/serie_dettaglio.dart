@@ -15,7 +15,7 @@ class SerieDettaglio {
     required this.coverImageOverride,
   });
 
-  final int serieId;
+  final String serieId;
   final String nome;
   final String? issn;
 

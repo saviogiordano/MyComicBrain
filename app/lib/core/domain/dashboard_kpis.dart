@@ -58,7 +58,7 @@ class SerieIncompleta {
     required this.numeriMancanti,
   });
 
-  final int serieId;
+  final String serieId;
   final String nome;
 
   /// Quanti numeri interi distinti da 1 a [numeriTotali] sono coperti da
@@ -88,7 +88,7 @@ class ComicRecente {
     this.coverImage,
   });
 
-  final int edizioneId;
+  final String edizioneId;
   final String titolo;
 
   /// Nome della serie, se l'Edizione ne ha una assegnata — mostrato sotto il

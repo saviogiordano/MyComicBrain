@@ -15,8 +15,8 @@ enum RuoloCreator {
 /// #64), per il rendering della Scheda — proiezione di sola lettura di una
 /// riga `ComicCreator` con il `name` del `Creator` già risolto via join.
 typedef CreatorConRuolo = ({
-  int comicCreatorId,
-  int creatorId,
+  String comicCreatorId,
+  String creatorId,
   String name,
   RuoloCreator ruolo,
 });

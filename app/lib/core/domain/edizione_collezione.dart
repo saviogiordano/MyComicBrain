@@ -30,9 +30,9 @@ class EdizioneCollezioneIndice {
     this.ean,
   });
 
-  final int edizioneId;
+  final String edizioneId;
   final String titolo;
-  final int? serieId;
+  final String? serieId;
   final String? serieName;
   final String? publisher;
   final int? issueNumber;
@@ -119,7 +119,7 @@ class EdizioneCollezioneFinestra {
   final String? coverImage;
   final bool coverHydratata;
 
-  int get edizioneId => indice.edizioneId;
+  String get edizioneId => indice.edizioneId;
   String get titolo => indice.titolo;
   String? get serieName => indice.serieName;
   String? get publisher => indice.publisher;

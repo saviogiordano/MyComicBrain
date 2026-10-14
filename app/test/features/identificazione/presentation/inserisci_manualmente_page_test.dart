@@ -53,7 +53,7 @@ void main() {
   /// estratti — la pipeline reale crea sempre questa riga prima che
   /// `InserisciManualmentePage` sia raggiungibile (§6.3): il provider di
   /// prefill (`analisiCopertinaProvider`) la presuppone esistente.
-  Future<int> scansione() async {
+  Future<String> scansione() async {
     final scansioneId = await repository.aggiungiScansione(
       image: '/scansioni/1.jpg',
     );
@@ -66,7 +66,7 @@ void main() {
 
   Future<void> pumpInserisciManualmente(
     WidgetTester tester, {
-    required int scansioneId,
+    required String scansioneId,
   }) async {
     // Il form ha molti più campi da #63 in poi (precompilati dall'AI):
     // non entrano più tutti nella viewport di test di default, e una
@@ -119,7 +119,7 @@ void main() {
         GoRoute(
           path: '/scansione/inserisci-manualmente',
           builder: (context, state) =>
-              InserisciManualmentePage(scansioneId: state.extra! as int),
+              InserisciManualmentePage(scansioneId: state.extra! as String),
         ),
       ],
     );
@@ -436,7 +436,7 @@ void main() {
           GoRoute(
             path: '/scansione/inserisci-manualmente',
             builder: (context, state) =>
-                InserisciManualmentePage(scansioneId: state.extra! as int),
+                InserisciManualmentePage(scansioneId: state.extra! as String),
           ),
         ],
       );

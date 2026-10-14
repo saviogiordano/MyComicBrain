@@ -18,7 +18,7 @@ void contrattoCreator(CreaAdapter crea) {
 
   tearDown(() => adapter.chiudi());
 
-  Future<int> edizione() async {
+  Future<String> edizione() async {
     final operaId = await repo.aggiungiOpera(title: 'The Amazing Spider-Man');
     return repo.aggiungiEdizione(operaId: operaId, issueNumberLabel: '1');
   }

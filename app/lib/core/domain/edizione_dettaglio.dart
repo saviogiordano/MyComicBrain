@@ -24,7 +24,7 @@ class CopiaDettaglio {
     this.forSale = false,
   });
 
-  final int id;
+  final String id;
   final StatoCopia status;
   final StatoLettura? readingStatus;
   final CondizioneCopia? condition;
@@ -103,10 +103,10 @@ class EdizioneDettaglio {
     this.copie = const [],
   });
 
-  final int edizioneId;
-  final int operaId;
+  final String edizioneId;
+  final String operaId;
   final String titolo;
-  final int? serieId;
+  final String? serieId;
   final String? serieName;
   final String? publisher;
   final int? issueNumber;

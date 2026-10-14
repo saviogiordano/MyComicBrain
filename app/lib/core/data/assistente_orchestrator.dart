@@ -78,7 +78,7 @@ class AssistenteOrchestrator {
           (ruolo: messaggio.ruolo, testo: messaggio.testo),
     ];
 
-    final edizioniCitate = <int>{};
+    final edizioniCitate = <String>{};
     final String risposta;
     try {
       risposta = await _client.chiedi(
@@ -116,7 +116,7 @@ class AssistenteOrchestrator {
   Future<Map<String, Object?>> _eseguiTool(
     String nome,
     Map<String, Object?> argomenti,
-    Set<int> edizioniCitate,
+    Set<String> edizioniCitate,
   ) async {
     switch (nome) {
       case 'cercaEdizioni':

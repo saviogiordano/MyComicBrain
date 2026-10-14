@@ -12,11 +12,11 @@ insert into public.collection_members (collection_id, user_id, role) values (:'c
 
 select tests.authenticate_as(:'owner');
 select lives_ok(
-  format($$ insert into public.scansioni (id, collection_id, image) values (101, %L, 'x/1.jpg') $$, :'col'),
+  format($$ insert into public.scansioni (id, collection_id, image) values (tests.id(101), %L, 'x/1.jpg') $$, :'col'),
   'l''utente crea una Scansione (user_id di default = auth.uid())');
-insert into public.analisi_copertina (id, scansione_id) values (101, 101);
-insert into public.identificazione (id, scansione_id) values (101, 101);
-insert into public.candidati (identificazione_id, source, punteggio) values (101, 'esterno', 80);
+insert into public.analisi_copertina (id, scansione_id) values (tests.id(101), tests.id(101));
+insert into public.identificazione (id, scansione_id) values (tests.id(101), tests.id(101));
+insert into public.candidati (identificazione_id, source, punteggio) values (tests.id(101), 'esterno', 80);
 insert into public.conversazione (id) values (101);
 insert into public.messaggio (conversazione_id, ruolo, testo) values (101, 'utente', 'ciao');
 reset role;
@@ -39,7 +39,7 @@ select is(tests.affected($$ delete from public.scansioni $$), 0,
 -- FK composita (user_id, scansione_id): anche conoscendo l'id, un utente
 -- non aggancia righe alla Scansione di un altro.
 select throws_ok(
-  $$ insert into public.identificazione (scansione_id) values (101) $$,
+  $$ insert into public.identificazione (scansione_id) values (tests.id(101)) $$,
   '23503', null,
   'un''Identificazione non può riferire la Scansione di un altro utente');
 reset role;

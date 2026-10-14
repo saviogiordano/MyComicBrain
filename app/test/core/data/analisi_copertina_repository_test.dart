@@ -23,7 +23,7 @@ void contrattoAnalisiCopertina(CreaAdapter crea) {
 
   tearDown(() => adapter.chiudi());
 
-  Future<int> scansione() async {
+  Future<String> scansione() async {
     immagine = await adapter.immagineScansione('1.jpg');
     return repo.aggiungiScansione(image: immagine);
   }

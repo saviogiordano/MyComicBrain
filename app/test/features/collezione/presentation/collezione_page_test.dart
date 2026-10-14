@@ -21,7 +21,10 @@ void main() {
 
   setUp(() async {
     db = AppDatabase(
-      DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
     );
     repository = DriftComicsRepository(db);
     SharedPreferences.setMockInitialValues({});
@@ -30,15 +33,17 @@ void main() {
 
   tearDown(() => db.close());
 
-  Future<int> edizionePosseduta({
+  Future<String> edizionePosseduta({
     required String titolo,
     String? serieName,
     String? publisher,
     String? language,
     FormatoEdizione? format,
   }) async {
-    int? serieId;
-    if (serieName != null) serieId = await repository.aggiungiSerie(name: serieName);
+    String? serieId;
+    if (serieName != null) {
+      serieId = await repository.aggiungiSerie(name: serieName);
+    }
     final operaId = await repository.aggiungiOpera(title: titolo);
     final edizioneId = await repository.aggiungiEdizione(
       operaId: operaId,
@@ -47,7 +52,10 @@ void main() {
       language: language,
       format: format,
     );
-    await repository.aggiungiCopia(edizioneId: edizioneId, status: StatoCopia.posseduta);
+    await repository.aggiungiCopia(
+      edizioneId: edizioneId,
+      status: StatoCopia.posseduta,
+    );
     return edizioneId;
   }
 
@@ -60,9 +68,18 @@ void main() {
     final router = GoRouter(
       initialLocation: '/collezione',
       routes: [
-        GoRoute(path: '/collezione', builder: (context, state) => const CollezionePage()),
-        GoRoute(path: '/scheda/:id', builder: (context, state) => const Scaffold(body: Text('Scheda'))),
-        GoRoute(path: '/scansione', builder: (context, state) => const Scaffold(body: Text('Scansione'))),
+        GoRoute(
+          path: '/collezione',
+          builder: (context, state) => const CollezionePage(),
+        ),
+        GoRoute(
+          path: '/scheda/:id',
+          builder: (context, state) => const Scaffold(body: Text('Scheda')),
+        ),
+        GoRoute(
+          path: '/scansione',
+          builder: (context, state) => const Scaffold(body: Text('Scansione')),
+        ),
       ],
     );
 
@@ -78,97 +95,128 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets("collezione vuota: mostra l'invito a scansionare il primo fumetto", (tester) async {
-    await pumpCollezione(tester);
+  testWidgets(
+    "collezione vuota: mostra l'invito a scansionare il primo fumetto",
+    (tester) async {
+      await pumpCollezione(tester);
 
-    expect(find.text('Nessun fumetto in collezione'), findsOneWidget);
-    expect(find.text('Scansiona il primo fumetto'), findsOneWidget);
-  });
+      expect(find.text('Nessun fumetto in collezione'), findsOneWidget);
+      expect(find.text('Scansiona il primo fumetto'), findsOneWidget);
+    },
+  );
 
-  testWidgets('con Edizioni possedute: mostra il conteggio e le card in griglia', (tester) async {
-    await edizionePosseduta(titolo: 'Dylan Dog', serieName: 'Dylan Dog', publisher: 'Bonelli');
-    await edizionePosseduta(titolo: 'Watchmen', publisher: 'Panini');
+  testWidgets(
+    'con Edizioni possedute: mostra il conteggio e le card in griglia',
+    (tester) async {
+      await edizionePosseduta(
+        titolo: 'Dylan Dog',
+        serieName: 'Dylan Dog',
+        publisher: 'Bonelli',
+      );
+      await edizionePosseduta(titolo: 'Watchmen', publisher: 'Panini');
 
-    await pumpCollezione(tester);
+      await pumpCollezione(tester);
 
-    expect(find.text('2 fumetti'), findsOneWidget);
-    // Il titolo compare più volte (copertina procedurale, titolo card,
-    // eventuale sottotitolo con la Serie): basta che compaia, non contarlo.
-    expect(find.text('Dylan Dog'), findsWidgets);
-    expect(find.text('Watchmen'), findsWidgets);
-  });
+      expect(find.text('2 fumetti'), findsOneWidget);
+      // Il titolo compare più volte (copertina procedurale, titolo card,
+      // eventuale sottotitolo con la Serie): basta che compaia, non contarlo.
+      expect(find.text('Dylan Dog'), findsWidgets);
+      expect(find.text('Watchmen'), findsWidgets);
+    },
+  );
 
-  testWidgets('apre il pannello "Filtri e ordina" con i 12 assi e il blocco di ordinamento', (tester) async {
-    await edizionePosseduta(titolo: 'Dylan Dog', serieName: 'Dylan Dog', publisher: 'Bonelli');
+  testWidgets(
+    'apre il pannello "Filtri e ordina" con i 12 assi e il blocco di ordinamento',
+    (tester) async {
+      await edizionePosseduta(
+        titolo: 'Dylan Dog',
+        serieName: 'Dylan Dog',
+        publisher: 'Bonelli',
+      );
 
-    await pumpCollezione(tester);
+      await pumpCollezione(tester);
 
-    await tester.tap(find.text('Filtri e ordina'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Filtri e ordina'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('In vendita'), findsOneWidget);
-    expect(find.text('Serie'), findsWidgets);
-    expect(find.text('Editore'), findsWidgets);
-    expect(find.text('Genere'), findsWidgets);
+      expect(find.text('In vendita'), findsOneWidget);
+      expect(find.text('Serie'), findsWidgets);
+      expect(find.text('Editore'), findsWidgets);
+      expect(find.text('Genere'), findsWidgets);
 
-    // Il toggle "In vendita" (§163/§164) aggiunge contenuto in cima al
-    // foglio: il blocco Ordina/Ricorda in fondo richiede ora uno scroll per
-    // diventare visibile in questo viewport di test.
-    for (
-      var i = 0;
-      i < 10 && find.text('Ricorda filtri e ordinamento').evaluate().isEmpty;
-      i++
-    ) {
-      await tester.drag(find.byType(ListView), const Offset(0, -300));
-      await tester.pump();
-    }
-    await tester.pumpAndSettle();
+      // Il toggle "In vendita" (§163/§164) aggiunge contenuto in cima al
+      // foglio: il blocco Ordina/Ricorda in fondo richiede ora uno scroll per
+      // diventare visibile in questo viewport di test.
+      for (
+        var i = 0;
+        i < 10 && find.text('Ricorda filtri e ordinamento').evaluate().isEmpty;
+        i++
+      ) {
+        await tester.drag(find.byType(ListView), const Offset(0, -300));
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
 
-    expect(find.text('Ordina per'), findsOneWidget);
-    expect(find.text('Ricorda filtri e ordinamento'), findsOneWidget);
-  });
+      expect(find.text('Ordina per'), findsOneWidget);
+      expect(find.text('Ricorda filtri e ordinamento'), findsOneWidget);
+    },
+  );
 
-  testWidgets('filtro senza risultati: mostra il secondo stato vuoto con "Rimuovi filtri"', (tester) async {
-    // Combinazione impossibile nel dataset: nessuna Edizione Giapponese è
-    // anche Cartonata — stesso scenario "③" del prototipo #96.
-    await edizionePosseduta(titolo: 'Dylan Dog', language: 'Italiano', format: FormatoEdizione.cartonato);
-    await edizionePosseduta(titolo: 'Berserk', language: 'Giapponese', format: FormatoEdizione.brossurato);
+  testWidgets(
+    'filtro senza risultati: mostra il secondo stato vuoto con "Rimuovi filtri"',
+    (tester) async {
+      // Combinazione impossibile nel dataset: nessuna Edizione Giapponese è
+      // anche Cartonata — stesso scenario "③" del prototipo #96.
+      await edizionePosseduta(
+        titolo: 'Dylan Dog',
+        language: 'Italiano',
+        format: FormatoEdizione.cartonato,
+      );
+      await edizionePosseduta(
+        titolo: 'Berserk',
+        language: 'Giapponese',
+        format: FormatoEdizione.brossurato,
+      );
 
-    await pumpCollezione(tester);
-    await tester.tap(find.text('Filtri e ordina'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Giapponese'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Cartonato'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mostra 0 risultati'));
-    await tester.pumpAndSettle();
+      await pumpCollezione(tester);
+      await tester.tap(find.text('Filtri e ordina'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Giapponese'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cartonato'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mostra 0 risultati'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Nessun fumetto corrisponde ai filtri'), findsOneWidget);
-    expect(find.text('Rimuovi filtri'), findsOneWidget);
-  });
+      expect(find.text('Nessun fumetto corrisponde ai filtri'), findsOneWidget);
+      expect(find.text('Rimuovi filtri'), findsOneWidget);
+    },
+  );
 
-  testWidgets('scroll infinito: superata la soglia di prefetch carica la pagina successiva', (tester) async {
-    // 150 Edizioni, ben oltre la prima pagina di 60 (dimensionePaginaCollezione):
-    // la card 'E100' non esiste ancora nella finestra iniziale.
-    for (var i = 0; i < 150; i++) {
-      await edizionePosseduta(titolo: 'E${i.toString().padLeft(3, '0')}');
-    }
+  testWidgets(
+    'scroll infinito: superata la soglia di prefetch carica la pagina successiva',
+    (tester) async {
+      // 150 Edizioni, ben oltre la prima pagina di 60 (dimensionePaginaCollezione):
+      // la card 'E100' non esiste ancora nella finestra iniziale.
+      for (var i = 0; i < 150; i++) {
+        await edizionePosseduta(titolo: 'E${i.toString().padLeft(3, '0')}');
+      }
 
-    await pumpCollezione(tester);
+      await pumpCollezione(tester);
 
-    expect(find.text('E100'), findsNothing);
+      expect(find.text('E100'), findsNothing);
 
-    for (var i = 0; i < 60 && find.text('E100').evaluate().isEmpty; i++) {
-      await tester.drag(find.byType(GridView), const Offset(0, -600));
-      await tester.pump();
-    }
-    await tester.pumpAndSettle();
+      for (var i = 0; i < 60 && find.text('E100').evaluate().isEmpty; i++) {
+        await tester.drag(find.byType(GridView), const Offset(0, -600));
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
 
-    // Il titolo compare più volte (copertina procedurale + titolo card),
-    // stessa ragione della card 'con Edizioni possedute' più sopra.
-    expect(find.text('E100'), findsWidgets);
-  });
+      // Il titolo compare più volte (copertina procedurale + titolo card),
+      // stessa ragione della card 'con Edizioni possedute' più sopra.
+      expect(find.text('E100'), findsWidgets);
+    },
+  );
 
   testWidgets(
     'una copia "in vendita" mostra la fascia "IN VENDITA" sulla card '
@@ -245,7 +293,11 @@ void main() {
       final rimuovi = tester.widget<ListTile>(
         find.widgetWithText(ListTile, 'Rimuovi da in vendita'),
       );
-      expect(rimuovi.enabled, isFalse, reason: 'deliberatamente non implementata');
+      expect(
+        rimuovi.enabled,
+        isFalse,
+        reason: 'deliberatamente non implementata',
+      );
 
       await tester.tap(find.text('Segna come in vendita'));
       await tester.pumpAndSettle();

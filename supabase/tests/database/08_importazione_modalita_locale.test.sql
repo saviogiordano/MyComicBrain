@@ -4,7 +4,7 @@
 -- righe a metà.
 begin;
 \ir helpers.psql
-select plan(18);
+select plan(21);
 
 select tests.create_user('importa@example.com') as utente \gset
 select tests.create_user('altro@example.com') as altro \gset
@@ -17,9 +17,9 @@ select tests.collection_of(:'utente') as col \gset
 -- Un'importazione precedente da un altro device: la Collezione è già
 -- popolata e l'importazione la unisce senza deduplicare.
 select tests.authenticate_as(:'utente');
-insert into public.opere (id, collection_id, title) values (1, :'col', 'Già nell''account');
-insert into public.edizioni (id, collection_id, opera_id) values (1, :'col', 1);
-insert into public.copie (collection_id, edizione_id, status) values (:'col', 1, 'posseduta');
+insert into public.opere (id, collection_id, title) values (tests.id(1), :'col', 'Già nell''account');
+insert into public.edizioni (id, collection_id, opera_id) values (tests.id(1), :'col', tests.id(1));
+insert into public.copie (collection_id, edizione_id, status) values (:'col', tests.id(1), 'posseduta');
 
 select is(
   public.importa_modalita_locale(:'payload'::jsonb, '00000000-0000-4000-8000-000000000001'),
@@ -77,6 +77,30 @@ select is(
    join public.identificazione i on i.id = c.identificazione_id
    join public.edizioni e on e.id = c.edizione_id),
   '2', 'un Candidato interno punta alla nuova Edizione');
+
+-- Drift con chiavi uuid (ADR-0008): gli id che sono già uuid si conservano,
+-- e i collegamenti seguono l'ordine del payload.
+select is(
+  public.importa_modalita_locale(
+    '{"opere":[{"id":"0190b000-0000-7000-8000-0000000000a1","title":"Zagor"}],
+      "edizioni":[{"id":"0190b000-0000-7000-8000-0000000000b1","opera_id":"0190b000-0000-7000-8000-0000000000a1","issue_number_label":"Z1"}],
+      "creator":[{"id":"0190b000-0000-7000-8000-0000000000c1","name":"Guido Nolitta"},
+                 {"id":"0190b000-0000-7000-8000-0000000000c2","name":"Gallieno Ferri"},
+                 {"id":"0190b000-0000-7000-8000-0000000000c3","name":"Bonelli"}],
+      "comic_creator":[{"id":3,"edizione_id":"0190b000-0000-7000-8000-0000000000b1","creator_id":"0190b000-0000-7000-8000-0000000000c3","ruolo":"altro"},
+                       {"id":1,"edizione_id":"0190b000-0000-7000-8000-0000000000b1","creator_id":"0190b000-0000-7000-8000-0000000000c1","ruolo":"sceneggiatore"},
+                       {"id":2,"edizione_id":"0190b000-0000-7000-8000-0000000000b1","creator_id":"0190b000-0000-7000-8000-0000000000c2","ruolo":"disegnatore"}]}',
+    '00000000-0000-4000-8000-000000000003') ->> 'copie_importate',
+  '0', 'un payload con id uuid viene importato');
+select is(
+  (select o.title from public.edizioni e join public.opere o on o.id = e.opera_id
+   where e.id = '0190b000-0000-7000-8000-0000000000b1'),
+  'Zagor', '... conservando gli uuid del device');
+select results_eq(
+  $$ select cr.name from public.comic_creator cc join public.creator cr on cr.id = cc.creator_id
+     where cc.edizione_id = '0190b000-0000-7000-8000-0000000000b1' order by cc.id $$,
+  $$ values ('Bonelli'), ('Guido Nolitta'), ('Gallieno Ferri') $$,
+  '... e l''ordine del payload per gli id da rimappare');
 
 -- Nuovo tentativo dopo una risposta persa: stesso esito, nessuna riga in più.
 select is(

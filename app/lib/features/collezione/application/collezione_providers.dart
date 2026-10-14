@@ -10,11 +10,13 @@ import 'package:mycomicbrain/features/collezione/application/filtri_collezione_p
 /// catalogo posseduto con i 12 assi di filtro/ordinamento già risolti, mai
 /// la cover — quella è la finestra hydratata, vedi
 /// [edizioniFinestraCollezioneProvider].
-final indiceCollezioneProvider = StreamProvider<List<EdizioneCollezioneIndice>>((
-  ref,
-) {
-  return ref.watch(comicsRepositoryProvider).watchIndiceCollezione();
-});
+final indiceCollezioneProvider = StreamProvider<List<EdizioneCollezioneIndice>>(
+  (
+    ref,
+  ) {
+    return ref.watch(comicsRepositoryProvider).watchIndiceCollezione();
+  },
+);
 
 final filtriCollezionePersistenceProvider =
     Provider<FiltriCollezionePersistence>((ref) {
@@ -113,22 +115,24 @@ bool _aggiuntaMeseCorrente(EdizioneCollezioneIndice edizione, DateTime ora) {
 /// conteggio "X di Y fumetti" sia della finestra caricata (deciso su
 /// #115): entrambi devono vedere lo stesso insieme finale.
 final Provider<AsyncValue<List<EdizioneCollezioneIndice>>>
-edizioniVisibiliProvider = Provider<AsyncValue<List<EdizioneCollezioneIndice>>>((
-  ref,
-) {
-  final stato = ref.watch(filtriCollezioneProvider);
-  final soloMeseCorrente = ref.watch(soloAggiuntiMeseCorrenteProvider);
-  return ref.watch(indiceCollezioneProvider).whenData((edizioni) {
-    var visibili = edizioniVisibili(edizioni, stato);
-    if (soloMeseCorrente) {
-      final ora = DateTime.now();
-      visibili = visibili
-          .where((edizione) => _aggiuntaMeseCorrente(edizione, ora))
-          .toList();
-    }
-    return visibili;
-  });
-});
+edizioniVisibiliProvider = Provider<AsyncValue<List<EdizioneCollezioneIndice>>>(
+  (
+    ref,
+  ) {
+    final stato = ref.watch(filtriCollezioneProvider);
+    final soloMeseCorrente = ref.watch(soloAggiuntiMeseCorrenteProvider);
+    return ref.watch(indiceCollezioneProvider).whenData((edizioni) {
+      var visibili = edizioniVisibili(edizioni, stato);
+      if (soloMeseCorrente) {
+        final ora = DateTime.now();
+        visibili = visibili
+            .where((edizione) => _aggiuntaMeseCorrente(edizione, ora))
+            .toList();
+      }
+      return visibili;
+    });
+  },
+);
 
 /// I valori davvero presenti in collezione per un asse (§9, deciso su #85)
 /// — usati dal pannello Filtri per proporre solo opzioni realmente
@@ -183,7 +187,7 @@ final numeroCaricatiCollezioneProvider =
 /// [edizioniVisibiliProvider]) — si ri-crea (nuova subscription) ogni volta
 /// che la finestra cambia, sia per `caricaAltro()` sia per un cambiamento
 /// reattivo a monte.
-final hydratazioneCollezioneProvider = StreamProvider<Map<int, String?>>((
+final hydratazioneCollezioneProvider = StreamProvider<Map<String, String?>>((
   ref,
 ) {
   final visibili = ref.watch(edizioniVisibiliProvider).valueOrNull ?? const [];
@@ -258,12 +262,12 @@ final modalitaSelezioneProvider =
 
 /// Le Edizioni selezionate mentre [modalitaSelezioneProvider] è attivo (§9,
 /// deciso su #164) — insieme di `edizioneId`, non persistito.
-class EdizioniSelezionateNotifier extends Notifier<Set<int>> {
+class EdizioniSelezionateNotifier extends Notifier<Set<String>> {
   @override
-  Set<int> build() => const {};
+  Set<String> build() => const {};
 
-  void toggle(int edizioneId) {
-    final selezionati = Set<int>.from(state);
+  void toggle(String edizioneId) {
+    final selezionati = Set<String>.from(state);
     if (!selezionati.add(edizioneId)) selezionati.remove(edizioneId);
     state = selezionati;
   }
@@ -272,6 +276,6 @@ class EdizioniSelezionateNotifier extends Notifier<Set<int>> {
 }
 
 final edizioniSelezionateProvider =
-    NotifierProvider<EdizioniSelezionateNotifier, Set<int>>(
+    NotifierProvider<EdizioniSelezionateNotifier, Set<String>>(
       EdizioniSelezionateNotifier.new,
     );

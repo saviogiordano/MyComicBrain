@@ -12,8 +12,8 @@ import 'package:mycomicbrain/core/domain/formato.dart';
 
 void main() {
   RigaEsportazioneCopia rigaCompleta() => RigaEsportazioneCopia(
-    copiaId: 1,
-    edizioneId: 10,
+    copiaId: '1',
+    edizioneId: '10',
     operaTitolo: 'Dylan Dog',
     serieName: 'Dylan Dog',
     publisher: 'Sergio Bonelli Editore',
@@ -31,8 +31,8 @@ void main() {
     format: FormatoEdizione.spillato,
     autori: const [
       (
-        comicCreatorId: 1,
-        creatorId: 1,
+        comicCreatorId: '1',
+        creatorId: '1',
         name: 'Tiziano Sclavi',
         ruolo: RuoloCreator.sceneggiatore,
       ),
@@ -50,8 +50,8 @@ void main() {
   );
 
   RigaEsportazioneCopia rigaMinima() => RigaEsportazioneCopia(
-    copiaId: 2,
-    edizioneId: 20,
+    copiaId: '2',
+    edizioneId: '20',
     operaTitolo: 'Volume unico',
     status: StatoCopia.persa,
     createdAt: DateTime(2024, 5),
@@ -89,7 +89,7 @@ void main() {
     test('ultima colonna "Copertina" col nome del file nello zip', () {
       final csv = generaCsvEsportazione(
         [rigaCompleta(), rigaMinima()],
-        fileCopertine: {10: 'copertine/edizione_10.jpg'},
+        fileCopertine: {'10': 'copertine/edizione_10.jpg'},
       );
       final righe = csv.split('\r\n')..removeWhere((r) => r.isEmpty);
 
@@ -173,27 +173,30 @@ void main() {
     final jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 1, 2]);
     final png = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2]);
 
-    RigaEsportazioneCopia riga(int copiaId, int edizioneId, String? cover) =>
-        RigaEsportazioneCopia(
-          copiaId: copiaId,
-          edizioneId: edizioneId,
-          operaTitolo: 'Opera $edizioneId',
-          status: StatoCopia.posseduta,
-          createdAt: DateTime(2024),
-          coverImage: cover,
-        );
+    RigaEsportazioneCopia riga(
+      String copiaId,
+      String edizioneId,
+      String? cover,
+    ) => RigaEsportazioneCopia(
+      copiaId: copiaId,
+      edizioneId: edizioneId,
+      operaTitolo: 'Opera $edizioneId',
+      status: StatoCopia.posseduta,
+      createdAt: DateTime(2024),
+      coverImage: cover,
+    );
 
     test('un file per Edizione, estensione dai byte, cover illeggibili '
         'saltate', () async {
       final caricate = <String>[];
       final copertine = await raccogliCopertineEsportazione(
         [
-          riga(1, 10, '/a.jpg'),
+          riga('1', '10', '/a.jpg'),
           // Seconda Copia della stessa Edizione: nessun secondo caricamento.
-          riga(2, 10, '/a.jpg'),
-          riga(3, 20, 'https://example.com/b'),
-          riga(4, 30, '/mancante.jpg'),
-          riga(5, 40, null),
+          riga('2', '10', '/a.jpg'),
+          riga('3', '20', 'https://example.com/b'),
+          riga('4', '30', '/mancante.jpg'),
+          riga('5', '40', null),
         ],
         caricaBytesCopertina: (cover) async {
           caricate.add(cover);
@@ -207,8 +210,8 @@ void main() {
 
       expect(caricate, ['/a.jpg', 'https://example.com/b', '/mancante.jpg']);
       expect(copertine.fileCopertine, {
-        10: 'copertine/edizione_10.jpg',
-        20: 'copertine/edizione_20.png',
+        '10': 'copertine/edizione_10.jpg',
+        '20': 'copertine/edizione_20.png',
       });
       expect(copertine.bytesPerFile, {
         'copertine/edizione_10.jpg': jpeg,

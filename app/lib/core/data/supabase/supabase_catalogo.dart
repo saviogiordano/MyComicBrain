@@ -13,7 +13,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
   // --- Opere, Serie, Edizioni, Copie ---
 
   @override
-  Future<int> aggiungiOpera({required String title, DateTime? createdAt}) =>
+  Future<String> aggiungiOpera({required String title, DateTime? createdAt}) =>
       _inserisci(TabellaSupabase.opere, {
         'title': title,
         if (createdAt != null) 'created_at': _iso(createdAt),
@@ -22,7 +22,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
   /// Riusa la Serie con lo stesso nome (senza distinzione di maiuscole),
   /// come su drift.
   @override
-  Future<int> aggiungiSerie({
+  Future<String> aggiungiSerie({
     required String name,
     int? totalIssues,
     String? issn,
@@ -35,7 +35,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
         .order('id', ascending: true)
         .limit(1)
         .maybeSingle();
-    if (esistente != null) return esistente['id'] as int;
+    if (esistente != null) return esistente['id'] as String;
     return _inserisci(TabellaSupabase.serie, {
       'name': nome,
       'total_issues': totalIssues,
@@ -44,9 +44,9 @@ mixin _CatalogoSupabase implements ComicsRepository {
   }
 
   @override
-  Future<int> aggiungiEdizione({
-    required int operaId,
-    int? serieId,
+  Future<String> aggiungiEdizione({
+    required String operaId,
+    String? serieId,
     String? publisher,
     int? issueNumber,
     String? issueNumberLabel,
@@ -87,8 +87,8 @@ mixin _CatalogoSupabase implements ComicsRepository {
   });
 
   @override
-  Future<int> aggiungiCopia({
-    required int edizioneId,
+  Future<String> aggiungiCopia({
+    required String edizioneId,
     required StatoCopia status,
     StatoLettura? readingStatus,
     CondizioneCopia? condition,
@@ -101,7 +101,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
     double? valutazione,
     DateTime? createdAt,
     DateTime? updatedAt,
-    int? scansioneId,
+    String? scansioneId,
   }) {
     final aggiornataIl = updatedAt ?? createdAt;
     return _inserisci(TabellaSupabase.copie, {
@@ -124,14 +124,14 @@ mixin _CatalogoSupabase implements ComicsRepository {
 
   @override
   Future<void> aggiornaTitoloOpera({
-    required int operaId,
+    required String operaId,
     required String title,
   }) => _aggiorna(TabellaSupabase.opere, operaId, {'title': title});
 
   @override
   Future<void> aggiornaEdizione({
-    required int id,
-    int? serieId,
+    required String id,
+    String? serieId,
     String? publisher,
     int? issueNumber,
     String? issueNumberLabel,
@@ -166,7 +166,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
 
   @override
   Future<void> aggiornaCopia({
-    required int id,
+    required String id,
     CondizioneCopia? condition,
     double? purchasePrice,
     ValutaPrezzo? purchasePriceCurrency,
@@ -189,7 +189,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
 
   @override
   Future<void> cambiaStatoCopia({
-    required int id,
+    required String id,
     required StatoCopia status,
     StatoLettura? readingStatus,
   }) => _aggiorna(TabellaSupabase.copie, id, {
@@ -199,14 +199,16 @@ mixin _CatalogoSupabase implements ComicsRepository {
   });
 
   @override
-  Future<void> impostaInVendita({required int id, required bool inVendita}) =>
-      _aggiorna(TabellaSupabase.copie, id, {
-        'for_sale': inVendita,
-        'updated_at': _iso(DateTime.now()),
-      });
+  Future<void> impostaInVendita({
+    required String id,
+    required bool inVendita,
+  }) => _aggiorna(TabellaSupabase.copie, id, {
+    'for_sale': inVendita,
+    'updated_at': _iso(DateTime.now()),
+  });
 
   @override
-  Future<int> segnaEdizioniInVendita(List<int> edizioneIds) async {
+  Future<int> segnaEdizioniInVendita(List<String> edizioneIds) async {
     if (edizioneIds.isEmpty) return 0;
     final scritte = await _client
         .from(TabellaSupabase.copie.nome)
@@ -222,7 +224,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
   }
 
   @override
-  Future<bool> rimuoviCopia(int id) async {
+  Future<bool> rimuoviCopia(String id) async {
     final edizioneEliminata = await _client.rpc<bool>(
       'rimuovi_copia',
       params: {'target_copia_id': id},
@@ -232,7 +234,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
   }
 
   @override
-  Future<void> eliminaEdizione(int edizioneId) async {
+  Future<void> eliminaEdizione(String edizioneId) async {
     await _client.rpc<void>(
       'elimina_edizione',
       params: {'target_edizione_id': edizioneId},
@@ -249,7 +251,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
             .ilike('name', '%${_escapeLike(query)}%')
             .order('id', ascending: true))
       SerieTableData(
-        id: riga['id'] as int,
+        id: riga['id'] as String,
         name: riga['name'] as String,
         totalIssues: riga['total_issues'] as int?,
         issn: riga['issn'] as String?,
@@ -262,17 +264,17 @@ mixin _CatalogoSupabase implements ComicsRepository {
   @override
   Future<List<CreatorData>> cercaCreator(String query) async => [
     for (final riga in await _cercaPerNome(TabellaSupabase.creator, query))
-      CreatorData(id: riga['id'] as int, name: riga['name'] as String),
+      CreatorData(id: riga['id'] as String, name: riga['name'] as String),
   ];
 
   @override
-  Future<int> aggiungiCreator(String name) =>
+  Future<String> aggiungiCreator(String name) =>
       _inserisci(TabellaSupabase.creator, {'name': name});
 
   @override
   Future<void> collegaCreatorAEdizione({
-    required int edizioneId,
-    required int creatorId,
+    required String edizioneId,
+    required String creatorId,
     required RuoloCreator ruolo,
   }) => _inserisci(TabellaSupabase.comicCreator, {
     'edizione_id': edizioneId,
@@ -281,11 +283,11 @@ mixin _CatalogoSupabase implements ComicsRepository {
   });
 
   @override
-  Future<void> rimuoviCreatorDaEdizione(int comicCreatorId) =>
+  Future<void> rimuoviCreatorDaEdizione(String comicCreatorId) =>
       _elimina(TabellaSupabase.comicCreator, comicCreatorId);
 
   @override
-  Future<List<CreatorConRuolo>> autoriDiEdizione(int edizioneId) async {
+  Future<List<CreatorConRuolo>> autoriDiEdizione(String edizioneId) async {
     final righe = await _client
         .from(TabellaSupabase.comicCreator.nome)
         .select(_selectAutori)
@@ -297,47 +299,47 @@ mixin _CatalogoSupabase implements ComicsRepository {
   @override
   Future<List<CharacterData>> cercaCharacter(String query) async => [
     for (final riga in await _cercaPerNome(TabellaSupabase.character, query))
-      CharacterData(id: riga['id'] as int, name: riga['name'] as String),
+      CharacterData(id: riga['id'] as String, name: riga['name'] as String),
   ];
 
   @override
-  Future<int> aggiungiCharacter(String name) =>
+  Future<String> aggiungiCharacter(String name) =>
       _inserisci(TabellaSupabase.character, {'name': name});
 
   @override
   Future<void> collegaCharacterAEdizione({
-    required int edizioneId,
-    required int characterId,
+    required String edizioneId,
+    required String characterId,
   }) => _inserisci(TabellaSupabase.comicCharacter, {
     'edizione_id': edizioneId,
     'character_id': characterId,
   });
 
   @override
-  Future<void> rimuoviCharacterDaEdizione(int comicCharacterId) =>
+  Future<void> rimuoviCharacterDaEdizione(String comicCharacterId) =>
       _elimina(TabellaSupabase.comicCharacter, comicCharacterId);
 
   @override
   Future<List<TagTableData>> cercaTag(String query) async => [
     for (final riga in await _cercaPerNome(TabellaSupabase.tag, query))
-      TagTableData(id: riga['id'] as int, name: riga['name'] as String),
+      TagTableData(id: riga['id'] as String, name: riga['name'] as String),
   ];
 
   @override
-  Future<int> aggiungiTag(String name) =>
+  Future<String> aggiungiTag(String name) =>
       _inserisci(TabellaSupabase.tag, {'name': name});
 
   @override
   Future<void> collegaTagAEdizione({
-    required int edizioneId,
-    required int tagId,
+    required String edizioneId,
+    required String tagId,
   }) => _inserisci(TabellaSupabase.edizioneTag, {
     'edizione_id': edizioneId,
     'tag_id': tagId,
   });
 
   @override
-  Future<void> rimuoviTagDaEdizione(int edizioneTagId) =>
+  Future<void> rimuoviTagDaEdizione(String edizioneTagId) =>
       _elimina(TabellaSupabase.edizioneTag, edizioneTagId);
 
   /// Sostituzione intera senza transazione: elimina i Generi fuori da
@@ -346,7 +348,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
   /// la chiamata.
   @override
   Future<void> impostaGeneriEdizione({
-    required int edizioneId,
+    required String edizioneId,
     required Set<GenereEdizione> generi,
   }) async {
     final nomi = [for (final genere in generi) genere.name];
@@ -382,8 +384,8 @@ mixin _CatalogoSupabase implements ComicsRepository {
   // la fetta Serie/Dashboard/Valore stimato) ---
 
   @override
-  Future<int> avviaOrRiavviaValoreStimato({
-    required int copiaId,
+  Future<String> avviaOrRiavviaValoreStimato({
+    required String copiaId,
     DateTime? createdAt,
   }) async {
     final esistente = await _client
@@ -398,7 +400,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
         if (createdAt != null) 'created_at': _iso(createdAt),
       });
     }
-    final id = esistente['id'] as int;
+    final id = esistente['id'] as String;
     await _aggiorna(TabellaSupabase.valoreStimato, id, {
       'status': StatoValoreStimato.inCorso.name,
       'error_message': null,
@@ -408,7 +410,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
 
   @override
   Future<void> completaValoreStimato({
-    required int id,
+    required String id,
     required double value,
     DateTime? completedAt,
   }) => _aggiorna(TabellaSupabase.valoreStimato, id, {
@@ -420,7 +422,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
   // --- Scheda del fumetto ---
 
   @override
-  Stream<EdizioneDettaglio?> watchEdizione(int edizioneId) =>
+  Stream<EdizioneDettaglio?> watchEdizione(String edizioneId) =>
       _invalidazione.osserva(_tabelleDiEdizione, () async {
         final riga = await _client
             .from(TabellaSupabase.edizioni.nome)
@@ -434,7 +436,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
       });
 
   @override
-  Future<String?> coverImageGrezzoDi(int edizioneId) async {
+  Future<String?> coverImageGrezzoDi(String edizioneId) async {
     final riga = await _client
         .from(TabellaSupabase.edizioni.nome)
         .select('cover_image')
@@ -457,10 +459,10 @@ mixin _CatalogoSupabase implements ComicsRepository {
             .toList()
           ..sort((a, b) => a.comicCreatorId.compareTo(b.comicCreatorId));
     return EdizioneDettaglio(
-      edizioneId: e['id'] as int,
-      operaId: opera['id'] as int,
+      edizioneId: e['id'] as String,
+      operaId: opera['id'] as String,
       titolo: opera['title'] as String,
-      serieId: serie?['id'] as int?,
+      serieId: serie?['id'] as String?,
       serieName: serie?['name'] as String?,
       publisher: e['publisher'] as String?,
       issueNumber: e['issue_number'] as int?,
@@ -485,7 +487,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
   static CopiaDettaglio _copiaDettaglio(Map<String, dynamic> c) {
     final valore = _unaONessuna(c['valore_stimato']);
     return CopiaDettaglio(
-      id: c['id'] as int,
+      id: c['id'] as String,
       status: StatoCopia.values.byName(c['status'] as String),
       readingStatus: _enumOrNull(StatoLettura.values, c['reading_status']),
       condition: _enumOrNull(CondizioneCopia.values, c['condition']),
@@ -515,8 +517,8 @@ mixin _CatalogoSupabase implements ComicsRepository {
   static CreatorConRuolo _autore(Map<String, dynamic> riga) {
     final creator = riga['creator'] as Map<String, dynamic>;
     return (
-      comicCreatorId: riga['id'] as int,
-      creatorId: creator['id'] as int,
+      comicCreatorId: riga['id'] as String,
+      creatorId: creator['id'] as String,
       name: creator['name'] as String,
       ruolo: RuoloCreator.values.byName(riga['ruolo'] as String),
     );
@@ -539,7 +541,7 @@ mixin _CatalogoSupabase implements ComicsRepository {
   // --- Primitive ---
 
   /// Inserisce una riga nella Collezione e ne restituisce l'id.
-  Future<int> _inserisci(
+  Future<String> _inserisci(
     TabellaSupabase tabella,
     Map<String, Object?> valori,
   ) async {
@@ -549,19 +551,19 @@ mixin _CatalogoSupabase implements ComicsRepository {
         .select('id')
         .single();
     _invalidazione.segnala({tabella});
-    return riga['id'] as int;
+    return riga['id'] as String;
   }
 
   Future<void> _aggiorna(
     TabellaSupabase tabella,
-    int id,
+    String id,
     Map<String, Object?> valori,
   ) async {
     await _client.from(tabella.nome).update(valori).eq('id', id);
     _invalidazione.segnala({tabella});
   }
 
-  Future<void> _elimina(TabellaSupabase tabella, int id) async {
+  Future<void> _elimina(TabellaSupabase tabella, String id) async {
     await _client.from(tabella.nome).delete().eq('id', id);
     _invalidazione.segnala({tabella});
   }

@@ -367,20 +367,24 @@ final scansioniNonConfermateProvider = StreamProvider<List<String>>((ref) {
 /// di conferma #59), per id — a differenza di [statoAnalisiCopertinaProvider]
 /// (per percorso immagine) usa `scansioneId` perché è la chiave con cui il
 /// resto del repository dell'Identificazione già lavora.
-final StreamProviderFamily<EsitoIdentificazione, int> identificazioneProvider =
-    StreamProvider.family<EsitoIdentificazione, int>((ref, scansioneId) {
-      return ref
-          .watch(comicsRepositoryProvider)
-          .watchIdentificazione(scansioneId);
-    });
+final StreamProviderFamily<EsitoIdentificazione, String>
+identificazioneProvider = StreamProvider.family<EsitoIdentificazione, String>((
+  ref,
+  scansioneId,
+) {
+  return ref.watch(comicsRepositoryProvider).watchIdentificazione(scansioneId);
+});
 
 /// L'Analisi Copertina completata di una Scansione, per id — usata da
 /// `InserisciManualmentePage` (§6.3, deciso su #63) per precompilare il
 /// form col risultato AI invece di lasciarlo vuoto quando né il catalogo
 /// interno né ComicVine hanno trovato un candidato affidabile.
-final FutureProviderFamily<AnalisiCopertinaTableData, int>
+final FutureProviderFamily<AnalisiCopertinaTableData, String>
 analisiCopertinaProvider =
-    FutureProvider.family<AnalisiCopertinaTableData, int>((ref, scansioneId) {
+    FutureProvider.family<AnalisiCopertinaTableData, String>((
+      ref,
+      scansioneId,
+    ) {
       return ref
           .watch(comicsRepositoryProvider)
           .analisiCopertinaPerScansione(scansioneId);
@@ -389,10 +393,13 @@ analisiCopertinaProvider =
 /// L'Edizione con le sue Copie e i suoi Autori per la Scheda del fumetto
 /// (§8, deciso su #63/#65/#67/#68), per id — `null` se l'Edizione è stata
 /// cancellata.
-final StreamProviderFamily<EdizioneDettaglio?, int> edizioneDettaglioProvider =
-    StreamProvider.family<EdizioneDettaglio?, int>((ref, edizioneId) {
-      return ref.watch(comicsRepositoryProvider).watchEdizione(edizioneId);
-    });
+final StreamProviderFamily<EdizioneDettaglio?, String>
+edizioneDettaglioProvider = StreamProvider.family<EdizioneDettaglio?, String>((
+  ref,
+  edizioneId,
+) {
+  return ref.watch(comicsRepositoryProvider).watchEdizione(edizioneId);
+});
 
 /// L'elenco `/serie` (§11, deciso su #97/#98), raggruppato in tre sezioni.
 final serieListaProvider = StreamProvider<SerieLista>((ref) {
@@ -401,7 +408,7 @@ final serieListaProvider = StreamProvider<SerieLista>((ref) {
 
 /// Il dettaglio `/serie/:id` (§11, deciso su #97/#99), per id — `null` se
 /// la Serie è stata cancellata.
-final StreamProviderFamily<SerieDettaglio?, int> serieDettaglioProvider =
-    StreamProvider.family<SerieDettaglio?, int>((ref, serieId) {
+final StreamProviderFamily<SerieDettaglio?, String> serieDettaglioProvider =
+    StreamProvider.family<SerieDettaglio?, String>((ref, serieId) {
       return ref.watch(comicsRepositoryProvider).watchSerieDettaglio(serieId);
     });

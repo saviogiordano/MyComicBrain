@@ -32,11 +32,11 @@ class IdentificazionePipeline {
   /// richiesta di nuova Analisi Copertina su una riga già `completata`,
   /// riepilogo), riprende quella riga invece di inserirne una seconda — la
   /// relazione con `scansioneId` è 1:1.
-  Future<void> identifica({required int scansioneId}) async {
+  Future<void> identifica({required String scansioneId}) async {
     final analisi = await _repository.analisiCopertinaPerScansione(scansioneId);
     final identificazioneEsistente = await _repository
         .idIdentificazionePerScansione(scansioneId);
-    final int identificazioneId;
+    final String identificazioneId;
     if (identificazioneEsistente != null) {
       identificazioneId = identificazioneEsistente;
       await _repository.riavviaIdentificazione(id: identificazioneId);

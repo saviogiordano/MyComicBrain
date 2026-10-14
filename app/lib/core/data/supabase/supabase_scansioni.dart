@@ -46,7 +46,7 @@ mixin _ScansioniSupabase implements ComicsRepository {
   /// Carica l'immagine e crea la riga. L'upload sovrascrive: un tentativo
   /// ripetuto dopo un errore sulla riga non trova la chiave occupata.
   @override
-  Future<int> aggiungiScansione({
+  Future<String> aggiungiScansione({
     required String image,
     DateTime? createdAt,
   }) async {
@@ -73,24 +73,24 @@ mixin _ScansioniSupabase implements ComicsRepository {
         .select('id')
         .single();
     _invalidazione.segnala({TabellaSupabase.scansioni});
-    return riga['id'] as int;
+    return riga['id'] as String;
   }
 
   @override
-  Future<int> idScansionePerImmagine(String image) async {
+  Future<String> idScansionePerImmagine(String image) async {
     final riga = await _client
         .from(TabellaSupabase.scansioni.nome)
         .select('id')
         .eq('image', _chiaveScansione(image))
         .single();
-    return riga['id'] as int;
+    return riga['id'] as String;
   }
 
   /// Elimina la riga (Analisi e Identificazione seguono a cascata, le Copie
   /// perdono il collegamento) e poi, senza far fallire l'eliminazione,
   /// l'oggetto su Storage e la copia in cache.
   @override
-  Future<void> eliminaScansione({required int id}) async {
+  Future<void> eliminaScansione({required String id}) async {
     final righe = await _client
         .from(TabellaSupabase.scansioni.nome)
         .delete()
@@ -150,8 +150,8 @@ mixin _ScansioniSupabase implements ComicsRepository {
   // --- Analisi Copertina ---
 
   @override
-  Future<int> avviaAnalisiCopertina({
-    required int scansioneId,
+  Future<String> avviaAnalisiCopertina({
+    required String scansioneId,
     DateTime? createdAt,
   }) async {
     final riga = await _client
@@ -164,12 +164,12 @@ mixin _ScansioniSupabase implements ComicsRepository {
         .select('id')
         .single();
     _invalidazione.segnala({TabellaSupabase.analisiCopertina});
-    return riga['id'] as int;
+    return riga['id'] as String;
   }
 
   @override
   Future<void> completaAnalisiCopertina({
-    required int id,
+    required String id,
     required String rawResponse,
     String? title,
     String? issueNumberLabel,
@@ -222,7 +222,7 @@ mixin _ScansioniSupabase implements ComicsRepository {
 
   @override
   Future<void> fallisciAnalisiCopertina({
-    required int id,
+    required String id,
     required String errorMessage,
     DateTime? completedAt,
   }) => _aggiornaAnalisi(id, {
@@ -232,7 +232,7 @@ mixin _ScansioniSupabase implements ComicsRepository {
   });
 
   @override
-  Future<void> riavviaAnalisiCopertina({required int id}) =>
+  Future<void> riavviaAnalisiCopertina({required String id}) =>
       _aggiornaAnalisi(id, {
         'status': StatoAnalisiCopertina.inCorso.name,
         'error_message': null,
@@ -240,12 +240,12 @@ mixin _ScansioniSupabase implements ComicsRepository {
       });
 
   @override
-  Future<int> idAnalisiCopertinaPerScansione(int scansioneId) async =>
+  Future<String> idAnalisiCopertinaPerScansione(String scansioneId) async =>
       (await analisiCopertinaPerScansione(scansioneId)).id;
 
   @override
   Future<AnalisiCopertinaTableData> analisiCopertinaPerScansione(
-    int scansioneId,
+    String scansioneId,
   ) async {
     final a = await _client
         .from(TabellaSupabase.analisiCopertina.nome)
@@ -254,8 +254,8 @@ mixin _ScansioniSupabase implements ComicsRepository {
         .single();
     List<String> lista(String chiave) => (a[chiave] as List).cast<String>();
     return AnalisiCopertinaTableData(
-      id: a['id'] as int,
-      scansioneId: a['scansione_id'] as int,
+      id: a['id'] as String,
+      scansioneId: a['scansione_id'] as String,
       title: a['title'] as String?,
       issueNumberLabel: a['issue_number_label'] as String?,
       publisher: a['publisher'] as String?,
@@ -310,7 +310,7 @@ mixin _ScansioniSupabase implements ComicsRepository {
         },
       );
 
-  Future<void> _aggiornaAnalisi(int id, Map<String, Object?> valori) async {
+  Future<void> _aggiornaAnalisi(String id, Map<String, Object?> valori) async {
     await _client
         .from(TabellaSupabase.analisiCopertina.nome)
         .update(valori)

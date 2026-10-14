@@ -28,10 +28,10 @@ void contrattoCollezione(CreaAdapter crea) {
   /// Crea un'opera + un'edizione (opzionalmente in una serie, con un
   /// numero) e vi aggiunge una copia con lo [status] dato. Ritorna l'id
   /// dell'edizione.
-  Future<int> edizioneConCopia({
+  Future<String> edizioneConCopia({
     required String titolo,
     required StatoCopia status,
-    int? serieId,
+    String? serieId,
     int? issueNumber,
     String? issueNumberLabel,
     String? coverImage,
@@ -271,7 +271,7 @@ void contrattoCollezione(CreaAdapter crea) {
             status: StatoCopia.venduta,
             coverImage: 'https://example.com/venduta.jpg',
           );
-          const inesistente = 999999;
+          const inesistente = '00000000-0000-7000-8000-000000999999';
 
           final mappa = await repo.watchHydratazioneCollezione([
             venduta,

@@ -49,7 +49,7 @@ class AnalisiCopertinaPipeline {
   }
 
   Future<void> _avviaUna(String percorsoImmagine) async {
-    final int scansioneId;
+    final String scansioneId;
     try {
       scansioneId = await _repository.idScansionePerImmagine(percorsoImmagine);
     } on Object {
@@ -98,8 +98,8 @@ class AnalisiCopertinaPipeline {
   }
 
   Future<void> _eseguiAnalisi({
-    required int analisiId,
-    required int scansioneId,
+    required String analisiId,
+    required String scansioneId,
     required String percorsoImmagine,
   }) async {
     try {
