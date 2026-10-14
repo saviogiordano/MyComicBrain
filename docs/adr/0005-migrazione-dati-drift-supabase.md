@@ -1,5 +1,7 @@
 # Percorso di migrazione dati da drift/sqlite locale a Supabase Postgres (§17)
 
+> **Superato in parte da [ADR-0008](0008-replica-locale-e-sincronizzazione.md)**: dopo l'importazione il Profilo non lavora più online-only, ma su una propria Replica locale sincronizzata. L'importazione resta come descritta qui, con id `uuid` che non vengono più rimappati.
+
 ADR-0003 fissa l'architettura (accesso diretto a Supabase, niente backend custom) e ADR-0004 lo schema multiutente (`collections`/`collection_members`, una Collezione per account). Nessuno dei due copre il momento di passaggio: oggi l'app è interamente locale (drift/sqlite, nessun account), e resterà usabile così anche dopo l'introduzione degli account. Questo documento registra quando e come i dati locali di un device si trasferiscono a Supabase. Decisioni prese in sessione di grilling sul ticket [#155](https://github.com/saviogiordano/MyComicBrain/issues/155) (mappa [#149](https://github.com/saviogiordano/MyComicBrain/issues/149)).
 
 Decisione, in sintesi:

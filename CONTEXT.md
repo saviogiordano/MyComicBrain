@@ -124,7 +124,18 @@ L'unità di condivisione multiutente su Supabase (§17.2/§17.3): un insieme di 
 
 **Modalità locale**:
 Lo stato d'uso dell'app *prima* di qualunque autenticazione su un device — scansione, catalogazione, tutto, appoggiato solo su drift/sqlite locale. Non è uno dei Profili di §17.1 (non richiede un account), è ciò che c'è prima che ne esista uno. Alla prima autenticazione su quel device (creazione di un account o login su uno già esistente), all'utente viene proposto di importare i suoi dati nella Collezione di destinazione, dove migrano o si uniscono a quelli esistenti. La Modalità locale su quel device si esaurisce solo quando l'importazione riesce o viene rifiutata, oppure subito se non ci sono dati locali: se l'importazione fallisce l'utente può uscire e restare in Modalità locale, e un'importazione interrotta riprende al riavvio. Una volta esaurita non torna più, nemmeno dopo logout o eliminazione dell'account: l'uso successivo richiede sempre un Profilo autenticato. Deciso su [#155](https://github.com/saviogiordano/MyComicBrain/issues/155), dettagli in [ADR-0005](docs/adr/0005-migrazione-dati-drift-supabase.md).
-_Avoid_: Offline mode (quello di §19 è un requisito futuro per profili *già* autenticati, fuori scope della decisione qui — voce distinta, non ancora progettata), modalità ospite/guest (nessun concetto di sessione temporanea: la Modalità locale non scade e non richiede mai un account per continuare a funzionare)
+_Avoid_: Offline mode (l'uso senza rete di un Profilo autenticato è la Replica locale, voce distinta), modalità ospite/guest (nessun concetto di sessione temporanea: la Modalità locale non scade e non richiede mai un account per continuare a funzionare)
+
+**Replica locale**:
+La copia completa, sul device, della Collezione di un Profilo autenticato, su cui l'app lavora sempre, con o senza rete (§19): si vedono collezione e cover, si modifica, si aggiunge a mano, si scattano Scansioni. Ogni Profilo ha la propria, distinta dalla Modalità locale. Nasce con il primo download al login o dopo una reinstallazione e il logout la cancella. Deciso su [Decisione — architettura della Replica locale e della Sincronizzazione](https://github.com/saviogiordano/MyComicBrain/issues/200), dettagli in [ADR-0008](docs/adr/0008-replica-locale-e-sincronizzazione.md).
+_Avoid_: Cache (la Replica non è una cache: è ciò che l'app legge e scrive), Offline mode
+
+**Sincronizzazione**:
+Lo scambio automatico fra le Repliche locali e la Collezione su Supabase (§18): carica le Modifiche in sospeso e scarica ciò che è cambiato altrove. Nei conflitti vince, campo per campo, l'ultima modifica fatta (non l'ultima arrivata), e l'eliminazione prevale, anche sui figli aggiunti o modificati altrove sotto la riga eliminata. Deciso su [#200](https://github.com/saviogiordano/MyComicBrain/issues/200).
+_Avoid_: Backup (il backup di §18 è una conseguenza, non il meccanismo), sync (ok in prosa)
+
+**Modifica in sospeso**:
+Una modifica o un'eliminazione fatta sulla Replica locale e non ancora accolta da Supabase. Sono queste a far scattare l'avviso al logout: cancellando la Replica andrebbero perse. Deciso su [#200](https://github.com/saviogiordano/MyComicBrain/issues/200).
 
 **Ruolo**:
 La posizione di un Profilo rispetto a una Collezione (§17.2): **Proprietario** (gestione completa, incluso invitare/rimuovere collaboratori ed eliminare la Collezione — sempre esattamente uno per Collezione, mai co-proprietà), **Editor** (aggiunge/modifica/elimina Opere, Edizioni e Copie, non gestisce i collaboratori) o **Visualizzatore** (accesso in sola lettura). Deciso su [#154](https://github.com/saviogiordano/MyComicBrain/issues/154).
