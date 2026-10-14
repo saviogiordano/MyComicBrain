@@ -50,3 +50,13 @@ end;
 $$;
 
 grant execute on all functions in schema tests to authenticated;
+
+-- Uno uuid fisso e leggibile per gli id dei test (ADR-0008: le chiavi delle
+-- tabelle replicate sono uuid).
+create function tests.id(n bigint)
+returns uuid
+language sql
+immutable
+as $$
+  select ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid
+$$;
