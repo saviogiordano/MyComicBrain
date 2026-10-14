@@ -27,7 +27,8 @@ import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/data/speech_to_text_service.dart';
-import 'package:mycomicbrain/core/data/supabase/supabase_comics_repository.dart';
+import 'package:mycomicbrain/core/data/repliche_profilo.dart';
+import 'package:mycomicbrain/core/data/supabase/archivio_conversazione_supabase.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
@@ -105,28 +106,48 @@ final idUtenteSupabaseProvider = Provider<String?>((ref) {
   return email == null ? null : client.auth.currentUser?.id;
 });
 
-/// Sceglie l'adapter dalla sessione (ADR-0007): nessuna sessione → drift;
-/// Profilo autenticato → Supabase, legato al suo utente. Login e logout
-/// ricostruiscono tutto ciò che dipende da qui.
+/// Le Replica locali dei Profili autenticati su questo device (ADR-0008).
+final replicheProfiloProvider = Provider<ReplicheProfilo>((ref) {
+  final repliche = ReplicheProfilo();
+  ref.onDispose(repliche.chiudi);
+  return repliche;
+});
+
+/// Sceglie il database dalla sessione (ADR-0008): nessuna sessione → la
+/// Modalità locale; Profilo autenticato → la sua Replica locale, con la
+/// Conversazione su Supabase. Login e logout ricostruiscono tutto ciò che
+/// dipende da qui.
 final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
   final userId = ref.watch(idUtenteSupabaseProvider);
   if (userId == null) return ref.watch(driftComicsRepositoryProvider);
-  final repository = SupabaseComicsRepository(
+  final repliche = ref.watch(replicheProfiloProvider);
+  final conversazione = ArchivioConversazioneSupabase(
     ref.watch(supabaseClientProvider)!,
-    userId: userId,
-    copertinaDownloader: ref.watch(copertinaDownloaderProvider),
   );
-  ref.onDispose(repository.chiudi);
-  return repository;
+  ref.onDispose(conversazione.chiudi);
+  return DriftComicsRepository(
+    repliche.database(userId),
+    // Le cover salvate sul device stanno nella cartella del Profilo, che il
+    // logout cancella.
+    copertinaDownloader: CopertinaDownloader(
+      baseDirectory: () => repliche.cartellaDati(userId),
+    ),
+    conversazione: conversazione,
+  );
 });
 
 final imageCropServiceProvider = Provider<ImageCropService>(
   (ref) => ImageCropService(),
 );
 
-final scansioneStorageProvider = Provider<ScansioneStorage>(
-  (ref) => ScansioneStorage(),
-);
+/// Le Scansioni di un Profilo autenticato stanno nella sua cartella, come
+/// le cover della sua Replica (ADR-0008).
+final scansioneStorageProvider = Provider<ScansioneStorage>((ref) {
+  final userId = ref.watch(idUtenteSupabaseProvider);
+  if (userId == null) return ScansioneStorage();
+  final repliche = ref.watch(replicheProfiloProvider);
+  return ScansioneStorage(baseDirectory: () => repliche.cartellaDati(userId));
+});
 
 final claudeCoverAnalysisClientProvider = Provider<ClaudeCoverAnalysisClient>(
   (ref) => ClaudeCoverAnalysisClient(

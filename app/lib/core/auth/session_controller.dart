@@ -81,6 +81,13 @@ final haDatiLocaliProvider = Provider<Future<bool> Function()>(
   (ref) => throw UnimplementedError('haDatiLocaliProvider non sostituito'),
 );
 
+/// La cancellazione dal device dei dati del Profilo autenticato adesso
+/// (Replica locale, cover e Scansioni, ADR-0008), da eseguire dopo che il
+/// Profilo è uscito; `null` senza Profilo o con il login spento.
+final cancellazioneProfiloProvider = Provider<Future<void> Function()?>(
+  (ref) => null,
+);
+
 // Chiavi persistite su device (non nella sessione: logout ed eliminazione
 // dell'account non le azzerano, ADR-0005).
 const _chiaveBenvenutoSuperato = 'account.benvenutoSuperato';
@@ -90,6 +97,11 @@ const _chiaveEmailInAttesa = 'account.emailInAttesa';
 class SessionController extends Notifier<SessionState> {
   Preferences get _preferences => ref.read(accountPreferencesProvider);
   AuthGateway get _gateway => ref.read(authGatewayProvider);
+
+  /// Preparata da logout ed eliminazione, eseguita quando il Profilo esce.
+  /// Una sessione finita da sola (token revocato o scaduto) non la prepara:
+  /// la Replica resta per il prossimo accesso.
+  Future<void> Function()? _cancellazioneAllUscita;
 
   @override
   SessionState build() {
@@ -150,11 +162,23 @@ class SessionController extends Notifier<SessionState> {
 
   Future<void> annullaEmailInAttesa() => _impostaEmailInAttesa(null);
 
-  Future<void> esci() => _gateway.esci();
+  Future<void> esci() => _uscendo(_gateway.esci);
 
   /// Il Profilo torna `null` da [AuthGateway.cambiamenti], come per il
   /// logout: logout ed eliminazione lasciano intatte le chiavi del device.
-  Future<void> eliminaAccount() => _gateway.eliminaAccount();
+  Future<void> eliminaAccount() => _uscendo(_gateway.eliminaAccount);
+
+  /// Prepara la cancellazione prima di [uscita]: il Profilo può uscire da
+  /// [AuthGateway.cambiamenti] prima che [uscita] restituisca.
+  Future<void> _uscendo(Future<void> Function() uscita) async {
+    _cancellazioneAllUscita = ref.read(cancellazioneProfiloProvider);
+    try {
+      await uscita();
+    } on Object {
+      _cancellazioneAllUscita = null;
+      rethrow;
+    }
+  }
 
   /// Verifica la rete per il Profilo autenticato: all'avvio, a ogni login
   /// e dal pulsante "Riprova" del blocco offline.
@@ -172,7 +196,12 @@ class SessionController extends Notifier<SessionState> {
   /// Unico punto in cui cambia il Profilo (vedi [AuthGateway]).
   Future<void> _suProfilo(Profilo? profilo) async {
     if (profilo == null) {
+      // Prima esce il Profilo, così nessuno legge più la sua Replica, poi
+      // si cancellano i suoi dati.
       state = _copia(profilo: () => null, offline: false);
+      final cancellazione = _cancellazioneAllUscita;
+      _cancellazioneAllUscita = null;
+      await cancellazione?.call();
       return;
     }
     // Prima di pubblicare il Profilo: con drift vuoto si entra subito

@@ -25,14 +25,14 @@ import 'package:mycomicbrain/core/domain/serie_lista.dart';
 /// farle vedere il backend: prende e restituisce tipi di dominio. Fanno
 /// ancora eccezione le righe drift restituite da [cercaCreator],
 /// [cercaCharacter], [cercaTag], [cercaSerie] e
-/// [analisiCopertinaPerScansione] (`CreatorData`, `CharacterData`, ...),
-/// che l'adapter Supabase deve costruire a sua volta.
+/// [analisiCopertinaPerScansione] (`CreatorData`, `CharacterData`, ...).
 ///
-/// Interfaccia del seam del layer dati (ADR-0007): `DriftComicsRepository`
-/// per la Modalità locale, un adapter Supabase per i profili autenticati,
-/// scelti da `comicsRepositoryProvider` in base alla sessione. Ogni metodo
-/// va implementato su entrambi gli adapter e coperto dalla suite di
-/// contratto (`test/core/data/contratto/`).
+/// Interfaccia del seam del layer dati (ADR-0007), implementata da
+/// `DriftComicsRepository` sia per la Modalità locale sia per la Replica
+/// locale di un Profilo autenticato (ADR-0008), scelte da
+/// `comicsRepositoryProvider` in base alla sessione. Per la Replica la
+/// Conversazione sta su Supabase (`ArchivioConversazione`). Ogni metodo è
+/// coperto dalla suite di contratto (`test/core/data/contratto/`).
 abstract interface class ComicsRepository {
   /// Ci sono dati in Modalità locale da importare (ADR-0005)? Catalogo
   /// (Opere, Serie, Creator, Personaggi, Tag) o Scansioni — non la

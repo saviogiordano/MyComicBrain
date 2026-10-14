@@ -31,10 +31,6 @@ void contrattoConversazione(CreaAdapter crea) {
       final id2 = await repo.getOrCreaConversazione();
 
       expect(id1, id2);
-      final tutte = await adapter.drift
-          .select(adapter.drift.conversazioneTable)
-          .get();
-      expect(tutte, hasLength(1));
     },
   );
 
@@ -59,6 +55,8 @@ void contrattoConversazione(CreaAdapter crea) {
       final messaggi = await repo.watchMessaggi(conversazioneId).first;
 
       expect(messaggi, hasLength(2));
+      expect(messaggi[0].createdAt, DateTime(2026));
+      expect(messaggi[1].createdAt, DateTime(2026, 1, 2));
       expect(messaggi[0].ruolo, RuoloMessaggio.utente);
       expect(messaggi[0].testo, 'Quanti Batman ho?');
       expect(messaggi[1].ruolo, RuoloMessaggio.assistente);
@@ -144,14 +142,27 @@ void contrattoConversazione(CreaAdapter crea) {
 
       await repo.eliminaConversazione(conversazioneId);
 
-      final conversazioni = await adapter.drift
-          .select(adapter.drift.conversazioneTable)
-          .get();
-      final messaggi = await adapter.drift
-          .select(adapter.drift.messaggioTable)
-          .get();
-      expect(conversazioni, isEmpty);
-      expect(messaggi, isEmpty);
+      expect(await repo.watchMessaggi(conversazioneId).first, isEmpty);
+      final nuova = await repo.getOrCreaConversazione();
+      expect(nuova, isNot(conversazioneId));
+      expect(await repo.watchMessaggi(nuova).first, isEmpty);
     },
   );
+
+  test('watchMessaggi riemette dopo un nuovo Messaggio', () async {
+    final conversazioneId = await repo.getOrCreaConversazione();
+    final emissioni = repo.watchMessaggi(conversazioneId);
+
+    final attese = expectLater(
+      emissioni.map((messaggi) => [for (final m in messaggi) m.testo]),
+      emitsThrough(['Ciao']),
+    );
+    await repo.aggiungiMessaggio(
+      conversazioneId: conversazioneId,
+      ruolo: RuoloMessaggio.utente,
+      testo: 'Ciao',
+    );
+
+    await attese;
+  });
 }

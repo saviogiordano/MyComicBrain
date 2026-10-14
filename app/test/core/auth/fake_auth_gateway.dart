@@ -105,6 +105,9 @@ class FakeAuthGateway implements AuthGateway {
   @override
   Future<void> esci() async => _emetti(null);
 
+  /// La sessione finisce senza logout (token revocato o scaduto).
+  void sessioneScaduta() => _emetti(null);
+
   final accountEliminati = <String>[];
 
   @override

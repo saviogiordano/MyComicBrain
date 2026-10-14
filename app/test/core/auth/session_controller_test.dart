@@ -10,12 +10,22 @@ void main() {
   late PreferencesInMemoria preferences;
   late bool datiLocali;
 
+  /// Le cancellazioni dei dati del Profilo dal device, con il Profilo
+  /// della sessione nel momento in cui avvengono.
+  late List<Profilo?> cancellazioni;
+
   ProviderContainer avvia() {
-    final container = ProviderContainer(
+    late final ProviderContainer container;
+    container = ProviderContainer(
       overrides: [
         authGatewayProvider.overrideWithValue(gateway),
         accountPreferencesProvider.overrideWithValue(preferences),
         haDatiLocaliProvider.overrideWithValue(() async => datiLocali),
+        cancellazioneProfiloProvider.overrideWithValue(
+          () async => cancellazioni.add(
+            container.read(sessionControllerProvider).profilo,
+          ),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -26,6 +36,7 @@ void main() {
     gateway = FakeAuthGateway();
     preferences = PreferencesInMemoria();
     datiLocali = false;
+    cancellazioni = [];
   });
 
   test('al primo avvio si atterra sul benvenuto', () {
@@ -331,5 +342,59 @@ void main() {
 
       expect(container.read(sessionControllerProvider).profilo, isNotNull);
     });
+  });
+
+  group('dati del Profilo sul device (ADR-0008)', () {
+    Future<(ProviderContainer, SessionController)> autenticato() async {
+      final container = avvia();
+      final controller = container.read(sessionControllerProvider.notifier);
+      await controller.accediConGoogle();
+      await pumpEventQueue();
+      return (container, controller);
+    }
+
+    test('il logout li cancella, a Profilo già uscito', () async {
+      final (_, controller) = await autenticato();
+
+      await controller.esci();
+      await pumpEventQueue();
+
+      expect(cancellazioni, [null]);
+    });
+
+    test("l'eliminazione dell'account li cancella", () async {
+      final (_, controller) = await autenticato();
+
+      await controller.eliminaAccount();
+      await pumpEventQueue();
+
+      expect(cancellazioni, [null]);
+    });
+
+    test("un'eliminazione fallita non li tocca", () async {
+      final (_, controller) = await autenticato();
+      gateway.prossimoErrore = const AuthException(AuthErrore.rete);
+
+      await expectLater(
+        controller.eliminaAccount(),
+        throwsA(isA<AuthException>()),
+      );
+      await pumpEventQueue();
+
+      expect(cancellazioni, isEmpty);
+    });
+
+    test(
+      'una sessione finita senza logout li conserva: al nuovo accesso la '
+      'Replica è ancora lì',
+      () async {
+        await autenticato();
+
+        gateway.sessioneScaduta();
+        await pumpEventQueue();
+
+        expect(cancellazioni, isEmpty);
+      },
+    );
   });
 }

@@ -12,8 +12,9 @@ import 'package:path/path.dart' as p;
 /// Un adapter di [ComicsRepository] su cui gira la suite di contratto
 /// (ADR-0007). Ogni area della suite è un `*_repository_test.dart` che
 /// espone `contratto<Area>(CreaAdapter)`: il suo `main` la esegue su
-/// [creaAdapterDriftInMemoria], l'adapter Supabase la esegue con la propria
-/// factory. Ogni test parte da dati vuoti.
+/// [creaAdapterDriftInMemoria]; le aree che cambiano per un Profilo
+/// autenticato girano anche su `creaAdapterProfiloLocale`. Ogni test parte
+/// da dati vuoti.
 abstract interface class AdapterSottoContratto {
   ComicsRepository get repo;
 
@@ -25,14 +26,11 @@ abstract interface class AdapterSottoContratto {
   });
 
   /// Il database drift dietro l'adapter, per i test che preparano o
-  /// verificano righe senza passare dall'interfaccia. Solo l'adapter drift
-  /// lo espone: su un altro adapter quei test falliscono finché non vengono
-  /// riscritti sull'interfaccia, come richiede la parità di ADR-0007.
+  /// verificano righe senza passare dall'interfaccia.
   AppDatabase get drift;
 
   /// Il percorso di un file immagine nuovo di nome [nome], come quello che
-  /// `ScansioneStorage` passa ad `aggiungiScansione`: l'adapter Supabase lo
-  /// carica su Storage, quindi deve esistere.
+  /// `ScansioneStorage` passa ad `aggiungiScansione`.
   Future<String> immagineScansione(String nome);
 
   Future<void> chiudi();
