@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show TableUpdateQuery;
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
@@ -23,11 +25,15 @@ import 'package:mycomicbrain/core/data/openrouter_assistente_client.dart';
 import 'package:mycomicbrain/core/data/openrouter_cover_analysis_client.dart';
 import 'package:mycomicbrain/core/data/preferences_shared_preferences_adapter.dart';
 import 'package:mycomicbrain/core/data/price_charting_client.dart';
+import 'package:mycomicbrain/core/data/registro_modifiche.dart';
+import 'package:mycomicbrain/core/data/repliche_profilo.dart';
 import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
 import 'package:mycomicbrain/core/data/settings_repository.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/motore_sincronizzazione.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/sincronizzatore.dart';
 import 'package:mycomicbrain/core/data/speech_to_text_service.dart';
-import 'package:mycomicbrain/core/data/repliche_profilo.dart';
 import 'package:mycomicbrain/core/data/supabase/archivio_conversazione_supabase.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
@@ -135,6 +141,57 @@ final comicsRepositoryProvider = Provider<ComicsRepository>((ref) {
     conversazione: conversazione,
   );
 });
+
+/// Il motore di Sincronizzazione della Replica del Profilo autenticato
+/// (ADR-0008), `null` in Modalità locale. Parte appena c'è un Profilo
+/// (`MyComicBrainApp` lo tiene vivo) e si ferma al logout.
+final motoreSincronizzazioneProvider = Provider<MotoreSincronizzazione?>((
+  ref,
+) {
+  final userId = ref.watch(idUtenteSupabaseProvider);
+  final client = ref.watch(supabaseClientProvider);
+  if (userId == null || client == null) return null;
+  final db = ref.watch(replicheProfiloProvider).database(userId);
+  final registro = RegistroModifiche(db);
+  final motore = MotoreSincronizzazione(
+    sincronizzatore: Sincronizzatore(
+      db: db,
+      canale: CanaleSupabase(client, userId: userId),
+      userId: userId,
+    ),
+    rete: ReteConnectivity(),
+    // Le scritture locali: anche il pull scrive, ma senza registro, quindi
+    // conta solo una scrittura che lascia Modifiche in sospeso.
+    scritture: db
+        .tableUpdates(
+          TableUpdateQuery.allOf([
+            for (final t in db.allTables)
+              if (RegistroModifiche.tabelleReplicate.contains(
+                t.actualTableName,
+              ))
+                TableUpdateQuery.onTable(t),
+          ]),
+        )
+        .asyncMap((_) => registro.conteggio())
+        .where((n) => n > 0),
+  );
+  final ciclo = AppLifecycleListener(
+    onResume: motore.tornaInPrimoPiano,
+    onHide: motore.vaInBackground,
+  );
+  ref.onDispose(() {
+    ciclo.dispose();
+    unawaited(motore.chiudi());
+  });
+  unawaited(motore.avvia());
+  return motore;
+});
+
+/// Lo stato della Sincronizzazione per la UI (#217).
+final statoSincronizzazioneProvider = StreamProvider<StatoSincronizzazione?>(
+  (ref) =>
+      ref.watch(motoreSincronizzazioneProvider)?.stati ?? Stream.value(null),
+);
 
 final imageCropServiceProvider = Provider<ImageCropService>(
   (ref) => ImageCropService(),
