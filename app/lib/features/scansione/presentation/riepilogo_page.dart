@@ -84,10 +84,14 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
           ?.stato;
       return stato == null || stato == StatoAnalisiCopertina.pending;
     });
+    final percorsi = [for (final s in daInviare) s.path];
+    final pipeline = ref.read(analisiCopertinaPipelineProvider);
+    // Senza rete il batch resta "in attesa di rete" e parte dopo la prima
+    // Sincronizzazione riuscita (`avvioScansioniInAttesaProvider`, #210).
     unawaited(
-      ref.read(analisiCopertinaPipelineProvider).avviaBatch([
-        for (final s in daInviare) s.path,
-      ]),
+      ref.read(senzaReteProvider)
+          ? pipeline.accoda(percorsi)
+          : pipeline.avviaBatch(percorsi),
     );
   }
 
@@ -188,6 +192,11 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
     // anche a pipeline già avviata (richiesta utente) — vedi
     // `RiepilogoPage.ripresa`.
     final eliminabile = widget.ripresa || !avviato;
+    final inAttesa =
+        ref.watch(scansioniInAttesaProvider).valueOrNull ?? const <String>{};
+    final notaSenzaRete =
+        ref.watch(senzaReteProvider) &&
+        _scansioni.any((s) => inAttesa.contains(s.path));
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
       body: SafeArea(
@@ -228,6 +237,10 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                       color: AppColors.textSecondary,
                     ),
                   ),
+                  if (notaSenzaRete) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    const _NotaSenzaRete(),
+                  ],
                 ],
               ),
             ),
@@ -291,6 +304,33 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
   }
 }
 
+/// La nota del riepilogo quando qualche Scansione aspetta la rete
+/// (prototipo #201): le immagini delle Scansioni non vanno sugli altri
+/// device, quindi il riconoscimento partirà da qui.
+class _NotaSenzaRete extends StatelessWidget {
+  const _NotaSenzaRete();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.cloud_off_outlined, size: 16, color: AppColors.amber),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Text(
+            'Senza rete le scansioni restano su questo telefono: verranno '
+            'riconosciute qui appena torna la connessione',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Sfondo rivelato dallo swipe-to-delete. Rosso Material puro, non un
 /// token del design system: la palette dell'app non ne ha uno per azioni
 /// distruttive (l'ambra è riservata a segnali di attenzione, mai errore —
@@ -349,6 +389,12 @@ class _RigaScansione extends ConsumerWidget {
     final confermata =
         ref.watch(scansioneConfermataProvider(scansione.path)).valueOrNull ??
         false;
+    final inAttesa =
+        ref
+            .watch(scansioniInAttesaProvider)
+            .valueOrNull
+            ?.contains(scansione.path) ??
+        false;
     final pronta =
         stato?.stato == StatoAnalisiCopertina.completata && !confermata;
 
@@ -391,6 +437,7 @@ class _RigaScansione extends ConsumerWidget {
           ),
           _ChipStatoAnalisi(
             stato: stato?.stato,
+            inAttesa: inAttesa,
             confermata: confermata,
             errorMessage: stato?.errorMessage,
             onRiprova: () => ref
@@ -428,12 +475,17 @@ class _RigaScansione extends ConsumerWidget {
 class _ChipStatoAnalisi extends StatelessWidget {
   const _ChipStatoAnalisi({
     required this.stato,
+    required this.inAttesa,
     required this.confermata,
     required this.errorMessage,
     required this.onRiprova,
   });
 
   final StatoAnalisiCopertina? stato;
+
+  /// Mandata al riconoscimento ma non ancora avviata: senza rete, o
+  /// scattata su un altro device del Profilo (#210).
+  final bool inAttesa;
   final bool confermata;
   final String? errorMessage;
   final VoidCallback onRiprova;
@@ -448,6 +500,10 @@ class _ChipStatoAnalisi extends StatelessWidget {
 
     final (String label, Color colore) = switch (stato) {
       _ when confermata => ('Salvata', AppColors.accent),
+      StatoAnalisiCopertina.pending when inAttesa => (
+        'In attesa di rete',
+        AppColors.textMuted,
+      ),
       null || StatoAnalisiCopertina.pending => ('In sospeso', AppColors.amber),
       StatoAnalisiCopertina.inCorso => ('In corso', AppColors.amber),
       StatoAnalisiCopertina.completata => ('Completata', AppColors.accent),

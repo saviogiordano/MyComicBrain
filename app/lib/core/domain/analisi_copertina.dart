@@ -9,4 +9,17 @@ enum StatoAnalisiCopertina { pending, inCorso, completata, fallita }
 /// in carico questa Scansione (nessuna riga `AnalisiCopertinaTable` ancora),
 /// altrimenti lo stato reale della riga. `errorMessage` è valorizzato solo
 /// quando `stato` è `fallita`.
-typedef StatoAnalisiScansione = ({StatoAnalisiCopertina stato, String? errorMessage});
+typedef StatoAnalisiScansione = ({
+  StatoAnalisiCopertina stato,
+  String? errorMessage,
+});
+
+/// Una Scansione mandata al riconoscimento ("Fine" nel riepilogo) la cui
+/// Analisi Copertina non è ancora partita: la riga è `pending`. Succede
+/// senza rete, o su un altro device del Profilo, che non ha il file
+/// (ADR-0008, #210).
+typedef ScansioneInAttesa = ({
+  String analisiId,
+  String scansioneId,
+  String image,
+});

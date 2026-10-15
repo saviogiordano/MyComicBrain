@@ -489,6 +489,61 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
+  Future<String> accodaAnalisiCopertina({
+    required String scansioneId,
+    DateTime? createdAt,
+  }) {
+    return _db.transaction(() async {
+      final esistente =
+          await (_db.select(_db.analisiCopertinaTable)
+                ..where((a) => a.scansioneId.equals(scansioneId))
+                ..limit(1))
+              .getSingleOrNull();
+      if (esistente != null) return esistente.id;
+      final riga = await _db
+          .into(_db.analisiCopertinaTable)
+          .insertReturning(
+            AnalisiCopertinaTableCompanion.insert(
+              scansioneId: scansioneId,
+              status: const Value(StatoAnalisiCopertina.pending),
+              createdAt: createdAt ?? DateTime.now(),
+            ),
+          );
+      return riga.id;
+    });
+  }
+
+  @override
+  Stream<List<ScansioneInAttesa>> watchScansioniInAttesaDiAnalisi() {
+    final query =
+        _db.select(_db.analisiCopertinaTable).join([
+            innerJoin(
+              _db.scansioni,
+              _db.scansioni.id.equalsExp(_db.analisiCopertinaTable.scansioneId),
+            ),
+          ])
+          ..where(
+            _db.analisiCopertinaTable.status.equalsValue(
+              StatoAnalisiCopertina.pending,
+            ),
+          )
+          ..orderBy([
+            OrderingTerm.asc(_db.analisiCopertinaTable.createdAt),
+            OrderingTerm.asc(_db.analisiCopertinaTable.id),
+          ]);
+    return query.watch().map(
+      (righe) => [
+        for (final riga in righe)
+          (
+            analisiId: riga.readTable(_db.analisiCopertinaTable).id,
+            scansioneId: riga.readTable(_db.scansioni).id,
+            image: riga.readTable(_db.scansioni).image,
+          ),
+      ],
+    );
+  }
+
+  @override
   Future<void> completaAnalisiCopertina({
     required String id,
     required String rawResponse,

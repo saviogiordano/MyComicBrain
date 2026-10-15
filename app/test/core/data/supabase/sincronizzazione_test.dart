@@ -13,6 +13,7 @@ import 'package:mycomicbrain/core/data/sincronizzazione/sincronizzatore.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
 import 'package:mycomicbrain/core/domain/genere.dart';
+import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Due device dello stesso account convergono attraverso lo stack locale
@@ -216,6 +217,57 @@ void main() {
           expect((await copia(d, nuovaCopia))!.status, StatoCopia.prestata);
           expect(await d.db.select(d.db.edizioneTag).get(), isEmpty);
         }
+      },
+    );
+
+    test(
+      'una Scansione analizzata, identificata e confermata su un device '
+      "arriva sull'altro (#210)",
+      () async {
+        final a = await account();
+        final uno = await device(a);
+        final due = await device(a);
+        final scansioneId = await uno.repo.aggiungiScansione(
+          image: 'scansioni/0199f0c0-scan.jpg',
+        );
+        final analisiId = await uno.repo.accodaAnalisiCopertina(
+          scansioneId: scansioneId,
+        );
+        await uno.sync.sincronizza();
+        await uno.repo.riavviaAnalisiCopertina(id: analisiId);
+        await uno.repo.completaAnalisiCopertina(
+          id: analisiId,
+          rawResponse: '{}',
+          title: 'Tex',
+          characters: const ['Tex Willer'],
+        );
+        final identificazioneId = await uno.repo.avviaIdentificazione(
+          scansioneId: scansioneId,
+        );
+        final candidatoId = await uno.repo.aggiungiCandidato(
+          identificazioneId: identificazioneId,
+          source: FonteCandidato.esterno,
+          punteggio: 0.9,
+          title: 'Tex',
+          issueNumberLabel: '1',
+        );
+        await uno.repo.completaIdentificazione(id: identificazioneId);
+        final copiaId = await uno.repo.aggiungiCopia(
+          edizioneId: await uno.repo.aggiungiEdizione(
+            operaId: await uno.repo.aggiungiOpera(title: 'Tex'),
+          ),
+          status: StatoCopia.posseduta,
+          scansioneId: scansioneId,
+        );
+        await uno.sync.sincronizza();
+        expect(await RegistroModifiche(uno.db).voci(), isEmpty);
+
+        await due.sync.sincronizza();
+
+        final esito = await due.repo.watchIdentificazione(scansioneId).first;
+        expect(esito.stato, StatoIdentificazione.completata);
+        expect(esito.candidati.single.id, candidatoId);
+        expect((await copia(due, copiaId))?.scansioneId, scansioneId);
       },
     );
 

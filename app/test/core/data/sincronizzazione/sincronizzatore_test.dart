@@ -9,6 +9,7 @@ import 'package:mycomicbrain/core/data/registro_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/sincronizzatore.dart';
+import 'package:mycomicbrain/core/domain/identificazione.dart';
 
 /// Il pull applicato alla Replica (ADR-0008), con un server finto: ciò che
 /// il test di convergenza su Supabase non riesce a mettere in fila.
@@ -124,6 +125,35 @@ void main() {
           (op) => op['tabella'] == 'edizioni',
         )['valori'],
         containsPair('cover_image', 'c1/42.jpg'),
+      );
+    },
+  );
+
+  test(
+    'una colonna che su Supabase non esiste non va al server '
+    '(candidati.description, #210)',
+    () async {
+      final scansioneId = await repo.aggiungiScansione(
+        image: 'scansioni/1.jpg',
+      );
+      final identificazioneId = await repo.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repo.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 0.9,
+        title: 'Tex',
+      );
+
+      await sync.sincronizza();
+
+      final candidato = canale.inviate.firstWhere(
+        (op) => op['tabella'] == 'candidati',
+      );
+      expect(
+        (candidato['valori']! as Map).keys,
+        isNot(contains('description')),
       );
     },
   );

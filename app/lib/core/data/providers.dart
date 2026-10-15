@@ -444,8 +444,47 @@ final analisiCopertinaPipelineProvider = Provider<AnalisiCopertinaPipeline>((
     repository: ref.watch(comicsRepositoryProvider),
     client: ref.watch(coverAnalysisClientProvider),
     identificazionePipeline: ref.watch(identificazionePipelineProvider),
+    risolviImmagine: ref.watch(scansioneStorageProvider).risolvi,
   );
 });
+
+/// Le Scansioni accodate senza rete partono dopo ogni ciclo di
+/// Sincronizzazione riuscito (ADR-0008, #210): c'è la rete e le loro
+/// immagini sono già su Storage. Vale anche all'apertura dell'app, per
+/// quelle accodate prima di chiuderla. Va tenuto vivo finché c'è un
+/// Profilo, come [motoreSincronizzazioneProvider].
+final avvioScansioniInAttesaProvider = Provider<void>((ref) {
+  ref.listen(statoSincronizzazioneProvider, (prima, dopo) {
+    final stato = dopo.valueOrNull;
+    if (stato == null || stato.fase != FaseSincronizzazione.sincronizzata) {
+      return;
+    }
+    // Lo stesso ciclo si riemette mentre arrivano le cover.
+    final precedente = prima?.valueOrNull;
+    if (precedente?.fase == FaseSincronizzazione.sincronizzata &&
+        precedente?.ultima == stato.ultima) {
+      return;
+    }
+    unawaited(ref.read(analisiCopertinaPipelineProvider).avviaInAttesa());
+  });
+});
+
+/// Se la Sincronizzazione è senza rete. Sempre false in Modalità locale,
+/// dove non c'è un motore: lì il riconoscimento parte subito come prima.
+final senzaReteProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(statoSincronizzazioneProvider).valueOrNull?.fase ==
+      FaseSincronizzazione.offline,
+);
+
+/// I percorsi immagine delle Scansioni mandate al riconoscimento ma ancora
+/// da avviare ("In attesa di rete" nel riepilogo e in Dashboard, #210).
+final scansioniInAttesaProvider = StreamProvider<Set<String>>(
+  (ref) => ref
+      .watch(comicsRepositoryProvider)
+      .watchScansioniInAttesaDiAnalisi()
+      .map((righe) => {for (final r in righe) r.image}),
+);
 
 /// Lo stato reale dell'Analisi Copertina di una Scansione, per percorso
 /// immagine — usato dal riepilogo per riflettere `In sospeso`/`In corso`/

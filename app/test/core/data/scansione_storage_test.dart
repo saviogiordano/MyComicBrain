@@ -38,6 +38,21 @@ void main() {
     },
   );
 
+  test(
+    'risolvi porta sotto la cartella base il percorso relativo di una '
+    'Scansione arrivata da un altro device (#210)',
+    () async {
+      expect(
+        await storage.risolvi('scansioni/altro.jpg'),
+        p.join(tempBase.path, 'scansioni', 'altro.jpg'),
+      );
+      final salvato = await storage.salva(
+        File(p.join(tempBase.path, 'grezzo.jpg'))..writeAsStringSync('x'),
+      );
+      expect(await storage.risolvi(salvato.path), salvato.path);
+    },
+  );
+
   test('crea la directory scansioni/ se assente', () async {
     final scansioniDir = Directory(p.join(tempBase.path, 'scansioni'));
     expect(scansioniDir.existsSync(), isFalse);
