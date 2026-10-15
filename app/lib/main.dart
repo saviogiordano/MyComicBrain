@@ -20,9 +20,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final sharedPreferences = await SharedPreferences.getInstance();
-  final account = AuthConfig.loginAbilitato
-      ? await _overridesAccount(sharedPreferences)
-      : const <Override>[];
+  final account = await _overridesAccount(sharedPreferences);
 
   runApp(
     ProviderScope(
@@ -35,16 +33,12 @@ Future<void> main() async {
   );
 }
 
-/// Login reale dietro flag (#171, ADR-0007): inizializza Supabase con la
-/// sessione nello storage sicuro, che `initialize` ripristina prima di
-/// restituire — così `SessionController` parte già dal Profilo salvato.
+/// Account (#171, ADR-0008): inizializza Supabase con la sessione nello
+/// storage sicuro, che `initialize` ripristina prima di restituire — così
+/// `SessionController` parte già dal Profilo salvato.
 Future<List<Override>> _overridesAccount(
   SharedPreferences sharedPreferences,
 ) async {
-  assert(
-    AuthConfig.supabasePublishableKey.isNotEmpty,
-    'Manca --dart-define=SUPABASE_PUBLISHABLE_KEY (vedi app/README.md)',
-  );
   // La Replica del Profilo (ADR-0008) è un secondo `AppDatabase`, aperto
   // insieme a quello della Modalità locale su un file diverso.
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -96,23 +90,19 @@ class MyComicBrainApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     // La Sincronizzazione gira finché c'è un Profilo (ADR-0008), e con lei
     // l'avvio delle Scansioni accodate senza rete (#210).
-    if (AuthConfig.loginAbilitato) {
-      ref
-        ..watch(motoreSincronizzazioneProvider)
-        ..watch(avvioScansioniInAttesaProvider);
-    }
+    ref
+      ..watch(motoreSincronizzazioneProvider)
+      ..watch(avvioScansioniInAttesaProvider);
     return MaterialApp.router(
       title: 'MyComicBrain',
       theme: AppTheme.dark,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
       routerConfig: router,
-      builder: AuthConfig.loginAbilitato
-          ? (context, child) => AvvisoAccesso(
-              vaiAllaDashboard: () => router.go('/dashboard'),
-              child: AvvisoModificheScartate(child: child!),
-            )
-          : null,
+      builder: (context, child) => AvvisoAccesso(
+        vaiAllaDashboard: () => router.go('/dashboard'),
+        child: AvvisoModificheScartate(child: child!),
+      ),
     );
   }
 }

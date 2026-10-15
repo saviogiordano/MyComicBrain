@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mycomicbrain/core/auth/auth_config.dart';
 import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
@@ -591,11 +590,9 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                   AppSpacing.xxl,
                 ),
                 children: [
-                  if (AuthConfig.loginAbilitato) ...[
-                    const SezioneAccount(),
-                    const SizedBox(height: AppSpacing.lg),
-                    const SezioneSincronizzazione(),
-                  ],
+                  const SezioneAccount(),
+                  const SizedBox(height: AppSpacing.lg),
+                  const SezioneSincronizzazione(),
                   const SectionHeader(label: 'Provider AI Visivo'),
                   const SizedBox(height: AppSpacing.sm),
                   Column(

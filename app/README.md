@@ -115,17 +115,15 @@ Utile in particolare per testare lo scanner (fotocamera reale, permessi, prestaz
    ```
 7. **Permesso fotocamera** — `image_picker`/`camera` richiedono il permesso runtime al primo utilizzo dello scanner; se negato per errore, va riabilitato da *Impostazioni → App → MyComicBrain → Autorizzazioni → Fotocamera*.
 
-## Account (login reale, dietro flag)
+## Account
 
-Il login con Supabase (email, Apple, Google — #171) è dietro un flag di sviluppo finché il porting dei dati su Supabase non è completo (ADR-0007, #181). Senza flag l'app si comporta come prima (login fittizio, solo Modalità locale). Per attivarlo:
+Il login con Supabase (email, Apple, Google — #171) è sempre attivo: da loggati l'app lavora sulla Replica locale del Profilo e si sincronizza da sola (ADR-0008); senza account resta la Modalità locale. URL e chiave pubblicabile del progetto `ojfwicezfctlwpouudsa` hanno già il default in `lib/core/auth/auth_config.dart` (la chiave `sb_publishable_…` è pubblica per costruzione: le tabelle sono protette da RLS); per puntare a un altro progetto:
 
 ```bash
-flutter run --release -d <id-device> \
-  --dart-define=ACCOUNT_LOGIN=true \
-  --dart-define=SUPABASE_PUBLISHABLE_KEY=<chiave pubblicabile del progetto ojfwicezfctlwpouudsa>
+flutter run -d <id-device> \
+  --dart-define=SUPABASE_URL=<url> \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=<chiave pubblicabile>
 ```
-
-La chiave pubblicabile (`sb_publishable_…`) è nel dashboard Supabase → *Project Settings → API Keys*: è pubblica per costruzione (le tabelle sono protette da RLS). `SUPABASE_URL` ha già il default del progetto.
 
 Il login Google funziona solo per gli utenti di test finché la schermata di consenso è in *Testing* (#169).
 

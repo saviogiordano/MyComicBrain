@@ -59,7 +59,7 @@ void main() {
 
   final client = SupabaseClient('http://127.0.0.1:1', 'chiave-di-test');
 
-  test('senza client Supabase (login spento) resta su drift', () {
+  test('senza client Supabase resta su drift', () {
     final c = container(const []);
 
     expect(c.read(idUtenteSupabaseProvider), isNull);

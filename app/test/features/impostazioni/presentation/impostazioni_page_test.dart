@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
@@ -18,6 +19,8 @@ import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/features/impostazioni/application/esportazione_service.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
+
+import '../../../core/auth/fake_auth_gateway.dart';
 
 /// [EsportazioneService] finto che fallisce sempre (§16, deciso su #140):
 /// verifica il percorso di errore di "Importa/Esporta dati" senza dipendere
@@ -149,6 +152,12 @@ void main() {
       ProviderScope(
         overrides: [
           settingsRepositoryProvider.overrideWithValue(repo),
+          authGatewayProvider.overrideWithValue(FakeAuthGateway()),
+          accountPreferencesProvider.overrideWithValue(
+            PreferencesInMemoria()
+              ..valori['account.benvenutoSuperato'] = 'true',
+          ),
+          haDatiLocaliProvider.overrideWithValue(() async => false),
           if (aiClient != null)
             coverAnalysisClientPerProvider(
               aiClientPer ?? AiProvider.claude,
@@ -624,7 +633,9 @@ void main() {
             ),
           );
           addTearDown(db.close);
-          final servizio = _EsportazioneServiceInSospeso(DriftComicsRepository(db));
+          final servizio = _EsportazioneServiceInSospeso(
+            DriftComicsRepository(db),
+          );
 
           await pumpImpostazioni(tester, esportazioneService: servizio);
           final riga = switch (formato) {
