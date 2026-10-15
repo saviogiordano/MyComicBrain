@@ -618,6 +618,24 @@ class OrologioHlcTable extends Table {
   TextColumn get ultimo => text()();
 }
 
+/// Dove è arrivata la Sincronizzazione della Replica (ADR-0008): una sola
+/// riga, creata dal primo download riuscito. [cursore] è quello opaco di
+/// `cambiamenti_da` da cui riparte il prossimo pull; senza riga la Replica
+/// non è ancora stata scaricata. [ultima] è l'istante dell'ultima
+/// sincronizzazione completa.
+@DataClassName('StatoSincronizzazioneReplica')
+class StatoSincronizzazioneTable extends Table {
+  @override
+  String get tableName => 'stato_sincronizzazione';
+
+  IntColumn get id => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get cursore => text()();
+  DateTimeColumn get ultima => dateTime()();
+}
+
 @DriftDatabase(
   tables: [
     Opere,
@@ -640,6 +658,7 @@ class OrologioHlcTable extends Table {
     ValoreStimatoTable,
     RegistroModificheTable,
     OrologioHlcTable,
+    StatoSincronizzazioneTable,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -657,7 +676,7 @@ class AppDatabase extends _$AppDatabase {
   final bool replica;
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -665,6 +684,9 @@ class AppDatabase extends _$AppDatabase {
       if (replica) await RegistroModifiche(this).installa();
     },
     onUpgrade: stepByStep(
+      from17To18: (m, schema) async {
+        await m.createTable(schema.statoSincronizzazione);
+      },
       from16To17: (m, schema) async {
         await m.createTable(schema.registroModifiche);
         await m.createTable(schema.orologioHlc);

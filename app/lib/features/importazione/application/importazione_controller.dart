@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
+import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/supabase/importazione_modalita_locale.dart';
 import 'package:mycomicbrain/core/data/supabase/uuid_v4.dart';
 
@@ -116,6 +117,8 @@ class ImportazioneController extends AutoDisposeNotifier<StatoImportazione> {
         },
       );
       state = ImportazioneCompletata(esito);
+      // Le righe importate arrivano nella Replica col pull (ADR-0008).
+      unawaited(ref.read(motoreSincronizzazioneProvider)?.sincronizzaOra());
     } on Exception {
       state = ImportazioneFallita(avanzamento: ultimo, riepilogo: riepilogo);
     }

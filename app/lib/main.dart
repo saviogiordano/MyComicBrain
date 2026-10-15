@@ -69,7 +69,12 @@ Future<List<Override>> _overridesAccount(
       final userId = ref.watch(idUtenteSupabaseProvider);
       if (userId == null) return null;
       final repliche = ref.watch(replicheProfiloProvider);
-      return () => repliche.cancella(userId);
+      final motore = ref.watch(motoreSincronizzazioneProvider);
+      return () async {
+        // Nessun ciclo deve scrivere sulla Replica mentre si cancella.
+        await motore?.chiudi();
+        await repliche.cancella(userId);
+      };
     }),
     importatoreModalitaLocaleProvider.overrideWith(
       (ref) => ImportazioneModalitaLocale(
@@ -88,6 +93,8 @@ class MyComicBrainApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    // La Sincronizzazione gira finché c'è un Profilo (ADR-0008).
+    if (AuthConfig.loginAbilitato) ref.watch(motoreSincronizzazioneProvider);
     return MaterialApp.router(
       title: 'MyComicBrain',
       theme: AppTheme.dark,
