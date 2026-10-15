@@ -221,8 +221,8 @@ void main() {
     );
 
     test(
-      "una Scansione analizzata, identificata e confermata su un device arriva "
-      "sull'altro (#210)",
+      'una Scansione analizzata, identificata e confermata su un device '
+      "arriva sull'altro (#210)",
       () async {
         final a = await account();
         final uno = await device(a);
