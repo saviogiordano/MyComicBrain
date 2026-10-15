@@ -6,8 +6,10 @@ import 'package:mycomicbrain/core/design_system/tokens.dart';
 
 /// La cover reale di un'Edizione se nota (percorso locale scaricato da
 /// `CopertinaDownloader`, o in fallback l'URL remoto originale), altrimenti
-/// [ProceduralComicCover]. Un percorso locale ma ormai mancante su disco
-/// ricade sullo stesso segnaposto invece di un errore visibile. Condivisa
+/// [ProceduralComicCover]. Un percorso locale ma ormai (o non ancora)
+/// mancante su disco ricade sullo stesso segnaposto invece di un errore
+/// visibile: una cover che la Sincronizzazione scarica in background
+/// compare quando la query si rilegge. Condivisa
 /// dal carosello "Aggiunti di recente" (§4.1) e dalla griglia Collezione
 /// (§9) — stessa resa, stesso fallback.
 class ComicCoverImage extends StatelessWidget {
@@ -49,6 +51,10 @@ class ComicCoverImage extends StatelessWidget {
 
     final isRemote =
         immagine.startsWith('http://') || immagine.startsWith('https://');
+    // Controllato prima di `Image.file`: un file arrivato dopo un errore di
+    // caricamento non verrebbe riletto, perché il widget ha lo stesso
+    // percorso.
+    if (!isRemote && !File(immagine).existsSync()) return procedurale;
     final risolta = ClipRRect(
       borderRadius: AppRadii.xsRadius,
       child: isRemote

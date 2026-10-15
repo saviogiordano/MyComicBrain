@@ -1,3 +1,8 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
+import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Una riga che la Replica deve togliere: eliminata altrove, o scartata dal
@@ -19,8 +24,8 @@ typedef PaginaCambiamenti = ({
 });
 
 /// Le due RPC della Sincronizzazione (ADR-0008, contratto nella sezione
-/// "Implementazione"), più la Collezione dell'utente per le chiavi delle
-/// cover. Un seam per provare il motore senza Supabase.
+/// "Implementazione"), i file su Storage e la Collezione dell'utente per le
+/// chiavi delle cover. Un seam per provare il motore senza Supabase.
 abstract interface class CanaleSincronizzazione {
   /// La Collezione di cui l'utente è `owner`.
   Future<String> collectionId();
@@ -29,6 +34,15 @@ abstract interface class CanaleSincronizzazione {
   Future<List<RigaReplicata>> applicaModifiche(List<Map<String, Object?>> ops);
 
   Future<PaginaCambiamenti> cambiamentiDa(String? cursore, {int limite});
+
+  /// Carica [file] in [bucket] con [chiave], sovrascrivendo: la chiave
+  /// dipende solo dal nome del file, quindi ripetere l'upload non cambia
+  /// nulla.
+  Future<void> caricaFile(BucketImmagine bucket, String chiave, File file);
+
+  /// I byte dell'oggetto [chiave] di [bucket]; null se non esiste (o non è
+  /// visibile all'utente).
+  Future<Uint8List?> scaricaFile(BucketImmagine bucket, String chiave);
 }
 
 class CanaleSupabase implements CanaleSincronizzazione {
@@ -84,5 +98,38 @@ class CanaleSupabase implements CanaleSincronizzazione {
       cursore: pagina['cursore'] as String,
       altre: pagina['altre'] as bool,
     );
+  }
+
+  @override
+  Future<void> caricaFile(
+    BucketImmagine bucket,
+    String chiave,
+    File file,
+  ) async {
+    await _client.storage
+        .from(bucket.name)
+        .upload(
+          chiave,
+          file,
+          fileOptions: FileOptions(
+            contentType: switch (p.extension(chiave).toLowerCase()) {
+              '.png' => 'image/png',
+              '.webp' => 'image/webp',
+              _ => 'image/jpeg',
+            },
+            upsert: true,
+          ),
+        );
+  }
+
+  @override
+  Future<Uint8List?> scaricaFile(BucketImmagine bucket, String chiave) async {
+    try {
+      return await _client.storage.from(bucket.name).download(chiave);
+    } on StorageException catch (e) {
+      // Storage risponde 400 "Object not found" oltre a 404.
+      if (e.statusCode == '400' || e.statusCode == '404') return null;
+      rethrow;
+    }
   }
 }

@@ -158,6 +158,8 @@ final motoreSincronizzazioneProvider = Provider<MotoreSincronizzazione?>((
       db: db,
       canale: CanaleSupabase(client, userId: userId),
       userId: userId,
+      cartellaProfilo: () =>
+          ref.read(replicheProfiloProvider).cartellaDati(userId),
     ),
     rete: ReteConnectivity(),
     // Le scritture locali: anche il pull scrive, ma senza registro, quindi

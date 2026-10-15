@@ -58,6 +58,7 @@ class StatoSincronizzazione {
     this.prossimoTentativo,
     this.errore,
     this.righeScaricate,
+    this.cover,
   });
 
   final FaseSincronizzazione fase;
@@ -78,6 +79,11 @@ class StatoSincronizzazione {
   /// primo download.
   final int? righeScaricate;
 
+  /// Le cover in arrivo in background dopo un ciclo, quante su quante
+  /// ("Cover N/M"); null quando non se ne scaricano. Non dipende dalla
+  /// fase: un ciclo può partire e finire mentre arrivano.
+  final ({int scaricate, int totale})? cover;
+
   StatoSincronizzazione _con({
     required FaseSincronizzazione fase,
     bool? replicaScaricata,
@@ -92,7 +98,19 @@ class StatoSincronizzazione {
     prossimoTentativo: prossimoTentativo,
     errore: errore,
     righeScaricate: righeScaricate,
+    cover: cover,
   );
+
+  StatoSincronizzazione _conCover(({int scaricate, int totale})? cover) =>
+      StatoSincronizzazione(
+        fase: fase,
+        replicaScaricata: replicaScaricata,
+        ultima: ultima,
+        prossimoTentativo: prossimoTentativo,
+        errore: errore,
+        righeScaricate: righeScaricate,
+        cover: cover,
+      );
 }
 
 /// L'esito di [MotoreSincronizzazione.sincronizzaOra].
@@ -125,6 +143,9 @@ class SincronizzazioneFallita extends EsitoSincronizzazione {
 /// da [backoffIniziale] fino a [backoffMassimo]. In background e senza rete
 /// non parte nulla. I cicli non si sovrappongono: un innesco durante un
 /// ciclo ne fa partire un altro subito dopo.
+///
+/// Dopo ogni ciclo riuscito scarica in background le cover che mancano sul
+/// device, senza bloccare i cicli successivi.
 class MotoreSincronizzazione {
   MotoreSincronizzazione({
     required Sincronizzatore sincronizzatore,
@@ -166,6 +187,8 @@ class MotoreSincronizzazione {
 
   Future<EsitoSincronizzazione>? _cicloInCorso;
   Completer<EsitoSincronizzazione>? _cicloSuccessivo;
+  Future<void>? _coverInCorso;
+  var _coverDiNuovo = false;
 
   StatoSincronizzazione get stato => _stato;
 
@@ -301,6 +324,7 @@ class MotoreSincronizzazione {
         ),
       );
       _programma(periodo);
+      _scaricaCover();
       return SincronizzazioneRiuscita(esito);
     } on Object catch (errore) {
       if (_chiuso) {
@@ -322,6 +346,40 @@ class MotoreSincronizzazione {
       if (!offline) _programma(attesa);
       return SincronizzazioneFallita(errore, offline: offline);
     }
+  }
+
+  /// Le cover in background. Se un ciclo finisce mentre arrivano, il giro
+  /// riparte alla fine per le cover portate da quel ciclo. Un errore non
+  /// cambia lo stato: le cover mancanti si riprovano dopo il ciclo
+  /// successivo.
+  void _scaricaCover() {
+    if (_chiuso) return;
+    if (_coverInCorso != null) {
+      _coverDiNuovo = true;
+      return;
+    }
+    _coverInCorso = _sincronizzatore
+        .scaricaCover(
+          avanzamento: (scaricate, totale) => _emetti(
+            _stato._conCover((scaricate: scaricate, totale: totale)),
+          ),
+          interrompi: () => _chiuso,
+        )
+        .then<void>(
+          (_) {},
+          // Senza rete un nuovo giro fallirebbe subito: ci pensa il ciclo.
+          onError: (Object _) {
+            _coverDiNuovo = false;
+          },
+        )
+        .whenComplete(() {
+          _coverInCorso = null;
+          _emetti(_stato._conCover(null));
+          if (_coverDiNuovo) {
+            _coverDiNuovo = false;
+            _scaricaCover();
+          }
+        });
   }
 
   Duration _backoff() {
@@ -368,6 +426,7 @@ class MotoreSincronizzazione {
     } on Object {
       // Già riportato nello stato.
     }
+    await _coverInCorso;
     await _stati.close();
     await _scartate.close();
   }

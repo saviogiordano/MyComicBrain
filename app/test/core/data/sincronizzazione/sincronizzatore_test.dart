@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +7,7 @@ import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/registro_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/sincronizzatore.dart';
 
 /// Il pull applicato alla Replica (ADR-0008), con un server finto: ciò che
@@ -24,7 +27,13 @@ void main() {
     );
     repo = DriftComicsRepository(db);
     canale = _Canale();
-    sync = Sincronizzatore(db: db, canale: canale, userId: 'u1');
+    sync = Sincronizzatore(
+      db: db,
+      canale: canale,
+      userId: 'u1',
+      // I file non ci sono: escono dalla coda senza upload.
+      cartellaProfilo: () async => Directory.systemTemp,
+    );
   });
 
   tearDown(() => db.close());
@@ -166,4 +175,15 @@ class _Canale implements CanaleSincronizzazione {
     final pagina = pagine.isEmpty ? <Cambiamento>[] : pagine.removeAt(0);
     return (cambiamenti: pagina, cursore: '7', altre: pagine.isNotEmpty);
   }
+
+  @override
+  Future<void> caricaFile(
+    BucketImmagine bucket,
+    String chiave,
+    File file,
+  ) async {}
+
+  @override
+  Future<Uint8List?> scaricaFile(BucketImmagine bucket, String chiave) async =>
+      null;
 }

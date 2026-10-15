@@ -49,7 +49,14 @@ void main() {
       final file = File(percorso!);
       expect(file.existsSync(), isTrue);
       expect(p.dirname(file.path), p.join(tempBase.path, 'copertine'));
-      expect(p.basename(file.path), matches(RegExp(r'^\d+\.jpg$')));
+      expect(
+        p.basename(file.path),
+        matches(
+          RegExp(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.jpg$',
+          ),
+        ),
+      );
       expect(file.readAsBytesSync(), [1, 2, 3]);
     },
   );
@@ -81,16 +88,19 @@ void main() {
     expect(Directory(p.join(tempBase.path, 'copertine')).existsSync(), isFalse);
   });
 
-  test('chiamata HTTP fallita (rete): ritorna null invece di lanciare', () async {
-    final downloader = CopertinaDownloader(
-      httpClient: _FakeHttpClient(),
-      baseDirectory: () async => tempBase,
-    );
+  test(
+    'chiamata HTTP fallita (rete): ritorna null invece di lanciare',
+    () async {
+      final downloader = CopertinaDownloader(
+        httpClient: _FakeHttpClient(),
+        baseDirectory: () async => tempBase,
+      );
 
-    final percorso = await downloader.scarica(
-      'https://comicvine.example/1.jpg',
-    );
+      final percorso = await downloader.scarica(
+        'https://comicvine.example/1.jpg',
+      );
 
-    expect(percorso, isNull);
-  });
+      expect(percorso, isNull);
+    },
+  );
 }
