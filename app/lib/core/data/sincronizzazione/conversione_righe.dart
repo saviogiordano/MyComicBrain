@@ -39,9 +39,12 @@ const _colonneLista = {
 };
 
 /// Colonne drift che non vanno su Supabase: `scansioni.user_id` è un intero
-/// mai usato, su Supabase è l'uuid dell'utente e lo mette il server.
+/// mai usato, su Supabase è l'uuid dell'utente e lo mette il server;
+/// `candidati.description` è una colonna morta (#73) che Supabase non ha, e
+/// `applica_modifiche` rifiuterebbe l'intero lotto (#210).
 const _soloDrift = {
   'scansioni': {'user_id'},
+  'candidati': {'description'},
 };
 
 /// Traduce le righe fra la Replica locale e Supabase (ADR-0008). Il
