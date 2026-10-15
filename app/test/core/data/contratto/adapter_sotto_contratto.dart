@@ -50,14 +50,17 @@ typedef CreaAdapter = Future<AdapterSottoContratto> Function();
 
 /// [DriftComicsRepository] su un database SQLite in memoria.
 Future<AdapterSottoContratto> creaAdapterDriftInMemoria() async =>
-    _AdapterDriftInMemoria(
-      AppDatabase(
-        DatabaseConnection(
-          NativeDatabase.memory(),
-          closeStreamsSynchronously: true,
-        ),
-      ),
-    );
+    _AdapterDriftInMemoria(AppDatabase(_memoria()));
+
+/// [DriftComicsRepository] su una Replica locale in memoria, con i trigger
+/// del registro delle Modifiche in sospeso attivi (ADR-0008).
+Future<AdapterSottoContratto> creaAdapterReplicaInMemoria() async =>
+    _AdapterDriftInMemoria(AppDatabase.replica(_memoria()));
+
+DatabaseConnection _memoria() => DatabaseConnection(
+  NativeDatabase.memory(),
+  closeStreamsSynchronously: true,
+);
 
 class _AdapterDriftInMemoria implements AdapterSottoContratto {
   _AdapterDriftInMemoria(this.drift) : repo = DriftComicsRepository(drift);
