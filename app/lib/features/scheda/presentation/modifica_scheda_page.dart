@@ -141,7 +141,18 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     final sorgente = await _scegliSorgenteCover();
     if (sorgente == null) return;
 
-    final ritagliata = await ref.read(scegliCoverRitagliataProvider)(sorgente);
+    final String? ritagliata;
+    try {
+      ritagliata = await ref.read(scegliCoverRitagliataProvider)(sorgente);
+    } on Exception {
+      // Scanner o editor non disponibili (per esempio permesso negato).
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Foto non riuscita, riprova')),
+        );
+      }
+      return;
+    }
     if (ritagliata == null) return;
 
     final repository = ref.read(comicsRepositoryProvider);

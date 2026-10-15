@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:drift/drift.dart' show TableUpdateQuery;
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -200,18 +201,38 @@ final imageCropServiceProvider = Provider<ImageCropService>(
   (ref) => ImageCropService(),
 );
 
-/// Cambio della cover di un'Edizione o di una Serie: sceglie una foto da
-/// `sorgente` (galleria o fotocamera) e la apre nello stesso editor di
-/// ritaglio delle Scansioni, con le proporzioni della cover. Restituisce il
-/// file ritagliato (temporaneo, da salvare con `salvaCoverLocale`) o null se
-/// l'utente annulla. Sostituibile nei test, dove non c'è il plugin nativo.
+/// Cambio della cover di un'Edizione o di una Serie, con gli stessi
+/// componenti della Scansione: la fotocamera è lo scanner nativo
+/// (`cunning_document_scanner`, il riquadro che aggancia il fumetto), la
+/// galleria è `image_picker`; poi la foto passa dall'editor di ritaglio con
+/// le proporzioni della cover. Restituisce il file ritagliato (temporaneo,
+/// da salvare con `salvaCoverLocale`) o null se l'utente annulla. Gli
+/// errori dello scanner (permesso negato) arrivano al chiamante.
+/// Sostituibile nei test, dove non ci sono i plugin nativi.
 final scegliCoverRitagliataProvider =
     Provider<Future<String?> Function(ImageSource sorgente)>((ref) {
       final ritaglio = ref.watch(imageCropServiceProvider);
       return (sorgente) async {
-        final scelta = await ImagePicker().pickImage(source: sorgente);
+        final String? scelta;
+        if (sorgente == ImageSource.camera) {
+          final pagine = await CunningDocumentScanner.getPictures(noOfPages: 1);
+          scelta = (pagine == null || pagine.isEmpty) ? null : pagine.first;
+        } else {
+          scelta = (await ImagePicker().pickImage(source: sorgente))?.path;
+        }
         if (scelta == null) return null;
-        return ritaglio.ritagliaFoto(scelta.path);
+        // Il controller nativo appena chiuso è ancora in animazione: iOS
+        // rifiuta di presentare l'editor sopra, che non comparirebbe.
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        final ritagliata = await ritaglio.ritagliaFoto(scelta);
+        if (sorgente == ImageSource.camera) {
+          try {
+            await CunningDocumentScanner.cleanCache();
+          } on CunningDocumentScannerException {
+            // Best-effort: il ritaglio è già un file a parte.
+          }
+        }
+        return ritagliata;
       };
     });
 

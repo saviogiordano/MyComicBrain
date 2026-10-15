@@ -169,6 +169,23 @@ void main() {
     expect(await salvaECover(tester, edizioneId), 'copertine/originale.jpg');
   });
 
+  testWidgets('se la foto non riesce lo dice e la cover resta', (
+    tester,
+  ) async {
+    final edizioneId = await pumpModifica(
+      tester,
+      ritaglia: (_) async => throw Exception('permesso negato'),
+    );
+
+    await tester.tap(find.text('Cambia cover'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scatta una foto'));
+    await attendiIO(tester);
+
+    expect(find.text('Foto non riuscita, riprova'), findsOneWidget);
+    expect(await salvaECover(tester, edizioneId), 'copertine/originale.jpg');
+  });
+
   testWidgets('le Note della Copia mostrano tutte le righe', (tester) async {
     const note = 'prima riga\nseconda riga\nterza riga\nquarta riga';
     await tester.pumpWidget(
