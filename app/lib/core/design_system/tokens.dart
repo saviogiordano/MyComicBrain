@@ -49,6 +49,12 @@ abstract final class AppColors {
   static const Color amberStrong = Color(0xFFC4771B);
 
   static Color amberAlpha(double opacity) => amber.withValues(alpha: opacity);
+
+  // Stato della Sincronizzazione (prototipo #201): rosso per un errore,
+  // verde per "Sincronizzato".
+  static const Color danger = Color(0xFFE5484D);
+  static const Color dangerLight = Color(0xFFFF8A8D);
+  static const Color success = Color(0xFF3DD68C);
 }
 
 /// Spaziature su scala 4px, coprendo il range osservato nel prototipo (4–34px).

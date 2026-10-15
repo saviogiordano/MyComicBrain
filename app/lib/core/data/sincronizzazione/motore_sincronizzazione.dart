@@ -113,6 +113,10 @@ class StatoSincronizzazione {
       );
 }
 
+/// Una riga con Modifiche in sospeso tolta dalla Replica perché eliminata
+/// altrove, col titolo per l'avviso "modifica non salvata" se ce l'ha.
+typedef ModificaScartata = ({RigaReplicata riga, String? titolo});
+
 /// L'esito di [MotoreSincronizzazione.sincronizzaOra].
 sealed class EsitoSincronizzazione {
   const EsitoSincronizzazione();
@@ -171,7 +175,7 @@ class MotoreSincronizzazione {
   final DateTime Function() _ora;
 
   final _stati = StreamController<StatoSincronizzazione>.broadcast();
-  final _scartate = StreamController<List<RigaReplicata>>.broadcast();
+  final _scartate = StreamController<List<ModificaScartata>>.broadcast();
   var _stato = const StatoSincronizzazione(
     fase: FaseSincronizzazione.ferma,
     replicaScaricata: false,
@@ -192,15 +196,19 @@ class MotoreSincronizzazione {
 
   StatoSincronizzazione get stato => _stato;
 
-  /// [stato] e i suoi cambiamenti.
+  /// [stato] e i suoi cambiamenti, a partire da quando [avvia] ha letto
+  /// dove è arrivata la Replica: prima [StatoSincronizzazione.replicaScaricata]
+  /// non vale ancora nulla.
   Stream<StatoSincronizzazione> get stati async* {
-    yield _stato;
+    if (_avviato) yield _stato;
     yield* _stati.stream;
   }
 
+  var _avviato = false;
+
   /// Le righe con Modifiche in sospeso tolte dalla Replica perché eliminate
   /// altrove: l'avviso "modifica non salvata".
-  Stream<List<RigaReplicata>> get scartate => _scartate.stream;
+  Stream<List<ModificaScartata>> get scartate => _scartate.stream;
 
   /// Apertura dell'app: legge dove è arrivata la Replica, si mette in
   /// ascolto degli inneschi e fa partire il primo ciclo (il primo download,
@@ -212,6 +220,7 @@ class MotoreSincronizzazione {
       replicaScaricata: salvato != null,
       ultima: salvato?.ultima,
     );
+    _avviato = true;
     _emetti(_stato);
     _iscrizioni
       ..add(_rete.cambiamenti.listen(_cambioRete))
@@ -315,7 +324,12 @@ class MotoreSincronizzazione {
         ),
       );
       _tentativiFalliti = 0;
-      if (esito.scartate.isNotEmpty && !_chiuso) _scartate.add(esito.scartate);
+      if (esito.scartate.isNotEmpty && !_chiuso) {
+        _scartate.add([
+          for (final riga in esito.scartate)
+            (riga: riga, titolo: esito.titoli[riga]),
+        ]);
+      }
       _emetti(
         _stato._con(
           fase: FaseSincronizzazione.sincronizzata,

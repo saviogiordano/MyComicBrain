@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,9 +12,11 @@ import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/motore_sincronizzazione.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/features/dashboard/presentation/dashboard_page.dart';
+import 'package:mycomicbrain/features/sincronizzazione/application/sincronizzazione_providers.dart';
 
 void main() {
   late AppDatabase db;
@@ -36,6 +38,7 @@ void main() {
     WidgetTester tester, {
     SessionState? account,
     bool senzaRete = false,
+    List<Override> sincronizzazione = const [],
   }) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -43,6 +46,7 @@ void main() {
           appDatabaseProvider.overrideWithValue(db),
           if (account != null) statoAccountProvider.overrideWithValue(account),
           senzaReteProvider.overrideWithValue(senzaRete),
+          ...sincronizzazione,
         ],
         child: MaterialApp(theme: AppTheme.dark, home: const DashboardPage()),
       ),
@@ -383,6 +387,52 @@ void main() {
       );
 
       expect(find.text('Account'), findsOneWidget);
+    });
+
+    testWidgets('con la Sincronizzazione attiva la pillola ne mostra lo '
+        'stato e apre lo sheet con le Modifiche in sospeso', (tester) async {
+      await pumpDashboard(
+        tester,
+        account: stato(
+          profilo: const Profilo(
+            email: 'mario@example.com',
+            metodo: MetodoAccesso.google,
+          ),
+        ),
+        sincronizzazione: [
+          statoSincronizzazioneProvider.overrideWith(
+            (ref) => Stream.value(
+              const StatoSincronizzazione(
+                fase: FaseSincronizzazione.offline,
+                replicaScaricata: true,
+              ),
+            ),
+          ),
+          modificheInSospesoProvider.overrideWith((ref) => Stream.value(2)),
+          elencoModificheProvider.overrideWith(
+            (ref) => Stream.value([
+              'Copia modificata: Dylan Dog 41',
+              'Opera aggiunta: Tex',
+            ]),
+          ),
+        ],
+      );
+
+      expect(find.text('Account'), findsNothing);
+      await tester.tap(find.text('Offline · 2 in attesa'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sincronizzazione'), findsOneWidget);
+      expect(find.text('• Copia modificata: Dylan Dog 41'), findsOneWidget);
+      expect(find.text('Apri Impostazioni'), findsOneWidget);
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Sincronizza ora'),
+            )
+            .onPressed,
+        isNull,
+      );
     });
 
     testWidgets("con l'email in attesa mostra il banner di conferma", (
