@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prototipo Sincronizzazione</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!--
+  PROTOTIPO THROWAWAY — ticket #201 (mappa #165). Non è codice di produzione.
+  Domanda: come appaiono all'utente la Sincronizzazione e la Replica locale
+  (indicatore di stato, Sincronizza ora, primo download, Scansione offline,
+  logout con Modifiche in sospeso, blocco offline residuo)?
+  Apri il file con doppio click. Varianti condivisibili via URL:
+  ?indicatore=A|B|C&cover=A|B&logout=A|B&scarto=A|B
+-->
+<style>
+:root{
+  --deep:#08090A;--base:#0E1113;--raised:#141A1D;--card:rgba(255,255,255,.02);
+  --b1:rgba(255,255,255,.06);--b2:rgba(255,255,255,.08);--b3:rgba(255,255,255,.14);
+  --t:#F2F4F5;--t2:rgba(242,244,245,.6);--t3:rgba(242,244,245,.5);--t4:rgba(242,244,245,.34);
+  --accent:#22B8CF;--amber:#E9A23B;--red:#E5484D;
+  --pbg:#F6F5F2;--pfg:#1B1D1F;--pmuted:#6B6F73;--pline:#E3E1DC;--pacc:#0E7C8C;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--pbg);color:var(--pfg);font:14px/1.5 'Space Grotesk',system-ui,sans-serif}
+.wrap{display:grid;grid-template-columns:420px 1fr;gap:32px;max-width:1320px;margin:0 auto;padding:28px 24px 60px}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
+.lead{color:var(--pmuted);margin:0 0 20px;max-width:760px}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;background:#1B1D1F;color:#F6F5F2;padding:2px 8px;border-radius:99px;margin-bottom:8px}
+
+/* ── phone ── */
+.phone{position:sticky;top:20px;width:390px;height:800px;border-radius:52px;background:#000;padding:12px;box-shadow:0 30px 60px rgba(0,0,0,.25)}
+.screen{position:relative;width:100%;height:100%;border-radius:42px;overflow:hidden;background:linear-gradient(180deg,#0E1113,#0A0C0D);color:var(--t)}
+.island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:110px;height:32px;border-radius:20px;background:#000;z-index:50}
+.status{position:absolute;top:0;left:0;right:0;height:52px;display:flex;justify-content:space-between;align-items:center;padding:6px 30px 0;font-size:13px;font-weight:600;z-index:40}
+.sc{position:absolute;inset:0;padding:64px 22px 26px;display:flex;flex-direction:column;overflow:auto}
+.sc.between{justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px}
+.logo i{width:26px;height:26px;border-radius:7px;background:var(--accent);display:flex;align-items:center;justify-content:center;font:700 13px 'Space Grotesk';color:var(--deep);font-style:normal}
+.logo b{font-weight:600;font-size:15px}
+.h{font:600 28px/1.1 'Space Grotesk';letter-spacing:-.025em;margin:22px 0 10px}
+.h2{font:600 21px/1.2 'Space Grotesk';letter-spacing:-.02em;margin:0 0 8px}
+.p{color:var(--t3);font-size:13.5px;line-height:1.6;margin:0}
+.small{color:var(--t4);font-size:11px;line-height:1.5;text-align:center}
+.btn{height:50px;border-radius:15px;display:flex;align-items:center;justify-content:center;gap:8px;font:600 15px 'Space Grotesk';cursor:pointer;border:0;width:100%;color:var(--t);background:transparent}
+.btn.pri{background:var(--accent);color:var(--deep)}
+.btn.out{border:1px solid var(--b3);font-weight:500}
+.btn.white{background:#fff;color:#000}
+.btn.ghost{height:40px;font-weight:500;color:var(--t2)}
+.btn.danger{background:var(--red);color:#fff}
+.btn.link{height:auto;padding:6px;color:var(--accent);font-weight:500;font-size:13.5px}
+.btn[disabled]{opacity:.35;cursor:not-allowed}
+.stack{display:flex;flex-direction:column;gap:10px}
+.div{display:flex;align-items:center;gap:10px;color:var(--t4);font-size:11.5px}
+.div:before,.div:after{content:"";flex:1;height:1px;background:var(--b2)}
+.field{height:48px;border-radius:13px;border:1px solid var(--b2);background:var(--card);display:flex;align-items:center;padding:0 14px;color:var(--t2);font-size:14px}
+.seg{display:flex;background:var(--card);border:1px solid var(--b2);border-radius:12px;padding:3px}
+.seg span{flex:1;text-align:center;padding:7px;border-radius:9px;font-size:13px;color:var(--t3);cursor:pointer}
+.seg span.on{background:rgba(255,255,255,.08);color:var(--t)}
+.card{border:1px solid var(--b2);border-radius:14px;background:var(--card);padding:14px}
+.card.acc{border-color:rgba(34,184,207,.35);background:rgba(34,184,207,.06)}
+.card.amb{border-color:rgba(233,162,59,.35);background:rgba(233,162,59,.07)}
+.back{color:var(--t2);font-size:14px;cursor:pointer;margin-bottom:14px}
+.row{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-bottom:1px solid var(--b1);font-size:14px}
+.row:last-child{border-bottom:0}
+.row .v{color:var(--t3);font-size:13px}
+.row.click{cursor:pointer}
+.group{border:1px solid var(--b2);border-radius:14px;background:var(--card);overflow:hidden}
+.gl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--t4);margin:18px 4px 8px}
+.appbody{position:absolute;inset:0;padding:60px 18px 96px;overflow:auto}
+.nav{position:absolute;left:0;right:0;bottom:0;height:84px;border-top:1px solid var(--b1);background:rgba(14,17,19,.96);display:flex;justify-content:space-around;padding-top:10px;font-size:10.5px;color:var(--t4);z-index:20}
+.nav div{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+.nav div.on{color:var(--accent)}
+.nav .ic{width:22px;height:22px;border-radius:6px;border:1.5px solid currentColor}
+.kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.kpi .card b{display:block;font:500 22px 'Space Grotesk';color:var(--accent)}
+.kpi .card span{font-size:11.5px;color:var(--t3)}
+.banner{margin:-4px 0 12px;padding:9px 12px;border-radius:11px;font-size:12.5px;display:flex;gap:8px;align-items:center}
+.banner.off{background:rgba(233,162,59,.12);color:var(--amber)}
+.banner.acc{background:rgba(34,184,207,.1);color:var(--accent)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:99px;font-size:11.5px;border:1px solid var(--b2);color:var(--t2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--t4)}
+.dot.on{background:#3DD68C}.dot.off{background:var(--amber)}
+.avatar{width:42px;height:42px;border-radius:50%;background:rgba(34,184,207,.18);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:600}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:30;display:flex;flex-direction:column;justify-content:flex-end}
+.scrim.center{justify-content:center;padding:28px}
+.sheet{background:var(--raised);border-radius:24px 24px 0 0;padding:10px 20px 30px;border-top:1px solid var(--b2)}
+.sheet .grab{width:38px;height:5px;border-radius:3px;background:var(--b3);margin:0 auto 16px}
+.dialog{background:var(--raised);border-radius:20px;padding:20px;border:1px solid var(--b2)}
+.bar{height:8px;border-radius:4px;background:var(--b2);overflow:hidden;margin:18px 0 10px}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .4s}
+.steps{display:flex;flex-direction:column;gap:9px;margin-top:10px;font-size:13.5px}
+.steps div{display:flex;gap:10px;align-items:center;color:var(--t3)}
+.steps div.done{color:var(--t)}
+.steps div.now{color:var(--accent)}
+.bigic{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;background:rgba(34,184,207,.12);color:var(--accent);margin-bottom:18px}
+.bigic.amb{background:rgba(233,162,59,.12);color:var(--amber)}
+.bigic.red{background:rgba(229,72,77,.14);color:var(--red)}
+.toast{position:absolute;left:18px;right:18px;bottom:100px;background:#F2F4F5;color:#08090A;border-radius:12px;padding:11px 14px;font-size:13px;z-index:60}
+.off-screen{display:flex;align-items:center;justify-content:center;height:100%;color:var(--t4);font-size:13px;flex-direction:column;gap:12px;text-align:center;padding:30px}
+ul.cons{margin:10px 0 0;padding-left:18px;color:var(--t2);font-size:13.5px;line-height:1.7}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--t2);cursor:pointer;margin:16px 0}
+.check i{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--b3);flex:none;font-style:normal;display:flex;align-items:center;justify-content:center;font-size:13px}
+.check i.on{background:var(--accent);border-color:var(--accent);color:var(--deep)}
+
+/* ── panel ── */
+.panel section{background:#fff;border:1px solid var(--pline);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+.panel h3{margin:0 0 10px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--pmuted)}
+.state{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:13px}
+.state .k{color:var(--pmuted)}
+.state .kv{display:flex;justify-content:space-between;gap:10px;padding:3px 6px;border-radius:6px}
+.state .kv.chg{background:#FFF1C9}
+.state .sub{grid-column:1/-1;font-weight:600;margin-top:8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--pfg)}
+.changed{margin-top:10px;font-size:12.5px;color:var(--pmuted)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.pb{border:1px solid var(--pline);background:#fff;border-radius:10px;padding:7px 11px;font:500 13px 'Space Grotesk';cursor:pointer;color:var(--pfg)}
+.pb:hover{border-color:var(--pacc)}
+.pb.on{background:var(--pacc);border-color:var(--pacc);color:#fff}
+.pb[disabled]{opacity:.35;cursor:not-allowed}
+.vars{display:grid;grid-template-columns:130px 1fr;gap:10px 14px;align-items:start;font-size:13px}
+.vars .desc{grid-column:2;color:var(--pmuted);font-size:12.5px;margin-top:-4px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.tabs span{padding:6px 10px;border-radius:9px;font-size:12.5px;cursor:pointer;border:1px solid var(--pline)}
+.tabs span.on{background:#1B1D1F;color:#fff;border-color:#1B1D1F}
+.wdesc{color:var(--pmuted);font-size:13px;margin:0 0 12px}
+.wsteps{display:flex;flex-direction:column;gap:6px}
+.wsteps button{text-align:left}
+.wsteps button.done{background:#EEF7F8;border-color:#BFE3E8;color:var(--pmuted)}
+.qs{margin:0;padding-left:18px;font-size:13px;line-height:1.6}
+.qs li{margin-bottom:6px}
+code{font-size:12px;background:#F0EFEB;padding:1px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div><div class="phone"><div class="screen" id="phone"></div></div></div>
+/* ── aggiunte #201 ── */
+.syncpill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;font-size:11.5px;border:1px solid var(--b2);color:var(--t2);cursor:pointer}
+.syncpill.amb{border-color:rgba(233,162,59,.4);color:var(--amber)}
+.syncpill.red{border-color:rgba(229,72,77,.45);color:var(--red)}
+.syncpill.acc{border-color:rgba(34,184,207,.4);color:var(--accent)}
+.dot.red{background:var(--red)}.dot.acc{background:var(--accent)}
+.spin{display:inline-block;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.topbar .t{font:600 22px 'Space Grotesk';letter-spacing:-.02em}
+.cloud{position:relative;width:34px;height:34px;border-radius:10px;border:1px solid var(--b2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px}
+.cloud.amb{color:var(--amber);border-color:rgba(233,162,59,.4)}.cloud.red{color:var(--red);border-color:rgba(229,72,77,.45)}.cloud.ok{color:#3DD68C}
+.cloud .badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--amber);color:#000;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.popover{position:absolute;top:104px;right:16px;width:260px;background:var(--raised);border:1px solid var(--b3);border-radius:16px;padding:14px;z-index:35;box-shadow:0 16px 40px rgba(0,0,0,.5)}
+.gbanner{position:absolute;left:12px;right:12px;bottom:92px;z-index:21;border-radius:12px;padding:10px 12px;font-size:12.5px;display:flex;gap:8px;align-items:center;cursor:pointer;backdrop-filter:blur(6px)}
+.gbanner.amb{background:rgba(60,42,14,.95);color:var(--amber);border:1px solid rgba(233,162,59,.35)}
+.gbanner.red{background:rgba(58,18,20,.95);color:#FF8A8D;border:1px solid rgba(229,72,77,.4)}
+.gbanner.acc{background:rgba(10,44,50,.95);color:var(--accent);border:1px solid rgba(34,184,207,.35)}
+.gbanner .chev{margin-left:auto;opacity:.7}
+.covers{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}
+.cv{aspect-ratio:2/3;border-radius:6px;position:relative;overflow:hidden;border:1px solid var(--b1)}
+.cv.ph{background:repeating-linear-gradient(135deg,rgba(255,255,255,.03) 0 6px,rgba(255,255,255,.06) 6px 12px)}
+.cv.ph:after{content:"";position:absolute;inset:auto 6px 6px 6px;height:3px;border-radius:2px;background:rgba(255,255,255,.12)}
+.cv.new{outline:2px solid var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500}
+.chip.amb{background:rgba(233,162,59,.14);color:var(--amber)}
+.chip.acc{background:rgba(34,184,207,.12);color:var(--accent)}
+.chip.mut{background:rgba(255,255,255,.06);color:var(--t3)}
+.scanrow{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--b1)}
+.scanrow .th{width:42px;height:60px;border-radius:6px;background:linear-gradient(160deg,#2a3236,#151a1d);flex:none}
+.oplist{margin:8px 0 0;padding:0;list-style:none;font-size:12.5px;color:var(--t2)}
+.oplist li{padding:6px 0;border-bottom:1px solid var(--b1);display:flex;gap:8px}
+.oplist li:last-child{border-bottom:0}
+.kv2{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;color:var(--t2)}
+.kv2 b{color:var(--t);font-weight:500}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div><div class="phone"><div class="screen" id="phone"></div></div></div>
+  <div class="panel">
+    <span class="tag">Prototipo throwaway · #201</span>
+    <h1>Stato della Sincronizzazione, primo download e logout</h1>
+    <p class="lead">Prova come appaiono all'utente la <b>Replica locale</b> e la <b>Sincronizzazione</b> (ADR-0008): l'indicatore di stato, "Sincronizza ora" in Impostazioni, il primo download dopo login o reinstallazione, una Scansione scattata senza rete, il logout con Modifiche in sospeso e cosa resta del vecchio blocco "offline da autenticato". Il profilo è già autenticato e sincronizzato, con 162 fumetti. Tutto è simulato in memoria, i tempi sono accorciati.</p>
+
+    <section>
+      <h3>Varianti</h3>
+      <div class="vars" id="vars"></div>
+    </section>
+
+    <section>
+      <h3>Percorsi guidati</h3>
+      <div class="tabs" id="wtabs"></div>
+      <p class="wdesc" id="wdesc"></p>
+      <div class="wsteps" id="wsteps"></div>
+    </section>
+
+    <section>
+      <h3>Stato</h3>
+      <div class="state" id="state"></div>
+      <div class="changed" id="changed"></div>
+    </section>
+
+    <section>
+      <h3>Azioni libere</h3>
+      <div class="btns" id="free"></div>
+    </section>
+
+    <section>
+      <h3>Domande su cui reagire</h3>
+      <ol class="qs">
+        <li><b>Indicatore</b>: pillola in Dashboard (A), banner globale che compare solo quando c'è qualcosa da dire (B) o icona nuvola in ogni schermata (C)? Quando tutto è sincronizzato l'indicatore deve dire "Sincronizzato" o sparire?</li>
+        <li><b>Tocco sull'indicatore</b>: cosa deve aprire? In A apre uno sheet di dettaglio, in B porta a Impostazioni, in C apre un popover.</li>
+        <li><b>Impostazioni › Sincronizzazione</b>: stato, ultima sincronizzazione, modifiche in attesa e "Sincronizza ora" (disabilitato senza rete). Manca o avanza qualcosa? Serve l'elenco delle modifiche in attesa?</li>
+        <li><b>Primo download</b>: schermata bloccante con barra e passi, poi si entra. Le cover arrivano in background: in silenzio, con segnaposto che si riempiono (A), o con un contatore "Cover 40/162" nell'indicatore e in Impostazioni (B)?</li>
+        <li><b>Senza rete e senza Replica</b> (login o reinstallazione offline): il blocco a schermo intero resta solo qui. Il download riparte da solo quando torna la rete. Va bene?</li>
+        <li><b>Scansione offline</b>: nel riepilogo lo stato "In attesa di rete" con una nota in cima. Avvisare che solo questo telefono la può analizzare?</li>
+        <li><b>Logout con modifiche in sospeso</b>: dialog (A) o schermata dedicata con l'elenco (B)? "Esci comunque" chiede una seconda conferma.</li>
+        <li><b>Modifica scartata</b> perché la riga è stata eliminata su un altro dispositivo (l'eliminazione prevale): in silenzio (A) o con un avviso (B)?</li>
+        <li><b>Errori</b>: dopo quanti tentativi falliti l'indicatore passa da "Sincronizzo…" a errore? Qui succede al primo errore, con "riprovo tra N min".</li>
+      </ol>
+    </section>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   MODULO LOGICO — puro, nessun DOM. È la parte trasferibile nel motore di
+   Sincronizzazione (#208) e nel provider di stato che alimenta l'indicatore.
+   Il tempo è simulato in minuti (clock).
+   ═══════════════════════════════════════════════════════════════════════ */
+const SyncFlow = (() => {
+  const COMICS = 162;
+  const initial = (config) => ({
+    config, // { indicatore, cover, logout, scarto }
+    net: true,
+    clock: 0,
+    session: { email: 'mario@example.com' },
+    replica: { comics: COMICS, pending: [], lastSync: 0 },
+    server: { comics: COMICS, remoteChanges: 0, deleteElsewhere: false, error: false },
+    sync: { status: 'idle', fails: 0, retryAt: null }, // idle | scheduled | running | error
+    download: null,          // { pct } durante il primo download
+    covers: { total: COMICS, done: COMICS },
+    scans: [],               // { id, state: 'attesa-rete'|'in-corso'|'completata' }
+    ui: { screen: 'app', tab: 'home', overlay: null, toast: null, logoutAfterSync: false, logoutError: null },
+  });
+
+  const clone = (s) => JSON.parse(JSON.stringify(s));
+  let nextScan = 1;
+
+  // Che cosa racconta l'indicatore. Una sola funzione per tutte le varianti.
+  function indicator(s) {
+    const r = s.replica; if (!r) return null;
+    const n = r.pending.length;
+    const coversLeft = s.covers.total - s.covers.done;
+    if (!s.net) return { tone: 'amb', icon: '⦸', short: n ? `Offline · ${n} in attesa` : 'Offline', long: n ? `Sei offline. ${n} ${n === 1 ? 'modifica verrà sincronizzata' : 'modifiche verranno sincronizzate'} al ritorno della rete.` : 'Sei offline. Puoi continuare a usare la collezione.' , n };
+    if (s.sync.status === 'error') { const m = Math.max(1, s.sync.retryAt - s.clock); return { tone: 'red', icon: '!', short: `Non sincronizzato · riprovo tra ${m} min`, long: `La sincronizzazione non è riuscita. ${n ? n + ' modifiche restano su questo telefono. ' : ''}Riprovo tra ${m} min.`, n }; }
+    if (s.sync.status === 'running' || s.sync.status === 'scheduled') return { tone: 'acc', icon: '↻', spin: true, short: n ? `Sincronizzo ${n}…` : 'Sincronizzo…', long: 'Sincronizzazione in corso.', n };
+    if (s.config.cover === 'B' && coversLeft > 0) return { tone: 'acc', icon: '↓', short: `Cover ${s.covers.done}/${s.covers.total}`, long: `Collezione aggiornata. Scarico le cover: ${s.covers.done} di ${s.covers.total}.`, n, quiet: true };
+    return { tone: 'ok', icon: '✓', short: 'Sincronizzato', long: `Tutto sincronizzato · ${ago(s)}.`, n, ok: true };
+  }
+  const ago = (s) => { const d = s.clock - s.replica.lastSync; return d <= 0 ? 'adesso' : `${d} min fa`; };
+
+  function addOp(s, desc, kind) {
+    s.replica.pending.push({ desc, kind });
+    if (s.net && s.sync.status !== 'running' && s.sync.status !== 'error') s.sync.status = 'scheduled'; // debounce ~2 s
+  }
+
+  function doLogout(s) {
+    s.session = null; s.replica = null; s.scans = []; s.covers = { total: COMICS, done: 0 };
+    s.sync = { status: 'idle', fails: 0, retryAt: null };
+    s.ui = { ...s.ui, screen: 'welcome', overlay: null, tab: 'home', logoutAfterSync: false, logoutError: null, toast: 'Sei uscito. La collezione è al sicuro nel tuo account.' };
+  }
+  function startDownload(s) {
+    if (!s.net) { s.ui.screen = 'offline-first'; return; }
+    s.ui.screen = 'download'; s.download = { pct: 0 };
+  }
+
+  function reduce(prev, a) {
+    const s = clone(prev); const ui = s.ui;
+    if (!['COVER_TICK', 'DL_TICK', 'SCAN_DONE', 'SYNC_START'].includes(a.type)) ui.toast = null;
+    switch (a.type) {
+      case 'TAB': ui.tab = a.tab; ui.overlay = null; break;
+      case 'OVERLAY': ui.overlay = a.overlay; break;
+      case 'CLOSE': ui.overlay = null; ui.logoutError = null; break;
+
+      case 'NET': {
+        s.net = !s.net;
+        if (s.net) {
+          if (ui.screen === 'offline-first') startDownload(s);
+          else if (s.replica && (s.replica.pending.length || s.server.remoteChanges || s.scans.some(x => x.state === 'attesa-rete'))) s.sync.status = 'running';
+          else if (s.replica) s.sync.status = 'running'; // ritorno della rete = innesco
+        } else if (s.sync.status !== 'error') s.sync.status = 'idle';
+        if (s.download && !s.net) { s.download = null; ui.screen = 'offline-first'; }
+        break;
+      }
+      case 'EDIT': addOp(s, 'Copia modificata: Dylan Dog 41 (stato → Ottimo)', 'copia'); ui.toast = 'Salvato'; break;
+      case 'ADD': addOp(s, 'Copia aggiunta a mano: Tex 712', 'copia'); s.replica.comics++; ui.toast = 'Aggiunto alla collezione'; break;
+      case 'SCAN': {
+        const sc = { id: nextScan++, state: s.net ? 'in-corso' : 'attesa-rete' };
+        s.scans.push(sc);
+        addOp(s, `Scansione ${sc.id} (foto da caricare)`, 'scansione');
+        ui.tab = 'scan'; break;
+      }
+      case 'SCAN_DONE': s.scans.forEach(x => { if (x.state === 'in-corso') x.state = 'completata'; }); break;
+      case 'REMOTE_CHANGE': s.server.remoteChanges++; s.server.comics++; break;
+      case 'REMOTE_DELETE': s.server.deleteElsewhere = true; break;
+      case 'SERVER_ERROR': s.server.error = !s.server.error; break;
+
+      case 'SYNC_START': if (s.net && s.replica && s.sync.status === 'scheduled') s.sync.status = 'running'; break;
+      case 'SYNC_NOW':
+        if (!s.net) { ui.toast = 'Sei offline: la sincronizzazione riparte da sola al ritorno della rete.'; break; }
+        s.sync.status = 'running'; break;
+      case 'SYNC_COMPLETE': {
+        if (!s.replica || s.sync.status !== 'running') break;
+        if (!s.net) { s.sync.status = 'idle'; break; }
+        if (s.server.error) {
+          s.sync.fails++; s.sync.status = 'error';
+          s.sync.retryAt = s.clock + Math.min(5, 2 ** (s.sync.fails - 1));
+          if (ui.logoutAfterSync) { ui.logoutAfterSync = false; ui.logoutError = 'La sincronizzazione non è riuscita. Le modifiche sono ancora su questo telefono.'; }
+          break;
+        }
+        let discarded = 0;
+        if (s.server.deleteElsewhere) {
+          const i = s.replica.pending.findIndex(o => o.kind === 'copia');
+          if (i >= 0) { s.replica.pending.splice(i, 1); discarded = 1; }
+          s.replica.comics--; s.server.comics--; s.server.deleteElsewhere = false;
+        }
+        s.server.comics += s.replica.pending.filter(o => o.desc.startsWith('Copia aggiunta')).length;
+        s.replica.comics = s.server.comics;
+        s.replica.pending = []; s.server.remoteChanges = 0;
+        s.replica.lastSync = s.clock; s.sync = { status: 'idle', fails: 0, retryAt: null };
+        s.scans.forEach(x => { if (x.state === 'attesa-rete') x.state = 'in-corso'; }); // caricata la foto → parte l'analisi, solo qui
+        if (discarded && s.config.scarto === 'B') ui.toast = 'Una modifica non è stata salvata: «Dylan Dog 41» è stato eliminato su un altro dispositivo.';
+        if (ui.logoutAfterSync) doLogout(s);
+        break;
+      }
+      case 'TIME': {
+        s.clock += 5;
+        if (s.replica && s.net) {
+          if (s.sync.status === 'error' && s.clock >= s.sync.retryAt) s.sync.status = 'running';
+          else if (s.sync.status === 'idle') s.sync.status = 'running'; // ogni 5 min in primo piano
+        }
+        break;
+      }
+
+      case 'LOGIN': s.session = { email: 'mario@example.com' }; startDownload(s); break;
+      case 'DL_TICK':
+        if (!s.download) break;
+        s.download.pct = Math.min(100, s.download.pct + 9);
+        if (s.download.pct >= 100) {
+          s.download = null; ui.screen = 'app'; ui.tab = 'home';
+          s.replica = { comics: s.server.comics, pending: [], lastSync: s.clock };
+          s.covers = { total: s.server.comics, done: 0 };
+          s.sync = { status: 'idle', fails: 0, retryAt: null };
+        }
+        break;
+      case 'COVER_TICK': s.covers.done = Math.min(s.covers.total, s.covers.done + 18); break;
+      case 'RETRY_FIRST': if (s.net) startDownload(s); else ui.toast = 'Ancora nessuna connessione.'; break;
+      case 'REINSTALL':
+        s.session = null; s.replica = null; s.scans = []; s.covers = { total: s.server.comics, done: 0 };
+        s.sync = { status: 'idle', fails: 0, retryAt: null };
+        ui.screen = 'welcome'; ui.overlay = null; ui.tab = 'home';
+        break;
+
+      case 'LOGOUT':
+        ui.overlay = s.replica.pending.length ? 'logout-pending' : 'logout-simple'; break;
+      case 'LOGOUT_CONFIRM': doLogout(s); break;
+      case 'LOGOUT_SYNC':
+        if (!s.net) break;
+        ui.logoutAfterSync = true; ui.logoutError = null; s.sync.status = 'running'; break;
+      case 'LOGOUT_FORCE': ui.overlay = 'logout-force'; break;
+      case 'LOGOUT_FORCE_CONFIRM': doLogout(s); ui.toast = 'Sei uscito. Le modifiche non sincronizzate sono state eliminate.'; break;
+    }
+    return s;
+  }
+  return { initial, reduce, indicator, ago };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GUSCIO — varianti, effetti (timer), pannello, rendering.
+   ═══════════════════════════════════════════════════════════════════════ */
+const VARIANTS = {
+  indicatore: { A: 'Pillola in Dashboard, tocco → sheet di dettaglio', B: 'Banner globale solo quando serve, tocco → Impostazioni', C: 'Icona nuvola in ogni schermata, tocco → popover' },
+  cover: { A: 'Cover in silenzio (segnaposto che si riempiono)', B: 'Contatore "Cover N/M" nell\'indicatore e in Impostazioni' },
+  logout: { A: 'Dialog con le tre scelte', B: 'Schermata dedicata con l\'elenco delle modifiche' },
+  scarto: { A: 'Modifica scartata in silenzio', B: 'Avviso quando una modifica viene scartata' },
+};
+const params = new URLSearchParams(location.search);
+const config = {};
+for (const k in VARIANTS) config[k] = (params.get(k) || 'A').toUpperCase();
+
+let state = SyncFlow.initial(config);
+let prevFlat = flatten(state);
+let changedKeys = [];
+const timers = {};
+
+function dispatch(type, extra) {
+  state = SyncFlow.reduce(state, { type, ...(extra || {}) });
+  effects();
+  const f = flatten(state);
+  changedKeys = Object.keys(f).filter(k => f[k] !== prevFlat[k]);
+  prevFlat = f;
+  render();
+}
+function later(key, ms, type) { if (timers[key]) return; timers[key] = setTimeout(() => { timers[key] = null; dispatch(type); }, ms); }
+function effects() {
+  const s = state;
+  if (s.sync.status === 'scheduled') later('deb', 1500, 'SYNC_START');
+  if (s.sync.status === 'running') later('sync', 1300, 'SYNC_COMPLETE');
+  if (s.ui.screen === 'download') later('dl', 280, 'DL_TICK');
+  if (s.replica && s.net && s.covers.done < s.covers.total) later('cov', 450, 'COVER_TICK');
+  if (s.scans.some(x => x.state === 'in-corso')) later('scan', 1800, 'SCAN_DONE');
+}
+
+/* ── percorsi guidati ── */
+const WALKS = [
+  { name: 'In aereo', desc: 'La verifica finale della mappa: senza rete si modifica una Copia, se ne aggiunge una a mano e si scatta una Scansione. Tornata la rete, tutto parte da solo.',
+    steps: [['Togli la rete', 'NET'], ['Modifica una Copia', 'EDIT'], ['Aggiungi una Copia a mano', 'ADD'], ['Scatta una Scansione', 'SCAN'], ['Torna in Dashboard', 'TAB', { tab: 'home' }], ['Riaccendi la rete', 'NET'], ['Guarda il riepilogo Scansioni', 'TAB', { tab: 'scan' }]] },
+  { name: 'Primo download', desc: 'Reinstallazione e nuovo accesso: download in primo piano, poi si entra e le cover arrivano in background (prova le due varianti "cover").',
+    steps: [['Reinstalla l\'app', 'REINSTALL'], ['Accedi', 'LOGIN'], ['(attendi la fine del download)', null], ['Apri Collezione', 'TAB', { tab: 'coll' }]] },
+  { name: 'Accesso senza rete', desc: 'Senza Replica e senza rete: l\'unico caso in cui resta il blocco a schermo intero. Al ritorno della rete il download parte da solo.',
+    steps: [['Reinstalla l\'app', 'REINSTALL'], ['Togli la rete', 'NET'], ['Accedi', 'LOGIN'], ['Riaccendi la rete', 'NET']] },
+  { name: 'Logout: sincronizza e esci', desc: 'Modifiche fatte offline, poi logout: l\'avviso offre "Sincronizza e esci", disponibile solo con la rete.',
+    steps: [['Togli la rete', 'NET'], ['Modifica una Copia', 'EDIT'], ['Scatta una Scansione', 'SCAN'], ['Vai in Impostazioni', 'TAB', { tab: 'set' }], ['Esci', 'LOGOUT'], ['Riaccendi la rete', 'NET'], ['(di nuovo) Esci', 'LOGOUT'], ['Sincronizza e esci', 'LOGOUT_SYNC']] },
+  { name: 'Logout: esci comunque', desc: 'Uscita senza sincronizzare: seconda conferma distruttiva, le modifiche e la Scansione vanno perse.',
+    steps: [['Togli la rete', 'NET'], ['Modifica una Copia', 'EDIT'], ['Vai in Impostazioni', 'TAB', { tab: 'set' }], ['Esci', 'LOGOUT'], ['Esci comunque', 'LOGOUT_FORCE'], ['Conferma', 'LOGOUT_FORCE_CONFIRM']] },
+  { name: 'Errore del server', desc: 'Il server rifiuta la sincronizzazione: l\'indicatore passa a errore e si riprova con backoff fino a 5 minuti.',
+    steps: [['Attiva errore del server', 'SERVER_ERROR'], ['Modifica una Copia', 'EDIT'], ['(attendi l\'errore)', null], ['Passano 5 minuti', 'TIME'], ['Disattiva errore del server', 'SERVER_ERROR'], ['Vai in Impostazioni', 'TAB', { tab: 'set' }], ['Sincronizza ora', 'SYNC_NOW']] },
+  { name: 'Eliminato altrove', desc: 'Offline modifichi una Copia che intanto è stata eliminata su un altro dispositivo: l\'eliminazione prevale (prova le due varianti "scarto").',
+    steps: [['Togli la rete', 'NET'], ['Modifica una Copia', 'EDIT'], ['Un altro device elimina quella Copia', 'REMOTE_DELETE'], ['Riaccendi la rete', 'NET']] },
+];
+let walk = 0, walkDone = [];
+function startWalk(i) { walk = i; walkDone = []; Object.values(timers).forEach(clearTimeout); for (const k in timers) timers[k] = null; state = SyncFlow.initial(config); prevFlat = flatten(state); changedKeys = []; render(); }
+function runStep(i) { const [, t, x] = WALKS[walk].steps[i]; walkDone.push(i); if (t) dispatch(t, x); else render(); }
+function act(type, extra) { dispatch(type, extra); }
+
+/* ── pannello ── */
+function flatten(s) {
+  return {
+    'rete': s.net ? 'online' : 'offline', 'orologio': `${s.clock} min`,
+    'sessione': s.session ? s.session.email : '—', 'schermata': s.ui.screen,
+    'Replica': s.replica ? `${s.replica.comics} fumetti` : 'assente',
+    'in sospeso': s.replica ? String(s.replica.pending.length) : '—',
+    'ultima sync': s.replica ? SyncFlow.ago(s) : '—',
+    'stato sync': s.sync.status + (s.sync.fails ? ` (${s.sync.fails} falliti)` : ''),
+    'cover': `${s.covers.done}/${s.covers.total}`,
+    'scansioni': s.scans.map(x => x.state).join(', ') || '—',
+    'server': `${s.server.comics} fumetti` + (s.server.remoteChanges ? `, +${s.server.remoteChanges} da altri device` : ''),
+    'errore server': s.server.error ? 'sì' : 'no',
+    'download': s.download ? `${s.download.pct}%` : '—',
+  };
+}
+function renderState() {
+  const f = flatten(state);
+  document.getElementById('state').innerHTML = Object.entries(f).map(([k, v]) => `<div class="kv ${changedKeys.includes(k) ? 'chg' : ''}"><span class="k">${k}</span><span>${v}</span></div>`).join('');
+  document.getElementById('changed').textContent = changedKeys.length ? 'Cambiato: ' + changedKeys.join(', ') : '';
+}
+function renderPanel() {
+  document.getElementById('vars').innerHTML = Object.entries(VARIANTS).map(([k, opts]) =>
+    `<b>${k}</b><div class="btns">${Object.keys(opts).map(o => `<button class="pb ${config[k] === o ? 'on' : ''}" onclick="setVar('${k}','${o}')">${o}</button>`).join('')}</div><div class="desc">${opts[config[k]]}</div>`).join('');
+  document.getElementById('wtabs').innerHTML = WALKS.map((w, i) => `<span class="${i === walk ? 'on' : ''}" onclick="startWalk(${i})">${w.name}</span>`).join('');
+  document.getElementById('wdesc').textContent = WALKS[walk].desc + ' Toccare un percorso lo fa ripartire da capo.';
+  document.getElementById('wsteps').innerHTML = WALKS[walk].steps.map(([l], i) => `<button class="pb ${walkDone.includes(i) ? 'done' : ''}" onclick="runStep(${i})">${i + 1}. ${l}</button>`).join('');
+  const s = state;
+  const F = (l, t, x, dis) => `<button class="pb" ${dis ? 'disabled' : ''} onclick='act(${JSON.stringify(t)}${x ? ',' + JSON.stringify(x) : ''})'>${l}</button>`;
+  const inApp = !!s.replica && s.ui.screen === 'app';
+  document.getElementById('free').innerHTML = [
+    F(s.net ? 'Togli la rete' : 'Riaccendi la rete', 'NET'),
+    F('Modifica una Copia', 'EDIT', null, !inApp), F('Aggiungi a mano', 'ADD', null, !inApp), F('Scatta Scansione', 'SCAN', null, !inApp),
+    F('Modifica da altro device', 'REMOTE_CHANGE'), F('Elimina altrove', 'REMOTE_DELETE'),
+    F(s.server.error ? 'Errore server: off' : 'Errore server: on', 'SERVER_ERROR'),
+    F('+5 minuti', 'TIME'), F('Reinstalla app', 'REINSTALL'), F('Logout', 'LOGOUT', null, !inApp),
+  ].join('');
+}
+function setVar(k, o) {
+  config[k] = o; state.config = { ...config };
+  const p = new URLSearchParams(location.search); p.set(k, o); history.replaceState(null, '', '?' + p);
+  render();
+}
+
+/* ── telefono ── */
+const B = (label, type, cls = 'pri', extra, dis) => `<button class="btn ${cls}" ${dis ? 'disabled' : ''} onclick='act(${JSON.stringify(type)}${extra ? ',' + JSON.stringify(extra) : ''})'>${label}</button>`;
+
+function pillA(ind) {
+  const tone = ind.ok ? '' : ind.tone;
+  const dot = ind.ok ? '<span class="dot on"></span>' : `<span class="${ind.spin ? 'spin' : ''}">${ind.icon}</span>`;
+  return `<span class="syncpill ${tone}" onclick="act('OVERLAY',{overlay:'sync-sheet'})">${dot} ${ind.short}</span>`;
+}
+function cloudC(ind) {
+  const cls = ind.ok ? 'ok' : ind.tone === 'acc' ? '' : ind.tone;
+  return `<div class="cloud ${cls}" onclick="act('OVERLAY',{overlay:'${state.ui.overlay === 'pop' ? '' : 'pop'}'})"><span class="${ind.spin ? 'spin' : ''}">${ind.ok ? '☁︎' : ind.icon}</span>${ind.n ? `<span class="badge">${ind.n}</span>` : ''}</div>`;
+}
+function topbar(title) {
+  const ind = SyncFlow.indicator(state);
+  return `<div class="topbar"><span class="t">${title}</span>${config.indicatore === 'C' && ind ? cloudC(ind) : ''}</div>`;
+}
+function bannerB() {
+  const ind = SyncFlow.indicator(state);
+  if (config.indicatore !== 'B' || !ind || ind.ok || state.ui.tab === 'set') return '';
+  if (ind.tone === 'acc' && !ind.n && !ind.quiet) return ''; // sincronizzazione breve senza nulla in attesa: niente rumore
+  return `<div class="gbanner ${ind.tone}" onclick="act('TAB',{tab:'set'})"><span class="${ind.spin ? 'spin' : ''}">${ind.icon}</span>${ind.short}<span class="chev">›</span></div>`;
+}
+
+function coverGrid(n) {
+  const loaded = state.covers.done, tot = state.covers.total;
+  const hues = [190, 28, 350, 140, 260, 45, 210, 10, 300, 90, 170, 230];
+  let h = '';
+  for (let i = 0; i < n; i++) {
+    const has = i / n < loaded / Math.max(tot, 1);
+    h += has ? `<div class="cv" style="background:linear-gradient(160deg,hsl(${hues[i % 12]} 45% 38%),hsl(${hues[i % 12]} 40% 16%))"></div>` : `<div class="cv ph"></div>`;
+  }
+  return `<div class="covers">${h}</div>`;
+}
+
+function home() {
+  const s = state, ind = SyncFlow.indicator(s);
+  const waiting = s.scans.filter(x => x.state === 'attesa-rete').length;
+  return `${topbar('Ciao, Mario')}
+    ${config.indicatore === 'A' && ind ? `<div style="margin:-6px 0 12px">${pillA(ind)}</div>` : ''}
+    <div class="kpi"><div class="card"><b>${s.replica.comics}</b><span>fumetti</span></div><div class="card"><b>€ 1.240</b><span>valore stimato</span></div></div>
+    ${waiting ? `<div class="card amb" style="margin-top:12px;cursor:pointer" onclick="act('TAB',{tab:'scan'})"><b style="color:var(--amber);font-weight:600">${waiting} ${waiting === 1 ? 'scansione' : 'scansioni'} in attesa di rete</b><div class="p" style="font-size:12.5px">Verranno riconosciute appena torna la connessione.</div></div>` : ''}
+    <div class="gl">Aggiunti di recente</div>${coverGrid(8)}`;
+}
+function collezione() {
+  return `${topbar('Collezione')}<div class="field" style="height:40px;margin-bottom:6px">Cerca nella collezione</div>${coverGrid(16)}
+    ${config.cover === 'A' && state.covers.done < state.covers.total ? '' : ''}`;
+}
+function scan() {
+  const s = state, offline = !s.net;
+  const chip = (x) => x.state === 'attesa-rete' ? '<span class="chip amb">⦸ In attesa di rete</span>' : x.state === 'in-corso' ? '<span class="chip amb"><span class="spin">◌</span> In corso</span>' : '<span class="chip acc">Completata</span>';
+  const waiting = s.scans.filter(x => x.state === 'attesa-rete').length;
+  return `${topbar('Riepilogo batch')}
+    ${waiting ? `<div class="banner off" style="margin:0 0 12px">Senza rete le scansioni restano su questo telefono: verranno riconosciute qui appena torna la connessione.</div>` : ''}
+    ${s.scans.length ? s.scans.map(x => `<div class="scanrow"><div class="th"></div><div style="flex:1"><div style="font-size:14px">Scansione ${x.id}</div><div style="margin-top:4px">${chip(x)}</div></div></div>`).join('') : '<p class="p">Nessuna scansione in questo batch.</p>'}
+    <div class="stack" style="margin-top:16px">${B('Scatta una cover', 'SCAN')}${s.scans.length ? B('Vai alla Dashboard', 'TAB', 'out', { tab: 'home' }) : ''}</div>`;
+}
+function syncDetail(full) {
+  const s = state, ind = SyncFlow.indicator(s), r = s.replica;
+  return `<div class="kv2"><span>Stato</span><b style="color:${ind.ok ? '#3DD68C' : ind.tone === 'acc' ? 'var(--accent)' : ind.tone === 'red' ? '#FF8A8D' : 'var(--amber)'}">${ind.short}</b></div>
+    <div class="kv2"><span>Ultima sincronizzazione</span><b>${SyncFlow.ago(s)}</b></div>
+    <div class="kv2"><span>Modifiche in attesa</span><b>${r.pending.length}</b></div>
+    ${config.cover === 'B' && s.covers.done < s.covers.total ? `<div class="kv2"><span>Cover scaricate</span><b>${s.covers.done} di ${s.covers.total}</b></div>` : ''}
+    ${full && r.pending.length ? `<ul class="oplist">${r.pending.map(o => `<li>• ${o.desc}</li>`).join('')}</ul>` : ''}
+    <div class="p" style="font-size:12px;margin:8px 0 12px">${ind.long}</div>
+    ${B(s.sync.status === 'running' ? '<span class="spin">↻</span> Sincronizzo…' : 'Sincronizza ora', 'SYNC_NOW', 'out', null, !s.net || s.sync.status === 'running')}
+    ${!s.net ? '<div class="small" style="margin-top:8px">Serve una connessione a Internet.</div>' : ''}`;
+}
+function settings() {
+  const s = state;
+  return `${topbar('Impostazioni')}
+    <div class="gl">Account</div>
+    <div class="group"><div class="row"><div style="display:flex;gap:12px;align-items:center"><div class="avatar">M</div><div><div>${s.session.email}</div><div class="v">Accesso con email e password · ${s.replica.comics} fumetti</div></div></div></div>
+      <div class="row click" onclick="act('LOGOUT')">Esci <span class="v">›</span></div>
+      <div class="row" style="color:var(--red)">Elimina account <span class="v">›</span></div></div>
+    <div class="gl">Sincronizzazione</div>
+    <div class="card">${syncDetail(true)}</div>
+    <div class="gl">Dati</div>
+    <div class="group"><div class="row">Esporta collezione <span class="v">›</span></div><div class="row">Catalogo stampabile <span class="v">›</span></div></div>`;
+}
+
+function appShell() {
+  const s = state, t = s.ui.tab;
+  const body = t === 'home' ? home() : t === 'coll' ? collezione() : t === 'scan' ? scan() : settings();
+  const nav = [['home', 'Home'], ['coll', 'Collezione'], ['scan', 'Scansiona'], ['set', 'Impostazioni']]
+    .map(([k, l]) => `<div class="${t === k ? 'on' : ''}" onclick="act('TAB',{tab:'${k}'})"><span class="ic"></span>${l}</div>`).join('');
+  return `<div class="appbody">${body}</div>${bannerB()}<div class="nav">${nav}</div>`;
+}
+
+function welcome() {
+  return `<div class="sc between"><div><div class="logo"><i>M</i><b>MyComicBrain</b></div>
+    <div class="h">Bentornato</div><p class="p">Accedi per ritrovare la tua collezione. Su questo dispositivo la collezione è già passata a un account.</p></div>
+    <div class="stack">${B(' Continua con Apple', 'LOGIN', 'white')}${B('<b style="color:#4285F4">G</b> Continua con Google', 'LOGIN', 'out')}${B('Accedi con email', 'LOGIN', 'out')}</div></div>`;
+}
+function download() {
+  const p = state.download.pct;
+  const st = (label, from, to) => `<div class="${p >= to ? 'done' : p >= from ? 'now' : ''}">${p >= to ? '✓' : p >= from ? '◌' : '○'} ${label}</div>`;
+  const n = Math.round(state.server.comics * p / 100);
+  return `<div class="sc"><div class="bigic">↓</div><div class="h2">Scarico la tua collezione</div>
+    <p class="p">Serve solo la prima volta su questo dispositivo. Poi la collezione funziona anche senza rete.</p>
+    <div class="bar"><i style="width:${p}%"></i></div><div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--t3)"><span>${n} di ${state.server.comics} fumetti</span><span>${p}%</span></div>
+    <div class="steps" style="margin-top:22px">${st('Catalogo e Copie', 0, 70)}${st('Scansioni e riconoscimenti', 70, 100)}${st('Pronto', 100, 101)}</div>
+    <div class="small" style="margin-top:auto">Le immagini delle cover arrivano dopo, mentre usi l'app. Se l'app si chiude, il download riparte alla prossima apertura.</div></div>`;
+}
+function offlineFirst() {
+  return `<div class="sc between"><div><div class="bigic amb">⦸</div><div class="h2">Serve una connessione</div>
+    <p class="p">È il primo accesso su questo dispositivo: la collezione va scaricata una volta, poi funziona anche senza rete. Il download parte da solo appena torna la connessione.</p></div>
+    <div class="stack">${B('Riprova', 'RETRY_FIRST')}</div></div>`;
+}
+
+function overlays() {
+  const s = state, o = s.ui.overlay;
+  if (!o) return '';
+  if (o === 'pop') return `<div class="popover">${syncDetail(false)}</div>`;
+  if (o === 'sync-sheet') return `<div class="scrim" onclick="if(event.target===this)act('CLOSE')"><div class="sheet"><div class="grab"></div><div class="h2">Sincronizzazione</div>${syncDetail(true)}<div class="stack" style="margin-top:8px">${B('Apri Impostazioni', 'TAB', 'ghost', { tab: 'set' })}</div></div></div>`;
+  if (o === 'logout-simple') return `<div class="scrim center"><div class="dialog"><div class="h2">Uscire dall'account?</div><p class="p">La collezione resta nel tuo account. Da questo telefono verrà tolta e la ritroverai al prossimo accesso.</p><div class="stack" style="margin-top:16px">${B('Esci', 'LOGOUT_CONFIRM', 'danger')}${B('Annulla', 'CLOSE', 'ghost')}</div></div></div>`;
+  if (o === 'logout-force') {
+    const n = s.replica.pending.length;
+    return `<div class="scrim center"><div class="dialog"><div class="bigic red">!</div><div class="h2">Eliminare ${n} ${n === 1 ? 'modifica' : 'modifiche'}?</div><p class="p">Non sono ancora nel tuo account e non si possono recuperare. ${s.scans.some(x => x.state === 'attesa-rete') ? 'Anche le scansioni in attesa di rete andranno perse.' : ''}</p><div class="stack" style="margin-top:16px">${B('Esci e perdi le modifiche', 'LOGOUT_FORCE_CONFIRM', 'danger')}${B('Annulla', 'CLOSE', 'ghost')}</div></div></div>`;
+  }
+  if (o === 'logout-pending') {
+    const n = s.replica.pending.length, running = s.ui.logoutAfterSync;
+    const offNote = !s.net ? '<div class="small" style="margin:-2px 0 4px">Sei offline: collegati per sincronizzare.</div>' : '';
+    const err = s.ui.logoutError ? `<div class="banner off" style="margin:10px 0 0;background:rgba(229,72,77,.12);color:#FF8A8D">${s.ui.logoutError}</div>` : '';
+    const btns = `${B(running ? '<span class="spin">↻</span> Sincronizzo…' : 'Sincronizza e esci', 'LOGOUT_SYNC', 'pri', null, !s.net || running)}${offNote}${B('Esci comunque', 'LOGOUT_FORCE', 'out', null, running)}${B('Annulla', 'CLOSE', 'ghost')}`;
+    const msg = `${n} ${n === 1 ? 'modifica non è ancora stata sincronizzata' : 'modifiche non sono ancora state sincronizzate'}. Uscendo verrebbe${n === 1 ? '' : 'ro'} persa${n === 1 ? '' : 'e'}, perché la collezione viene tolta da questo telefono.`;
+    if (config.logout === 'A') return `<div class="scrim center"><div class="dialog"><div class="h2">Modifiche non sincronizzate</div><p class="p">${msg}</p>${err}<div class="stack" style="margin-top:16px">${btns}</div></div></div>`;
+    return `<div class="scrim" style="background:var(--base);justify-content:flex-start"><div class="sc"><div class="back" onclick="act('CLOSE')">‹ Impostazioni</div><div class="bigic amb">↻</div><div class="h2">Prima di uscire</div><p class="p">${msg}</p>
+      <div class="card" style="margin-top:14px"><div class="gl" style="margin:0 0 4px">In attesa</div><ul class="oplist">${s.replica.pending.map(o => `<li>• ${o.desc}</li>`).join('')}</ul></div>${err}
+      <div class="stack" style="margin-top:auto;padding-top:16px">${btns}</div></div></div>`;
+  }
+  return '';
+}
+
+function renderPhone() {
+  const s = state, sc = s.ui.screen;
+  const status = `<div class="island"></div><div class="status"><span>9:41</span><span>${s.net ? '●●● 5G' : '✈︎'}</span></div>`;
+  let body = sc === 'welcome' ? welcome() : sc === 'download' ? download() : sc === 'offline-first' ? offlineFirst() : appShell();
+  const toast = s.ui.toast ? `<div class="toast">${s.ui.toast}</div>` : '';
+  document.getElementById('phone').innerHTML = status + body + (sc === 'app' ? overlays() : '') + toast;
+}
+function render() { renderPhone(); renderState(); renderPanel(); }
+render();
+</script>
+</body>
+</html>
