@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:mycomicbrain/core/data/percorso_locale.dart' as percorso_locale;
 import 'package:mycomicbrain/core/data/uuid_v7.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -70,6 +71,13 @@ class ScansioneStorage {
 
     return salvato;
   }
+
+  /// Il percorso sul device di una Scansione per il valore di
+  /// `Scansioni.image`: quello assoluto di [salva], o quello relativo alla
+  /// cartella base di una Scansione arrivata con la Sincronizzazione da un
+  /// altro device (ADR-0008), il cui file qui di solito non c'è.
+  Future<String> risolvi(String image) =>
+      percorso_locale.risolvi(image, _baseDirectory);
 
   /// Elimina il file salvato di una Scansione rimossa prima di essere
   /// processata (swipe-to-delete nel riepilogo) — best-effort, sullo stesso

@@ -93,8 +93,13 @@ class MyComicBrainApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
-    // La Sincronizzazione gira finché c'è un Profilo (ADR-0008).
-    if (AuthConfig.loginAbilitato) ref.watch(motoreSincronizzazioneProvider);
+    // La Sincronizzazione gira finché c'è un Profilo (ADR-0008), e con lei
+    // l'avvio delle Scansioni accodate senza rete (#210).
+    if (AuthConfig.loginAbilitato) {
+      ref
+        ..watch(motoreSincronizzazioneProvider)
+        ..watch(avvioScansioniInAttesaProvider);
+    }
     return MaterialApp.router(
       title: 'MyComicBrain',
       theme: AppTheme.dark,

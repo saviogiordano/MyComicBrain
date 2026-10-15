@@ -41,6 +41,11 @@ class DashboardPage extends ConsumerWidget {
     // stato "collezione popolata" (segnalato da utente).
     final inSospeso =
         ref.watch(scansioniNonConfermateProvider).valueOrNull ?? const [];
+    final inAttesa =
+        ref.watch(scansioniInAttesaProvider).valueOrNull ?? const <String>{};
+    final inAttesaDiRete = ref.watch(senzaReteProvider)
+        ? inSospeso.where(inAttesa.contains).length
+        : 0;
     final emailInAttesa = ref.watch(statoAccountProvider)?.emailInAttesa;
 
     return Scaffold(
@@ -65,7 +70,10 @@ class DashboardPage extends ConsumerWidget {
                   AppSpacing.md,
                   0,
                 ),
-                child: _BatchInSospesoBanner(percorsi: inSospeso),
+                child: _BatchInSospesoBanner(
+                  percorsi: inSospeso,
+                  inAttesaDiRete: inAttesaDiRete,
+                ),
               ),
             Expanded(
               child: kpisAsync.when(
@@ -138,13 +146,21 @@ class _ConfermaEmailBanner extends StatelessWidget {
 /// dopo test manuale: senza anteprima non si riconosce di che batch si
 /// tratta prima di rientrare nel riepilogo).
 class _BatchInSospesoBanner extends StatelessWidget {
-  const _BatchInSospesoBanner({required this.percorsi});
+  const _BatchInSospesoBanner({
+    required this.percorsi,
+    required this.inAttesaDiRete,
+  });
 
   final List<String> percorsi;
+
+  /// Quante delle [percorsi] sono state mandate al riconoscimento senza
+  /// rete: se ce n'è qualcuna il banner parla di quelle (prototipo #201).
+  final int inAttesaDiRete;
 
   @override
   Widget build(BuildContext context) {
     final n = percorsi.length;
+    final attesa = inAttesaDiRete > 0;
     return AppCard(
       onTap: () => context.push(
         '/scansione/riepilogo/ripresa',
@@ -155,15 +171,22 @@ class _BatchInSospesoBanner extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.hourglass_top_outlined,
+              Icon(
+                attesa
+                    ? Icons.cloud_off_outlined
+                    : Icons.hourglass_top_outlined,
                 color: AppColors.amber,
                 size: 20,
               ),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
-                  n == 1 ? '1 scansione in sospeso' : '$n scansioni in sospeso',
+                  switch ((attesa, attesa ? inAttesaDiRete : n)) {
+                    (true, 1) => '1 scansione in attesa di rete',
+                    (true, final m) => '$m scansioni in attesa di rete',
+                    (false, 1) => '1 scansione in sospeso',
+                    (false, final m) => '$m scansioni in sospeso',
+                  },
                   style: AppTypography.titleMedium.copyWith(
                     color: AppColors.textPrimary,
                   ),
@@ -174,7 +197,9 @@ class _BatchInSospesoBanner extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            'Tocca per riprendere il riconoscimento AI',
+            attesa
+                ? 'Verranno riconosciute appena torna la connessione'
+                : 'Tocca per riprendere il riconoscimento AI',
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textSecondary,
             ),

@@ -35,12 +35,14 @@ void main() {
   Future<void> pumpDashboard(
     WidgetTester tester, {
     SessionState? account,
+    bool senzaRete = false,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
           if (account != null) statoAccountProvider.overrideWithValue(account),
+          senzaReteProvider.overrideWithValue(senzaRete),
         ],
         child: MaterialApp(theme: AppTheme.dark, home: const DashboardPage()),
       ),
@@ -310,6 +312,37 @@ void main() {
         expect(find.textContaining('in sospeso'), findsNothing);
       },
     );
+  });
+
+  group('Scansioni in attesa di rete (ADR-0008, #210)', () {
+    testWidgets(
+      'senza rete il banner conta le Scansioni accodate',
+      (tester) async {
+        final a = await repo.aggiungiScansione(image: 'a.jpg');
+        final b = await repo.aggiungiScansione(image: 'b.jpg');
+        await repo.aggiungiScansione(image: 'c.jpg');
+        await repo.accodaAnalisiCopertina(scansioneId: a);
+        await repo.accodaAnalisiCopertina(scansioneId: b);
+
+        await pumpDashboard(tester, senzaRete: true);
+
+        expect(find.text('2 scansioni in attesa di rete'), findsOneWidget);
+        expect(
+          find.text('Verranno riconosciute appena torna la connessione'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('con la rete resta il banner in sospeso', (tester) async {
+      final a = await repo.aggiungiScansione(image: 'a.jpg');
+      await repo.accodaAnalisiCopertina(scansioneId: a);
+
+      await pumpDashboard(tester);
+
+      expect(find.text('1 scansione in sospeso'), findsOneWidget);
+      expect(find.textContaining('attesa di rete'), findsNothing);
+    });
   });
 
   group('account (login reale dietro flag, #171)', () {

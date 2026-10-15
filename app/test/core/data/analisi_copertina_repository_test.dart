@@ -199,6 +199,101 @@ void contrattoAnalisiCopertina(CreaAdapter crea) {
     },
   );
 
+  group('Scansioni in attesa di rete (ADR-0008, #210)', () {
+    test('accodaAnalisiCopertina crea una riga in stato pending', () async {
+      final scansioneId = await scansione();
+
+      final analisiId = await repo.accodaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
+
+      expect(await repo.idAnalisiCopertinaPerScansione(scansioneId), analisiId);
+      final riga = await repo.analisiCopertinaPerScansione(scansioneId);
+      expect(riga.status, StatoAnalisiCopertina.pending);
+    });
+
+    test(
+      "accodaAnalisiCopertina non tocca un'Analisi Copertina già creata",
+      () async {
+        final scansioneId = await scansione();
+        final analisiId = await repo.avviaAnalisiCopertina(
+          scansioneId: scansioneId,
+        );
+        await repo.completaAnalisiCopertina(id: analisiId, rawResponse: '{}');
+
+        expect(
+          await repo.accodaAnalisiCopertina(scansioneId: scansioneId),
+          analisiId,
+        );
+        final riga = await repo.analisiCopertinaPerScansione(scansioneId);
+        expect(riga.status, StatoAnalisiCopertina.completata);
+      },
+    );
+
+    test(
+      'watchScansioniInAttesaDiAnalisi elenca solo le righe pending, '
+      "nell'ordine in cui sono state accodate",
+      () async {
+        final a = await adapter.immagineScansione('a.jpg');
+        final b = await adapter.immagineScansione('b.jpg');
+        final c = await adapter.immagineScansione('c.jpg');
+        final idA = await repo.aggiungiScansione(
+          image: a,
+          createdAt: DateTime(2026, 1, 2),
+        );
+        final idB = await repo.aggiungiScansione(
+          image: b,
+          createdAt: DateTime(2026, 1, 1),
+        );
+        final idC = await repo.aggiungiScansione(image: c);
+        final analisiA = await repo.accodaAnalisiCopertina(
+          scansioneId: idA,
+          createdAt: DateTime(2026, 1, 3),
+        );
+        final analisiB = await repo.accodaAnalisiCopertina(
+          scansioneId: idB,
+          createdAt: DateTime(2026, 1, 4),
+        );
+        await repo.avviaAnalisiCopertina(scansioneId: idC);
+
+        expect(await repo.watchScansioniInAttesaDiAnalisi().first, [
+          (analisiId: analisiA, scansioneId: idA, image: a),
+          (analisiId: analisiB, scansioneId: idB, image: b),
+        ]);
+      },
+    );
+
+    test(
+      'watchScansioniInAttesaDiAnalisi esclude una Scansione eliminata',
+      () async {
+        final scansioneId = await scansione();
+        await repo.accodaAnalisiCopertina(scansioneId: scansioneId);
+
+        await repo.eliminaScansione(id: scansioneId);
+
+        expect(await repo.watchScansioniInAttesaDiAnalisi().first, isEmpty);
+      },
+    );
+
+    test(
+      'una riga pending passa a inCorso con riavviaAnalisiCopertina',
+      () async {
+        final scansioneId = await scansione();
+        final analisiId = await repo.accodaAnalisiCopertina(
+          scansioneId: scansioneId,
+        );
+
+        await repo.riavviaAnalisiCopertina(id: analisiId);
+
+        expect(
+          (await repo.watchStatoAnalisiCopertina(immagine).first).stato,
+          StatoAnalisiCopertina.inCorso,
+        );
+        expect(await repo.watchScansioniInAttesaDiAnalisi().first, isEmpty);
+      },
+    );
+  });
+
   group('watchStatoAnalisiCopertina', () {
     test('pending finché la pipeline non ha ancora creato la riga', () async {
       await scansione();

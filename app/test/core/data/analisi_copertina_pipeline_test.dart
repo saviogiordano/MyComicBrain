@@ -403,6 +403,127 @@ void main() {
       );
     },
   );
+
+  group('Scansioni in attesa di rete (ADR-0008, #210)', () {
+    var chiamate = 0;
+
+    AnalisiCopertinaPipeline pipelineContata({
+      Future<String> Function(String image)? risolviImmagine,
+    }) => AnalisiCopertinaPipeline(
+      repository: repo,
+      client: _CoverAnalysisClientAlternante(
+        risposte: List.filled(10, () => _risultatoCompleto),
+        onChiamata: () => chiamate++,
+      ),
+      identificazionePipeline: IdentificazionePipeline(
+        repository: repo,
+        comicVineClient: _FakeComicVineClient(),
+      ),
+      risolviImmagine: risolviImmagine,
+    );
+
+    setUp(() => chiamate = 0);
+
+    test(
+      'accoda manda le Scansioni al riconoscimento senza avviarlo',
+      () async {
+        final path = await scansioneConImmagine('cover.jpg');
+
+        await pipelineContata().accoda([path]);
+
+        expect(chiamate, 0);
+        expect((await unicaAnalisi()).status, StatoAnalisiCopertina.pending);
+      },
+    );
+
+    test(
+      'accoda salta una Scansione il cui file non è su questo device',
+      () async {
+        // Una Scansione arrivata da un altro device del Profilo: la riga c'è,
+        // il file no (le immagini delle Scansioni non si scaricano, #209).
+        await repo.aggiungiScansione(image: 'scansioni/altro-device.jpg');
+
+        await pipelineContata().accoda(['scansioni/altro-device.jpg']);
+
+        expect(await db.select(db.analisiCopertinaTable).get(), isEmpty);
+      },
+    );
+
+    test(
+      'avviaInAttesa analizza e identifica le Scansioni accodate',
+      () async {
+        final a = await scansioneConImmagine('a.jpg');
+        final b = await scansioneConImmagine('b.jpg');
+        final pipeline = pipelineContata();
+        await pipeline.accoda([a, b]);
+
+        await pipeline.avviaInAttesa();
+
+        expect(chiamate, 2);
+        final analisi = await db.select(db.analisiCopertinaTable).get();
+        expect(analisi.map((a) => a.status), [
+          StatoAnalisiCopertina.completata,
+          StatoAnalisiCopertina.completata,
+        ]);
+        expect(await db.select(db.identificazioneTable).get(), hasLength(2));
+      },
+    );
+
+    test(
+      'avviaInAttesa lascia in attesa una Scansione accodata da un device che '
+      'ha il file, senza analizzarla',
+      () async {
+        // Il device che ha scattato la Scansione l'ha accodata offline; qui
+        // arriva con la Sincronizzazione, senza il file.
+        final id = await repo.aggiungiScansione(
+          image: 'scansioni/altro-device.jpg',
+        );
+        await repo.accodaAnalisiCopertina(scansioneId: id);
+
+        await pipelineContata().avviaInAttesa();
+
+        expect(chiamate, 0);
+        expect((await unicaAnalisi()).status, StatoAnalisiCopertina.pending);
+      },
+    );
+
+    test(
+      "avviaInAttesa legge l'immagine dal percorso risolto sul device",
+      () async {
+        final assoluto = await scansioneConImmagine('relativa.jpg');
+        final id = await repo.aggiungiScansione(
+          image: 'scansioni/relativa.jpg',
+        );
+        await repo.accodaAnalisiCopertina(scansioneId: id);
+
+        await pipelineContata(
+          risolviImmagine: (image) async =>
+              image == 'scansioni/relativa.jpg' ? assoluto : image,
+        ).avviaInAttesa();
+
+        expect(chiamate, 1);
+      },
+    );
+
+    test(
+      'avviaInAttesa chiamata mentre è già in corso non analizza due volte la '
+      'stessa Scansione, ma prende quelle accodate nel frattempo',
+      () async {
+        final a = await scansioneConImmagine('a.jpg');
+        final b = await scansioneConImmagine('b.jpg');
+        final pipeline = pipelineContata();
+        await pipeline.accoda([a]);
+
+        final primo = pipeline.avviaInAttesa();
+        await pipeline.accoda([b]);
+        final secondo = pipeline.avviaInAttesa();
+        await Future.wait([primo, secondo]);
+
+        expect(chiamate, 2);
+        expect(await db.select(db.analisiCopertinaTable).get(), hasLength(2));
+      },
+    );
+  });
 }
 
 class _CoverAnalysisClientAlternante implements CoverAnalysisClient {

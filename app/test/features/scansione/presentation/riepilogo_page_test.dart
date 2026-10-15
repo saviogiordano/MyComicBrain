@@ -21,7 +21,16 @@ import 'package:path/path.dart' as p;
 /// ricevuti da "Fine" invece di chiamare Claude davvero.
 class _FakeAnalisiCopertinaPipeline implements AnalisiCopertinaPipeline {
   final batchRicevuti = <List<String>>[];
+  final accodati = <List<String>>[];
   final riprovati = <String>[];
+
+  @override
+  Future<void> accoda(Iterable<String> percorsiImmagine) async {
+    accodati.add(percorsiImmagine.toList());
+  }
+
+  @override
+  Future<void> avviaInAttesa() async {}
 
   @override
   Future<void> avviaBatch(Iterable<String> percorsiImmagine) async {
@@ -139,6 +148,7 @@ void main() {
     AnalisiCopertinaPipeline? pipeline,
     ComicsRepository? repository,
     bool ripresa = false,
+    bool senzaRete = false,
   }) async {
     final risultato = _RisultatoPop();
     final rotta = ripresa ? '/scansione/riepilogo/ripresa' : '/scansione/riepilogo';
@@ -200,6 +210,7 @@ void main() {
             analisiCopertinaPipelineProvider.overrideWithValue(pipeline),
           if (repository != null)
             comicsRepositoryProvider.overrideWithValue(repository),
+          senzaReteProvider.overrideWithValue(senzaRete),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
@@ -341,6 +352,89 @@ void main() {
       expect(find.text('Completata'), findsOneWidget);
     },
   );
+
+  group('Scansioni in attesa di rete (ADR-0008, #210)', () {
+    testWidgets('senza rete "Fine" accoda il batch invece di avviarlo', (
+      tester,
+    ) async {
+      final pipeline = _FakeAnalisiCopertinaPipeline();
+      final scansioni = scansioniFinte(2);
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        pipeline: pipeline,
+        senzaRete: true,
+      );
+
+      await tester.tap(find.text('Fine'));
+      await tester.pumpAndSettle();
+
+      expect(pipeline.batchRicevuti, isEmpty);
+      expect(pipeline.accodati, [
+        [for (final s in scansioni) s.path],
+      ]);
+      expect(find.text('Vai alla Dashboard'), findsOneWidget);
+    });
+
+    testWidgets(
+      'una Scansione accodata mostra "In attesa di rete" e, senza rete, la '
+      'nota in cima',
+      (tester) async {
+        final db = AppDatabase(
+          DatabaseConnection(
+            NativeDatabase.memory(),
+            closeStreamsSynchronously: true,
+          ),
+        );
+        addTearDown(db.close);
+        final repository = DriftComicsRepository(db);
+        final scansioni = scansioniFinte(2);
+        final accodata = await repository.aggiungiScansione(
+          image: scansioni.first.path,
+        );
+        await repository.aggiungiScansione(image: scansioni.last.path);
+        await repository.accodaAnalisiCopertina(scansioneId: accodata);
+
+        await pumpRiepilogo(
+          tester,
+          scansioni,
+          repository: repository,
+          senzaRete: true,
+        );
+
+        expect(find.text('In attesa di rete'), findsOneWidget);
+        expect(find.text('In sospeso'), findsOneWidget);
+        expect(
+          find.text(
+            'Senza rete le scansioni restano su questo telefono: verranno '
+            'riconosciute qui appena torna la connessione',
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('con la rete la nota non compare', (tester) async {
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = DriftComicsRepository(db);
+      final scansioni = scansioniFinte(1);
+      final id = await repository.aggiungiScansione(
+        image: scansioni.single.path,
+      );
+      await repository.accodaAnalisiCopertina(scansioneId: id);
+
+      await pumpRiepilogo(tester, scansioni, repository: repository);
+
+      expect(find.text('In attesa di rete'), findsOneWidget);
+      expect(find.textContaining('Senza rete'), findsNothing);
+    });
+  });
 
   testWidgets('la chip "Fallita" è il tasto di retry manuale', (tester) async {
     final db = AppDatabase(

@@ -218,6 +218,20 @@ abstract interface class ComicsRepository {
     DateTime? createdAt,
   });
 
+  /// Manda una Scansione al riconoscimento senza avviarlo: crea la riga
+  /// `AnalisiCopertina` in stato `pending`, che la pipeline prende in carico
+  /// quando c'è la rete (ADR-0008, #210). Se la Scansione ha già un'Analisi
+  /// Copertina, in qualunque stato, la lascia com'è e ne restituisce l'id.
+  Future<String> accodaAnalisiCopertina({
+    required String scansioneId,
+    DateTime? createdAt,
+  });
+
+  /// Le Scansioni con l'Analisi Copertina ancora `pending`, nell'ordine in
+  /// cui sono state accodate (quello del batch). Una riga rimasta senza la sua Scansione
+  /// (eliminata dal riepilogo) non c'è.
+  Stream<List<ScansioneInAttesa>> watchScansioniInAttesaDiAnalisi();
+
   /// Registra il risultato di un'Analisi Copertina completata con successo —
   /// campi grezzi e non parsati (#31, #48), `rawResponse` preserva l'intera
   /// risposta strutturata di Claude.
