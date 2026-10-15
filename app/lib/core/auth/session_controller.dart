@@ -22,10 +22,6 @@ enum Ingresso {
   /// ancora importati né rifiutati: prompt di importazione a schermo intero
   /// prima di entrare nell'app (ADR-0005, variante A del prototipo #170).
   importazione,
-
-  /// Profilo autenticato senza rete: blocco a schermo intero con "Riprova"
-  /// (variante A del prototipo #170) — online-only, nessuna cache.
-  offline,
 }
 
 class SessionState {
@@ -34,7 +30,6 @@ class SessionState {
     required this.benvenutoSuperato,
     required this.modalitaLocaleEsaurita,
     required this.emailInAttesa,
-    this.offline = false,
   });
 
   /// `null` = Modalità locale.
@@ -45,10 +40,6 @@ class SessionState {
   /// Registrazione via email in attesa del link di conferma.
   final String? emailInAttesa;
 
-  /// Supabase non raggiungibile all'ultima verifica. Conta solo con un
-  /// Profilo autenticato: la Modalità locale funziona senza rete.
-  final bool offline;
-
   /// Profilo autenticato su un device con dati in Modalità locale non
   /// ancora importati né rifiutati (ADR-0005): con drift vuoto la Modalità
   /// locale si esaurisce già al login.
@@ -56,7 +47,6 @@ class SessionState {
 
   Ingresso get ingresso {
     if (profilo != null) {
-      if (offline) return Ingresso.offline;
       return importazioneInSospeso ? Ingresso.importazione : Ingresso.app;
     }
     if (modalitaLocaleEsaurita) return Ingresso.soloAccesso;
@@ -113,12 +103,9 @@ class SessionController extends Notifier<SessionState> {
       // Dopo il primo `state`: `build` deve restituire prima di poterlo
       // aggiornare.
       unawaited(
-        Future.microtask(() async {
-          await riprovaConnessione();
-          // App chiusa dopo aver svuotato drift ma prima di esaurire la
-          // Modalità locale: non c'è più niente da importare.
-          await _esaurisciSeSenzaDatiLocali();
-        }),
+        // App chiusa dopo aver svuotato drift ma prima di esaurire la
+        // Modalità locale: non c'è più niente da importare.
+        Future.microtask(_esaurisciSeSenzaDatiLocali),
       );
     }
     return SessionState(
@@ -180,14 +167,6 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
-  /// Verifica la rete per il Profilo autenticato: all'avvio, a ogni login
-  /// e dal pulsante "Riprova" del blocco offline.
-  Future<void> riprovaConnessione() async {
-    if (state.profilo == null) return;
-    final offline = !await _gateway.raggiungibile();
-    if (state.profilo != null) state = _copia(offline: offline);
-  }
-
   Future<void> _impostaEmailInAttesa(String? email) async {
     await _preferences.setString(_chiaveEmailInAttesa, email ?? '');
     state = _copia(emailInAttesa: () => email);
@@ -198,7 +177,7 @@ class SessionController extends Notifier<SessionState> {
     if (profilo == null) {
       // Prima esce il Profilo, così nessuno legge più la sua Replica, poi
       // si cancellano i suoi dati.
-      state = _copia(profilo: () => null, offline: false);
+      state = _copia(profilo: () => null);
       final cancellazione = _cancellazioneAllUscita;
       _cancellazioneAllUscita = null;
       await cancellazione?.call();
@@ -207,8 +186,7 @@ class SessionController extends Notifier<SessionState> {
     // Prima di pubblicare il Profilo: con drift vuoto si entra subito
     // nell'app, senza passare per un attimo dal prompt di importazione.
     await _esaurisciSeSenzaDatiLocali();
-    state = _copia(profilo: () => profilo, offline: false);
-    await riprovaConnessione();
+    state = _copia(profilo: () => profilo);
     if (state.emailInAttesa != null) await _impostaEmailInAttesa(null);
     if (!state.benvenutoSuperato) {
       await _preferences.setString(_chiaveBenvenutoSuperato, 'true');
@@ -241,7 +219,6 @@ class SessionController extends Notifier<SessionState> {
     bool? benvenutoSuperato,
     bool? modalitaLocaleEsaurita,
     String? Function()? emailInAttesa,
-    bool? offline,
   }) => SessionState(
     profilo: profilo != null ? profilo() : state.profilo,
     benvenutoSuperato: benvenutoSuperato ?? state.benvenutoSuperato,
@@ -250,7 +227,6 @@ class SessionController extends Notifier<SessionState> {
     emailInAttesa: emailInAttesa != null
         ? emailInAttesa()
         : state.emailInAttesa,
-    offline: offline ?? state.offline,
   );
 }
 

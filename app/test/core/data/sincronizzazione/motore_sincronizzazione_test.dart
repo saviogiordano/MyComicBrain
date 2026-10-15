@@ -48,6 +48,25 @@ void main() {
     });
   });
 
+  test(
+    "lo stato non esce prima che l'avvio sappia se la Replica è scaricata",
+    () {
+      fakeAsync((async) {
+        sync = _Sincronizzatore(scaricata: true);
+        rete = _Rete(online: false);
+        motore = MotoreSincronizzazione(sincronizzatore: sync, rete: rete);
+        final stati = <StatoSincronizzazione>[];
+        motore.stati.listen(stati.add);
+        async.flushMicrotasks();
+        expect(stati, isEmpty);
+
+        unawaited(motore.avvia());
+        async.flushMicrotasks();
+        expect(stati.first.replicaScaricata, isTrue);
+      });
+    },
+  );
+
   test("senza rete all'avvio resta offline e riparte quando torna", () {
     fakeAsync((async) {
       crea(async, scaricata: false, online: false);
@@ -245,10 +264,19 @@ void main() {
       crea(async);
       final scartate = <Object>[];
       motore.scartate.listen(scartate.add);
-      sync.termina(scartate: [(tabella: 'copie', id: 'x')]);
+      sync.termina(
+        scartate: [
+          (tabella: 'copie', id: 'x'),
+          (tabella: 'scansioni', id: 'y'),
+        ],
+        titoli: {(tabella: 'copie', id: 'x'): 'Dylan Dog 41'},
+      );
       async.flushMicrotasks();
       expect(scartate, [
-        [(tabella: 'copie', id: 'x')],
+        [
+          (riga: (tabella: 'copie', id: 'x'), titolo: 'Dylan Dog 41'),
+          (riga: (tabella: 'scansioni', id: 'y'), titolo: null),
+        ],
       ]);
     });
   });
@@ -278,10 +306,13 @@ class _Sincronizzatore implements Sincronizzatore {
     return (_ciclo = Completer()).future;
   }
 
-  void termina({List<({String tabella, String id})> scartate = const []}) {
+  void termina({
+    List<({String tabella, String id})> scartate = const [],
+    Map<({String tabella, String id}), String> titoli = const {},
+  }) {
     _scaricata = true;
     _ciclo.complete(
-      EsitoCiclo(inviate: 0, ricevute: 0, scartate: scartate),
+      EsitoCiclo(inviate: 0, ricevute: 0, scartate: scartate, titoli: titoli),
     );
   }
 

@@ -35,10 +35,6 @@ abstract interface class AuthGateway {
   /// su iOS chiede prima il foglio Apple: il code fresco serve a revocare
   /// il token.
   Future<void> eliminaAccount();
-
-  /// Supabase è raggiungibile? Un Profilo autenticato lavora online-only
-  /// (ADR-0005): senza rete l'app mostra il blocco offline (#170).
-  Future<bool> raggiungibile();
 }
 
 enum MetodoAccesso { apple, google, email }

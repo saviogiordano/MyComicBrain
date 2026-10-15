@@ -6,6 +6,7 @@ import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/registro_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/descrizione_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/file_replica.dart';
 
 /// Com'è andato un ciclo di Sincronizzazione.
@@ -14,6 +15,7 @@ class EsitoCiclo {
     required this.inviate,
     required this.ricevute,
     required this.scartate,
+    this.titoli = const {},
   });
 
   /// Le voci del registro accolte da `applica_modifiche`.
@@ -26,6 +28,9 @@ class EsitoCiclo {
   /// perché eliminate altrove (o scartate dal server): l'avviso "modifica
   /// non salvata" della UI.
   final List<RigaReplicata> scartate;
+
+  /// Il titolo delle [scartate] che lo hanno, letto prima di toglierle.
+  final Map<RigaReplicata, String> titoli;
 }
 
 /// Un ciclo di Sincronizzazione della Replica locale (ADR-0008): push del
@@ -50,12 +55,14 @@ class Sincronizzatore {
   }) : _db = db,
        _canale = canale,
        _registro = RegistroModifiche(db),
+       _descrizione = DescrizioneModifiche(db),
        _file = FileReplica(db: db, canale: canale, cartella: cartellaProfilo),
        _ora = ora ?? DateTime.now;
 
   final AppDatabase _db;
   final CanaleSincronizzazione _canale;
   final RegistroModifiche _registro;
+  final DescrizioneModifiche _descrizione;
   final FileReplica _file;
   final String userId;
   final int lottoPush;
@@ -76,10 +83,17 @@ class Sincronizzatore {
     void Function(int ricevute)? avanzamento,
   }) async {
     final conversione = await _conversioneRighe();
-    final scartate = <RigaReplicata>[];
+    final scartate = <RigaReplicata, String?>{};
     final inviate = await _push(conversione, scartate);
     final ricevute = await _pull(conversione, scartate, avanzamento);
-    return EsitoCiclo(inviate: inviate, ricevute: ricevute, scartate: scartate);
+    return EsitoCiclo(
+      inviate: inviate,
+      ricevute: ricevute,
+      scartate: scartate.keys.toList(),
+      titoli: {
+        for (final MapEntry(:key, :value) in scartate.entries) key: ?value,
+      },
+    );
   }
 
   /// Scarica le cover della Replica che mancano sul device: dopo un ciclo,
@@ -104,9 +118,10 @@ class Sincronizzatore {
 
   // --- Push ----------------------------------------------------------------
 
+  /// [scartate] raccoglie le righe scartate col loro titolo.
   Future<int> _push(
     ConversioneRighe conversione,
-    List<RigaReplicata> scartate,
+    Map<RigaReplicata, String?> scartate,
   ) async {
     var inviate = 0;
     while (true) {
@@ -130,7 +145,8 @@ class Sincronizzatore {
                 v.riga == riga.id &&
                 v.tipo != TipoVoceRegistro.eliminazione,
           );
-          if (await _togli(riga) || scrittaQui) scartate.add(riga);
+          final titolo = (await _descrizione.titoli([riga]))[riga];
+          if (await _togli(riga) || scrittaQui) scartate[riga] = titolo;
         }
       });
       inviate += lotto.length;
@@ -163,7 +179,7 @@ class Sincronizzatore {
 
   Future<int> _pull(
     ConversioneRighe conversione,
-    List<RigaReplicata> scartate,
+    Map<RigaReplicata, String?> scartate,
     void Function(int ricevute)? avanzamento,
   ) async {
     // Tutte le pagine prima di scrivere: la Replica non resta mai a metà di
@@ -185,9 +201,11 @@ class Sincronizzatore {
         final riga = (tabella: c.tabella, id: c.id);
         final sospese = inSospeso[riga];
         if (c.riga == null) {
-          if (await _togli(riga) && sospese != null && !sospese.eliminata) {
-            scartate.add(riga);
-          }
+          final modificataQui = sospese != null && !sospese.eliminata;
+          final titolo = modificataQui
+              ? (await _descrizione.titoli([riga]))[riga]
+              : null;
+          if (await _togli(riga) && modificataQui) scartate[riga] = titolo;
           inSospeso.remove(riga);
           continue;
         }

@@ -5,6 +5,7 @@ import 'package:mycomicbrain/core/auth/auth_gateway.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/login/presentation/accesso_ui.dart';
+import 'package:mycomicbrain/features/sincronizzazione/presentation/logout_con_modifiche.dart';
 
 /// Sezione "Account", prima di Impostazioni (#171, prototipo #170): tre
 /// stati — Modalità locale, email in attesa di conferma, Profilo
@@ -130,28 +131,10 @@ class _Autenticato extends ConsumerWidget {
     MetodoAccesso.email => 'email e password',
   };
 
+  /// Con Modifiche in sospeso avvisa che andrebbero perse (#217).
   Future<void> _esci(BuildContext context, WidgetRef ref) async {
-    final conferma = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text("Uscire dall'account?"),
-        content: const Text(
-          'La collezione resta nel tuo account: la ritrovi quando accedi di '
-          'nuovo.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Esci'),
-          ),
-        ],
-      ),
-    );
-    if (conferma != true || !context.mounted) return;
+    final conferma = await confermaLogout(context, ref);
+    if (!conferma || !context.mounted) return;
     await eseguiAccesso(
       context,
       ref.read(sessionControllerProvider.notifier).esci,

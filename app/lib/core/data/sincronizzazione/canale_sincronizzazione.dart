@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:mycomicbrain/core/data/registro_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
 import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -50,6 +51,20 @@ class CanaleSupabase implements CanaleSincronizzazione {
 
   final SupabaseClient _client;
   final String userId;
+
+  /// Quanto è grande la collezione sul server: le righe delle tabelle
+  /// replicate, cioè quelle che il primo download porterà, e i fumetti (le
+  /// Copie). Serve all'avanzamento del primo download (#217).
+  Future<({int righe, int fumetti})> dimensioni() async {
+    final tabelle = RegistroModifiche.tabelleReplicate.toList();
+    final conteggi = await Future.wait([
+      for (final t in tabelle) _client.from(t).count(),
+    ]);
+    return (
+      righe: conteggi.fold<int>(0, (a, b) => a + b),
+      fumetti: conteggi[tabelle.indexOf('copie')],
+    );
+  }
 
   @override
   Future<String> collectionId() async {

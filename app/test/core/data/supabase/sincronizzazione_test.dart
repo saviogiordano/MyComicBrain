@@ -308,6 +308,33 @@ void main() {
       }
     });
 
+    test(
+      'le dimensioni della collezione sono le righe del primo download',
+      () async {
+        final a = await account();
+        final uno = await device(a);
+        final operaId = await uno.repo.aggiungiOpera(title: 'Maus');
+        final edizioneId = await uno.repo.aggiungiEdizione(operaId: operaId);
+        for (var i = 0; i < 2; i++) {
+          await uno.repo.aggiungiCopia(
+            edizioneId: edizioneId,
+            status: StatoCopia.posseduta,
+          );
+        }
+        await uno.sync.sincronizza();
+
+        final due = await device(a);
+        final dimensioni = await CanaleSupabase(
+          due.client,
+          userId: a.userId,
+        ).dimensioni();
+        final esito = await due.sync.sincronizza();
+
+        expect(dimensioni.fumetti, 2);
+        expect(dimensioni.righe, esito.ricevute);
+      },
+    );
+
     test("l'eliminazione prevale e la modifica scartata si segnala", () async {
       final a = await account();
       final uno = await device(a);
@@ -337,6 +364,10 @@ void main() {
           (tabella: 'copie', id: orfana),
         ]),
       );
+      expect(esito.titoli, {
+        (tabella: 'copie', id: copiaId): 'Maus',
+        (tabella: 'copie', id: orfana): 'Maus',
+      });
       for (final d in [uno, due]) {
         expect(await d.db.select(d.db.edizioni).get(), isEmpty);
         expect(await d.db.select(d.db.copie).get(), isEmpty);

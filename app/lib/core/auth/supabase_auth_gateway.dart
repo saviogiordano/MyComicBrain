@@ -196,21 +196,6 @@ class SupabaseAuthGateway implements AuthGateway {
     if (_googleInizializzato) await GoogleSignIn.instance.signOut();
   });
 
-  @override
-  Future<bool> raggiungibile() async {
-    try {
-      final risposta = await http
-          .get(
-            Uri.parse('${AuthConfig.supabaseUrl}/auth/v1/health'),
-            headers: {'apikey': AuthConfig.supabasePublishableKey},
-          )
-          .timeout(const Duration(seconds: 8));
-      return risposta.statusCode < 500;
-    } on Exception {
-      return false;
-    }
-  }
-
   static Future<T> _traduci<T>(Future<T> Function() azione) async {
     try {
       return await azione();

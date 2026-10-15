@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/auth/auth_config.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
+import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/routing/app_bottom_nav.dart';
 import 'package:mycomicbrain/core/routing/session.dart';
 import 'package:mycomicbrain/features/collezione/presentation/collezione_page.dart';
@@ -17,7 +18,6 @@ import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_pag
 import 'package:mycomicbrain/features/login/presentation/accedi_page.dart';
 import 'package:mycomicbrain/features/login/presentation/benvenuto_page.dart';
 import 'package:mycomicbrain/features/login/presentation/login_page.dart';
-import 'package:mycomicbrain/features/login/presentation/offline_page.dart';
 import 'package:mycomicbrain/features/ricerca/presentation/ricerca_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/revisione_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
@@ -26,46 +26,70 @@ import 'package:mycomicbrain/features/scheda/presentation/modifica_scheda_page.d
 import 'package:mycomicbrain/features/scheda/presentation/scheda_page.dart';
 import 'package:mycomicbrain/features/serie/presentation/serie_dettaglio_page.dart';
 import 'package:mycomicbrain/features/serie/presentation/serie_page.dart';
+import 'package:mycomicbrain/features/sincronizzazione/presentation/primo_download_page.dart';
 import 'package:mycomicbrain/features/statistiche/presentation/statistiche_page.dart';
 
 /// Notifica il router quando la sessione cambia ([sessionProvider] con il
 /// login fittizio, [sessionControllerProvider] con quello reale dietro
-/// flag, #171), così `redirect` viene rivalutato senza dover ricreare il
-/// [GoRouter] (che perderebbe la sua history interna).
+/// flag, #171) o quando la Replica del Profilo risulta scaricata (#217),
+/// così `redirect` viene rivalutato senza dover ricreare il [GoRouter] (che
+/// perderebbe la sua history interna).
 class _SessionRefresh extends ChangeNotifier {
   _SessionRefresh(Ref ref) {
     if (AuthConfig.loginAbilitato) {
-      ref.listen(sessionControllerProvider, (_, _) => notifyListeners());
+      ref
+        ..listen(sessionControllerProvider, (_, _) => notifyListeners())
+        ..listen(_replicaScaricataProvider, (_, _) => notifyListeners());
     } else {
       ref.listen<bool>(sessionProvider, (_, _) => notifyListeners());
     }
   }
 }
 
+/// Se la Replica del Profilo autenticato è già stata scaricata; `null`
+/// finché il motore di Sincronizzazione non lo sa, o senza Profilo.
+final _replicaScaricataProvider = Provider<bool?>(
+  (ref) => ref.watch(
+    statoSincronizzazioneProvider.select(
+      (stato) => stato.valueOrNull?.replicaScaricata,
+    ),
+  ),
+);
+
+String? _redirectAccount(Ref ref, GoRouterState state) => redirectAccount(
+  ref.read(sessionControllerProvider),
+  replicaScaricata: ref.read(_replicaScaricataProvider),
+  posizione: state.matchedLocation,
+);
+
 /// Gate del login reale (#171): fuori dall'app solo benvenuto e accesso,
-/// un Profilo autenticato senza rete solo il blocco offline, uno con dati
-/// in Modalità locale ancora da importare solo il prompt di importazione
-/// (#173);
+/// un Profilo con dati in Modalità locale ancora da importare solo il
+/// prompt di importazione (#173), uno senza Replica locale solo il primo
+/// download (#217: con una Replica l'app si apre anche senza rete);
 /// dentro, `/accedi` resta raggiungibile in Modalità locale (da
-/// Impostazioni) ma non con un Profilo già autenticato.
-String? _redirectAccount(Ref ref, GoRouterState state) {
-  final sessione = ref.read(sessionControllerProvider);
-  final posizione = state.matchedLocation;
+/// Impostazioni) ma non con un Profilo già autenticato. [replicaScaricata]
+/// è null finché non si sa.
+@visibleForTesting
+String? redirectAccount(
+  SessionState sessione, {
+  required bool? replicaScaricata,
+  required String posizione,
+}) {
   final suBenvenuto = posizione == '/benvenuto';
   final suAccedi = posizione == '/accedi';
-  final suOffline = posizione == '/offline';
+  final suPrimoDownload = posizione == '/primo-download';
   final suImportazione = posizione == '/importazione';
-  if (sessione.ingresso == Ingresso.offline) {
-    return suOffline ? null : '/offline';
-  }
   if (sessione.ingresso == Ingresso.importazione) {
     return suImportazione ? null : '/importazione';
   }
   if (sessione.ingresso != Ingresso.app) {
     return suBenvenuto || suAccedi ? null : '/benvenuto';
   }
+  if (sessione.profilo != null && replicaScaricata != true) {
+    return suPrimoDownload ? null : '/primo-download';
+  }
   if (suBenvenuto ||
-      suOffline ||
+      suPrimoDownload ||
       suImportazione ||
       (suAccedi && sessione.profilo != null)) {
     return '/dashboard';
@@ -96,8 +120,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginPage(),
       ),
       GoRoute(
-        path: '/offline',
-        builder: (context, state) => const OfflinePage(),
+        path: '/primo-download',
+        builder: (context, state) => const PrimoDownloadPage(),
       ),
       GoRoute(
         path: '/importazione',

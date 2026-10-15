@@ -9,6 +9,8 @@ import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
 import 'package:mycomicbrain/features/dashboard/application/dashboard_providers.dart';
+import 'package:mycomicbrain/features/sincronizzazione/application/sincronizzazione_providers.dart';
+import 'package:mycomicbrain/features/sincronizzazione/presentation/stato_sincronizzazione.dart';
 
 const _mesiItaliani = [
   'gennaio',
@@ -314,8 +316,10 @@ class _EmptyCollection extends StatelessWidget {
 }
 
 /// Etichetta "LA TUA COLLEZIONE" + [content] (totale o messaggio a
-/// seconda dello stato), con la pillola "Modalità locale" / "Account" a
-/// destra quando il login reale è attivo (#171, prototipo #170).
+/// seconda dello stato), con a destra, quando il login reale è attivo, la
+/// pillola "Modalità locale" (#171, prototipo #170) o, per un Profilo
+/// autenticato, quella dello stato della Sincronizzazione (#217, prototipo
+/// #201).
 class _Header extends ConsumerWidget {
   const _Header({required this.content});
 
@@ -324,13 +328,16 @@ class _Header extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final account = ref.watch(statoAccountProvider);
+    final indicatore = ref.watch(indicatoreSincronizzazioneProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             const Expanded(child: SectionHeader(label: 'la tua collezione')),
-            if (account != null)
+            if (account?.profilo != null && indicatore != null)
+              PillolaSincronizzazione(indicatore: indicatore)
+            else if (account != null)
               AppChip(
                 label: account.profilo != null ? 'Account' : 'Modalità locale',
                 selected: account.profilo != null,

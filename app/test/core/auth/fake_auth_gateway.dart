@@ -19,9 +19,6 @@ class FakeAuthGateway implements AuthGateway {
 
   int confermeInviate = 0;
 
-  /// Supabase raggiungibile? Simula il device offline.
-  bool online = true;
-
   void _emetti(Profilo? profilo) {
     _profilo = profilo;
     _cambiamenti.add(profilo);
@@ -118,9 +115,6 @@ class FakeAuthGateway implements AuthGateway {
     accountEliminati.add(email);
     _emetti(null);
   }
-
-  @override
-  Future<bool> raggiungibile() async => online;
 }
 
 /// [Preferences] in memoria.

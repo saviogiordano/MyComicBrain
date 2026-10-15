@@ -9,6 +9,7 @@ import 'package:mycomicbrain/core/data/registro_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/sincronizzatore.dart';
+import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 
 /// Il pull applicato alla Replica (ADR-0008), con un server finto: ciò che
@@ -155,6 +156,28 @@ void main() {
         (candidato['valori']! as Map).keys,
         isNot(contains('description')),
       );
+    },
+  );
+
+  test(
+    'una riga modificata qui ed eliminata altrove si scarta col suo titolo',
+    () async {
+      final operaId = await repo.aggiungiOpera(title: 'Dylan Dog');
+      final edizioneId = await repo.aggiungiEdizione(
+        operaId: operaId,
+        issueNumberLabel: '1',
+      );
+      final copiaId = await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+      );
+      canale.dopoIlPush = () => repo.aggiornaCopia(id: copiaId, notes: 'qui');
+      canale.pagine.add([(tabella: 'copie', id: copiaId, riga: null)]);
+
+      final esito = await sync.sincronizza();
+
+      expect(esito.scartate, [(tabella: 'copie', id: copiaId)]);
+      expect(esito.titoli, {(tabella: 'copie', id: copiaId): 'Dylan Dog 1'});
     },
   );
 
