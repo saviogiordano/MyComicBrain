@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drift/drift.dart' show TableUpdateQuery;
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
 import 'package:mycomicbrain/core/data/assistente_client.dart';
@@ -198,6 +199,21 @@ final statoSincronizzazioneProvider = StreamProvider<StatoSincronizzazione?>(
 final imageCropServiceProvider = Provider<ImageCropService>(
   (ref) => ImageCropService(),
 );
+
+/// Cambio della cover di un'Edizione o di una Serie: sceglie una foto da
+/// `sorgente` (galleria o fotocamera) e la apre nello stesso editor di
+/// ritaglio delle Scansioni, con le proporzioni della cover. Restituisce il
+/// file ritagliato (temporaneo, da salvare con `salvaCoverLocale`) o null se
+/// l'utente annulla. Sostituibile nei test, dove non c'è il plugin nativo.
+final scegliCoverRitagliataProvider =
+    Provider<Future<String?> Function(ImageSource sorgente)>((ref) {
+      final ritaglio = ref.watch(imageCropServiceProvider);
+      return (sorgente) async {
+        final scelta = await ImagePicker().pickImage(source: sorgente);
+        if (scelta == null) return null;
+        return ritaglio.ritagliaFoto(scelta.path);
+      };
+    });
 
 /// Le Scansioni di un Profilo autenticato stanno nella sua cartella, come
 /// le cover della sua Replica (ADR-0008).

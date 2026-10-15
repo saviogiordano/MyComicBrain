@@ -141,11 +141,12 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     final sorgente = await _scegliSorgenteCover();
     if (sorgente == null) return;
 
-    final scelta = await ImagePicker().pickImage(source: sorgente);
-    if (scelta == null) return;
+    final ritagliata = await ref.read(scegliCoverRitagliataProvider)(sorgente);
+    if (ritagliata == null) return;
 
     final repository = ref.read(comicsRepositoryProvider);
-    final relativo = await repository.salvaCoverLocale(File(scelta.path));
+    final relativo = await repository.salvaCoverLocale(File(ritagliata));
+    await _eliminaBestEffort(ritagliata);
     final assoluto = await repository.risolviCoverImage(relativo);
     if (!mounted) return;
     setState(() {
@@ -153,6 +154,15 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
       _coverImageAssoluto = assoluto;
       _coverImageRelativoCaricato = true;
     });
+  }
+
+  /// Il file temporaneo dell'editor di ritaglio, già copiato tra le cover.
+  static Future<void> _eliminaBestEffort(String percorso) async {
+    try {
+      await File(percorso).delete();
+    } on FileSystemException {
+      // Best-effort: un temporaneo non ripulito non invalida la cover.
+    }
   }
 
   Future<ImageSource?> _scegliSorgenteCover() {
