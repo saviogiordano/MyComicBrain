@@ -121,12 +121,19 @@ class _ModificaSerieSheetState extends ConsumerState<_ModificaSerieSheet> {
   }
 
   Future<void> _scegliCoverDaGalleria() async {
-    final scelta = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (scelta == null) return;
+    final ritagliata = await ref.read(scegliCoverRitagliataProvider)(
+      ImageSource.gallery,
+    );
+    if (ritagliata == null) return;
 
     setState(() => _coverBusy = true);
     final repository = ref.read(comicsRepositoryProvider);
-    final relativo = await repository.salvaCoverLocale(File(scelta.path));
+    final relativo = await repository.salvaCoverLocale(File(ritagliata));
+    try {
+      await File(ritagliata).delete();
+    } on FileSystemException {
+      // Best-effort: il temporaneo del ritaglio è già stato copiato.
+    }
     final assoluto = await repository.risolviCoverImage(relativo);
     if (!mounted) return;
     setState(() {

@@ -141,11 +141,23 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     final sorgente = await _scegliSorgenteCover();
     if (sorgente == null) return;
 
-    final scelta = await ImagePicker().pickImage(source: sorgente);
-    if (scelta == null) return;
+    final String? ritagliata;
+    try {
+      ritagliata = await ref.read(scegliCoverRitagliataProvider)(sorgente);
+    } on Exception {
+      // Scanner o editor non disponibili (per esempio permesso negato).
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Foto non riuscita, riprova')),
+        );
+      }
+      return;
+    }
+    if (ritagliata == null) return;
 
     final repository = ref.read(comicsRepositoryProvider);
-    final relativo = await repository.salvaCoverLocale(File(scelta.path));
+    final relativo = await repository.salvaCoverLocale(File(ritagliata));
+    await _eliminaBestEffort(ritagliata);
     final assoluto = await repository.risolviCoverImage(relativo);
     if (!mounted) return;
     setState(() {
@@ -153,6 +165,15 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
       _coverImageAssoluto = assoluto;
       _coverImageRelativoCaricato = true;
     });
+  }
+
+  /// Il file temporaneo dell'editor di ritaglio, già copiato tra le cover.
+  static Future<void> _eliminaBestEffort(String percorso) async {
+    try {
+      await File(percorso).delete();
+    } on FileSystemException {
+      // Best-effort: un temporaneo non ripulito non invalida la cover.
+    }
   }
 
   Future<ImageSource?> _scegliSorgenteCover() {
@@ -472,6 +493,9 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
           'Descrizione',
           '',
           key: const Key('campo-descrizione'),
+          keyboardType: TextInputType.multiline,
+          // Il campo cresce con il testo: tutte le righe restano visibili.
+          maxLines: null,
         ),
         const SizedBox(height: AppSpacing.lg),
         const SectionHeader(label: 'Autori'),
@@ -628,6 +652,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     String hint, {
     Key? key,
     TextInputType? keyboardType,
+    int? maxLines = 1,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -643,6 +668,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
           key: key,
           controller: c,
           keyboardType: keyboardType,
+          maxLines: maxLines,
           style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,

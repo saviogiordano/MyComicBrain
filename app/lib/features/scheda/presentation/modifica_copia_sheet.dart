@@ -214,7 +214,14 @@ class _ModificaCopiaSheetState extends ConsumerState<_ModificaCopiaSheet> {
             const SizedBox(height: AppSpacing.xs),
             _campo(_posizione, 'Posizione', 'es. Scatola 3 — soggiorno'),
             const SizedBox(height: AppSpacing.xs),
-            _campo(_note, 'Note', 'es. prima ristampa italiana'),
+            _campo(
+              _note,
+              'Note',
+              'es. prima ristampa italiana',
+              keyboardType: TextInputType.multiline,
+              // Il campo cresce con il testo: tutte le righe restano visibili.
+              maxLines: null,
+            ),
             const SizedBox(height: AppSpacing.lg),
             SizedBox(
               width: double.infinity,
@@ -240,6 +247,7 @@ class _ModificaCopiaSheetState extends ConsumerState<_ModificaCopiaSheet> {
     String label,
     String hint, {
     TextInputType? keyboardType,
+    int? maxLines = 1,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,6 +262,7 @@ class _ModificaCopiaSheetState extends ConsumerState<_ModificaCopiaSheet> {
         TextField(
           controller: c,
           keyboardType: keyboardType,
+          maxLines: maxLines,
           style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,
