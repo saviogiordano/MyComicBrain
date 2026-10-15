@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:mycomicbrain/core/data/database.steps.dart';
+import 'package:mycomicbrain/core/data/registro_modifiche.dart';
 import 'package:mycomicbrain/core/data/uuid_v7.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
@@ -578,6 +579,45 @@ class ValoreStimatoTable extends Table {
   ];
 }
 
+/// Una Modifica in sospeso della Replica locale (ADR-0008): una scrittura o
+/// un'eliminazione su una tabella replicata, non ancora accolta da Supabase.
+/// La scrivono i trigger di `RegistroModifiche`, solo quando il database è
+/// aperto come Replica; in Modalità locale resta vuota. [id] è l'id
+/// dell'operazione per `applica_modifiche`, [sequenza] l'ordine in cui
+/// caricarle. [valori] è un oggetto JSON con i campi scritti (tutti per un
+/// inserimento, solo quelli cambiati per una modifica), null per
+/// un'eliminazione; tutti i campi di una voce hanno lo stesso [hlc].
+@DataClassName('VoceRegistro')
+class RegistroModificheTable extends Table {
+  @override
+  String get tableName => 'registro_modifiche';
+
+  IntColumn get sequenza => integer().autoIncrement()();
+  TextColumn get id => text().unique()();
+  TextColumn get tabella => text()();
+  TextColumn get riga => text()();
+  TextColumn get tipo => textEnum<TipoVoceRegistro>()();
+  TextColumn get valori => text().nullable()();
+  TextColumn get hlc => text()();
+}
+
+/// L'orologio ibrido (HLC) della Replica (ADR-0008): una sola riga con l'id
+/// del device, generato alla prima apertura come Replica, e l'ultimo
+/// timestamp emesso o ricevuto. Lo fanno avanzare i trigger del registro e
+/// `RegistroModifiche.ricevi`.
+@DataClassName('OrologioHlc')
+class OrologioHlcTable extends Table {
+  @override
+  String get tableName => 'orologio_hlc';
+
+  IntColumn get id => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+  TextColumn get dispositivo => text()();
+  TextColumn get ultimo => text()();
+}
+
 @DriftDatabase(
   tables: [
     Opere,
@@ -598,19 +638,37 @@ class ValoreStimatoTable extends Table {
     ConversazioneTable,
     MessaggioTable,
     ValoreStimatoTable,
+    RegistroModificheTable,
+    OrologioHlcTable,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   /// Il costruttore che accetta un [QueryExecutor] opzionale è necessario
   /// per i test in memoria (vedi `test/core/data/comics_repository_test.dart`).
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
+  AppDatabase([QueryExecutor? executor])
+    : replica = false,
+      super(executor ?? _open());
+
+  /// La Replica locale di un Profilo: a ogni apertura installa i trigger del
+  /// registro delle Modifiche in sospeso.
+  AppDatabase.replica(super.e) : replica = true;
+
+  /// Se il database è una Replica locale (ADR-0008) e non la Modalità locale.
+  final bool replica;
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+    beforeOpen: (details) async {
+      if (replica) await RegistroModifiche(this).installa();
+    },
     onUpgrade: stepByStep(
+      from16To17: (m, schema) async {
+        await m.createTable(schema.registroModifiche);
+        await m.createTable(schema.orologioHlc);
+      },
       from15To16: (m, schema) async {
         // Id interi → uuid v7 (ADR-0008, #204). Ogni vecchio id diventa un
         // uuid deterministico: istante 2020-09-13 + id millisecondi (prima

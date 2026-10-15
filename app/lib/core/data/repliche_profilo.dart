@@ -35,7 +35,7 @@ class ReplicheProfilo {
   /// La Replica del Profilo [idUtente], creata vuota se non esiste ancora.
   AppDatabase database(String idUtente) => _aperte.putIfAbsent(
     idUtente,
-    () => AppDatabase(_apri(() => cartellaDati(idUtente))),
+    () => AppDatabase.replica(_apri(() => cartellaDati(idUtente))),
   );
 
   static QueryExecutor _apriConDriftFlutter(
