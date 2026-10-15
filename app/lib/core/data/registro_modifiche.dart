@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
 import 'package:mycomicbrain/core/data/uuid_v7.dart';
 
 /// Che cosa ha fatto una voce del registro delle Modifiche in sospeso.
@@ -68,6 +69,12 @@ class RegistroModifiche {
       ];
       for (final sql in _trigger(nome, colonne)) {
         await _db.customStatement(sql);
+      }
+      for (final MapEntry(key: colonna, value: bucket)
+          in (colonneImmagine[nome] ?? const {}).entries) {
+        for (final sql in _triggerCodaFile(nome, colonna, bucket)) {
+          await _db.customStatement(sql);
+        }
       }
     }
   }
@@ -192,6 +199,35 @@ END''';
         attivo,
         voce('OLD.id', TipoVoceRegistro.eliminazione, 'NULL'),
       ),
+    ];
+  }
+
+  /// I trigger che mettono in `coda_file` il file di una colonna immagine
+  /// scritta sul device: insieme alla voce del registro, così il push trova
+  /// in coda ogni file a cui fanno riferimento le sue voci. Un URL non è un
+  /// file della Replica.
+  static List<String> _triggerCodaFile(
+    String tabella,
+    String colonna,
+    BucketImmagine bucket,
+  ) {
+    String crea(String nome, String evento) =>
+        '''
+CREATE TEMP TRIGGER coda_file_${tabella}_$nome AFTER $evento ON "$tabella"
+WHEN NOT EXISTS (SELECT 1 FROM registro_sospeso)
+  AND NEW."$colonna" IS NOT NULL
+  AND NEW."$colonna" NOT LIKE 'http://%'
+  AND NEW."$colonna" NOT LIKE 'https://%'
+BEGIN
+  INSERT OR IGNORE INTO coda_file (bucket, percorso)
+  VALUES ('${bucket.name}', NEW."$colonna");
+END''';
+
+    return [
+      for (final nome in ['inserimento', 'modifica'])
+        'DROP TRIGGER IF EXISTS temp.coda_file_${tabella}_$nome',
+      crea('inserimento', 'INSERT'),
+      crea('modifica', 'UPDATE OF "$colonna"'),
     ];
   }
 

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:mycomicbrain/core/data/uuid_v7.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -15,8 +16,9 @@ const copertinaDownloadTimeout = Duration(seconds: 45);
 
 /// Scarica la cover di un Candidato esterno (ComicVine) e la salva nella
 /// directory `<ApplicationSupportDirectory>/copertine/` (creata se assente),
-/// con nome `<millisecondsSinceEpoch>.jpg` — stesso schema di
-/// `ScansioneStorage` per le Scansioni, così il catalogo ha una copia locale
+/// con nome `<uuid v7>.jpg` — stesso schema di `ScansioneStorage` per le
+/// Scansioni. Il nome è anche la chiave su Storage (ADR-0008), quindi deve
+/// essere unico fra i device. Così il catalogo ha una copia locale
 /// della cover invece di dipendere dalla disponibilità futura dell'URL
 /// remoto di ComicVine.
 ///
@@ -62,7 +64,7 @@ class CopertinaDownloader {
 
     final destPath = p.join(
       dir.path,
-      '${DateTime.now().millisecondsSinceEpoch}.jpg',
+      '${uuidV7()}.jpg',
     );
     final file = await File(destPath).writeAsBytes(response.bodyBytes);
     return file.path;
@@ -79,7 +81,7 @@ class CopertinaDownloader {
 
     final destPath = p.join(
       dir.path,
-      '${DateTime.now().millisecondsSinceEpoch}.jpg',
+      '${uuidV7()}.jpg',
     );
     final salvato = await sorgente.copy(destPath);
     return salvato.path;
@@ -87,20 +89,20 @@ class CopertinaDownloader {
 
   /// Salva i byte di una cover già in memoria (import da zip, §16) in
   /// `<ApplicationSupportDirectory>/copertine/`, stesso schema di
-  /// [salvaLocale]. Il contatore evita collisioni di nome quando l'import
-  /// salva molte cover nello stesso istante.
-  Future<String> salvaBytes(Uint8List bytes, {String estensione = 'jpg'}) async {
+  /// [salvaLocale].
+  Future<String> salvaBytes(
+    Uint8List bytes, {
+    String estensione = 'jpg',
+  }) async {
     final base = await _baseDirectory();
     final dir = Directory(p.join(base.path, _cartellaCopertine));
     await dir.create(recursive: true);
 
     final destPath = p.join(
       dir.path,
-      '${DateTime.now().microsecondsSinceEpoch}_${_contatore++}.$estensione',
+      '${uuidV7()}.$estensione',
     );
     final file = await File(destPath).writeAsBytes(bytes);
     return file.path;
   }
-
-  static var _contatore = 0;
 }

@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/registro_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/file_replica.dart';
 
 /// Com'è andato un ciclo di Sincronizzazione.
 class EsitoCiclo {
@@ -29,7 +31,10 @@ class EsitoCiclo {
 /// Un ciclo di Sincronizzazione della Replica locale (ADR-0008): push del
 /// registro delle Modifiche in sospeso con `applica_modifiche`, poi pull con
 /// `cambiamenti_da`, applicato senza rigenerare Modifiche in sospeso. Il
-/// primo pull (nessun cursore salvato) è il primo download.
+/// primo pull (nessun cursore salvato) è il primo download. Prima di ogni
+/// lotto del push carica i file in coda, così il server non riceve mai la
+/// chiave di un file che Storage non ha; le cover arrivate col pull le
+/// scarica [scaricaCover].
 ///
 /// Non sa nulla di inneschi, rete e tentativi: li gestisce
 /// `MotoreSincronizzazione`.
@@ -38,17 +43,20 @@ class Sincronizzatore {
     required AppDatabase db,
     required CanaleSincronizzazione canale,
     required this.userId,
+    required Future<Directory> Function() cartellaProfilo,
     this.lottoPush = 200,
     this.paginaPull = 1000,
     DateTime Function()? ora,
   }) : _db = db,
        _canale = canale,
        _registro = RegistroModifiche(db),
+       _file = FileReplica(db: db, canale: canale, cartella: cartellaProfilo),
        _ora = ora ?? DateTime.now;
 
   final AppDatabase _db;
   final CanaleSincronizzazione _canale;
   final RegistroModifiche _registro;
+  final FileReplica _file;
   final String userId;
   final int lottoPush;
   final int paginaPull;
@@ -67,16 +75,32 @@ class Sincronizzatore {
   Future<EsitoCiclo> sincronizza({
     void Function(int ricevute)? avanzamento,
   }) async {
-    final conversione = _conversione ??= ConversioneRighe(
-      _db,
-      collectionId: await _canale.collectionId(),
-      userId: userId,
-    );
+    final conversione = await _conversioneRighe();
     final scartate = <RigaReplicata>[];
     final inviate = await _push(conversione, scartate);
     final ricevute = await _pull(conversione, scartate, avanzamento);
     return EsitoCiclo(inviate: inviate, ricevute: ricevute, scartate: scartate);
   }
+
+  /// Scarica le cover della Replica che mancano sul device: dopo un ciclo,
+  /// in background. [avanzamento] riceve quante ne sono arrivate su quante
+  /// ne mancavano; [interrompi] lo ferma fra un gruppo di download e
+  /// l'altro.
+  Future<void> scaricaCover({
+    void Function(int scaricate, int totale)? avanzamento,
+    bool Function()? interrompi,
+  }) async => _file.scaricaCover(
+    await _conversioneRighe(),
+    avanzamento: avanzamento,
+    interrompi: interrompi,
+  );
+
+  Future<ConversioneRighe> _conversioneRighe() async =>
+      _conversione ??= ConversioneRighe(
+        _db,
+        collectionId: await _canale.collectionId(),
+        userId: userId,
+      );
 
   // --- Push ----------------------------------------------------------------
 
@@ -87,6 +111,9 @@ class Sincronizzatore {
     var inviate = 0;
     while (true) {
       final lotto = (await _registro.voci()).take(lottoPush).toList();
+      // Dopo aver letto il lotto: i trigger mettono in coda il file insieme
+      // alla voce, quindi ogni file del lotto è già in coda.
+      await _file.caricaInCoda(conversione);
       if (lotto.isEmpty) return inviate;
       final ops = [
         for (final voce in lotto) ?_operazione(conversione, voce),

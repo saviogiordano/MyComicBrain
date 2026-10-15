@@ -16,7 +16,7 @@ void main() {
   tearDown(() => tempBase.delete(recursive: true));
 
   test(
-    'copia il file confermato in scansioni/ con nome epoch e ripulisce il grezzo',
+    'copia il file confermato in scansioni/ con nome uuid v7 e ripulisce il grezzo',
     () async {
       final grezzo = File(p.join(tempBase.path, 'grezzo.jpg'))
         ..writeAsStringSync('finta immagine');
@@ -25,7 +25,14 @@ void main() {
 
       expect(salvato.existsSync(), isTrue);
       expect(p.dirname(salvato.path), p.join(tempBase.path, 'scansioni'));
-      expect(p.basename(salvato.path), matches(RegExp(r'^\d+\.jpg$')));
+      expect(
+        p.basename(salvato.path),
+        matches(
+          RegExp(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.jpg$',
+          ),
+        ),
+      );
       expect(salvato.readAsStringSync(), 'finta immagine');
       expect(grezzo.existsSync(), isFalse);
     },
@@ -43,31 +50,41 @@ void main() {
   });
 
   group('salvaGrezzi', () {
-    test('copia ogni file in scansioni_grezze/ con nomi univoci, senza toccare gli originali (#89)', () async {
-      final scanA = File(p.join(tempBase.path, 'scan_a.jpg'))..writeAsStringSync('a');
-      final scanB = File(p.join(tempBase.path, 'scan_b.jpg'))..writeAsStringSync('b');
+    test(
+      'copia ogni file in scansioni_grezze/ con nomi univoci, senza toccare gli originali (#89)',
+      () async {
+        final scanA = File(p.join(tempBase.path, 'scan_a.jpg'))
+          ..writeAsStringSync('a');
+        final scanB = File(p.join(tempBase.path, 'scan_b.jpg'))
+          ..writeAsStringSync('b');
 
-      final permanenti = await storage.salvaGrezzi([scanA.path, scanB.path]);
+        final permanenti = await storage.salvaGrezzi([scanA.path, scanB.path]);
 
-      expect(permanenti, hasLength(2));
-      expect(permanenti.toSet(), hasLength(2), reason: 'ogni copia deve avere un nome univoco');
-      for (final path in permanenti) {
-        expect(p.dirname(path), p.join(tempBase.path, 'scansioni_grezze'));
-      }
-      expect(File(permanenti[0]).readAsStringSync(), 'a');
-      expect(File(permanenti[1]).readAsStringSync(), 'b');
-      // Gli originali (nella cache del plugin) non sono responsabilità di
-      // questo metodo: restano intatti, la ripulizia è affare del plugin
-      // (`cleanCache()`).
-      expect(scanA.existsSync(), isTrue);
-      expect(scanB.existsSync(), isTrue);
-    });
+        expect(permanenti, hasLength(2));
+        expect(
+          permanenti.toSet(),
+          hasLength(2),
+          reason: 'ogni copia deve avere un nome univoco',
+        );
+        for (final path in permanenti) {
+          expect(p.dirname(path), p.join(tempBase.path, 'scansioni_grezze'));
+        }
+        expect(File(permanenti[0]).readAsStringSync(), 'a');
+        expect(File(permanenti[1]).readAsStringSync(), 'b');
+        // Gli originali (nella cache del plugin) non sono responsabilità di
+        // questo metodo: restano intatti, la ripulizia è affare del plugin
+        // (`cleanCache()`).
+        expect(scanA.existsSync(), isTrue);
+        expect(scanB.existsSync(), isTrue);
+      },
+    );
 
     test('crea la directory scansioni_grezze/ se assente', () async {
       final grezziDir = Directory(p.join(tempBase.path, 'scansioni_grezze'));
       expect(grezziDir.existsSync(), isFalse);
 
-      final scan = File(p.join(tempBase.path, 'scan.jpg'))..writeAsStringSync('x');
+      final scan = File(p.join(tempBase.path, 'scan.jpg'))
+        ..writeAsStringSync('x');
       await storage.salvaGrezzi([scan.path]);
 
       expect(grezziDir.existsSync(), isTrue);

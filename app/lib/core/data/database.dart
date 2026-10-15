@@ -636,6 +636,23 @@ class StatoSincronizzazioneTable extends Table {
   DateTimeColumn get ultima => dateTime()();
 }
 
+/// La coda dei file della Replica da caricare su Storage (ADR-0008): un
+/// file per riga, con il bucket della colonna immagine che lo usa e il
+/// percorso come sta nella Replica. La scrivono dei trigger `TEMP` sulle
+/// colonne immagine, insieme alla voce del registro, e la svuota la
+/// Sincronizzazione prima del push. In Modalità locale resta vuota.
+@DataClassName('FileInCoda')
+class CodaFileTable extends Table {
+  @override
+  String get tableName => 'coda_file';
+
+  TextColumn get bucket => text()();
+  TextColumn get percorso => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {bucket, percorso};
+}
+
 @DriftDatabase(
   tables: [
     Opere,
@@ -659,6 +676,7 @@ class StatoSincronizzazioneTable extends Table {
     RegistroModificheTable,
     OrologioHlcTable,
     StatoSincronizzazioneTable,
+    CodaFileTable,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -676,7 +694,7 @@ class AppDatabase extends _$AppDatabase {
   final bool replica;
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -684,6 +702,25 @@ class AppDatabase extends _$AppDatabase {
       if (replica) await RegistroModifiche(this).installa();
     },
     onUpgrade: stepByStep(
+      from18To19: (m, schema) async {
+        await m.createTable(schema.codaFile);
+        // Una Replica già sincronizzata ha cover e Scansioni create prima
+        // della coda: si caricano al prossimo push. La Modalità locale non
+        // ha mai lo stato della Sincronizzazione.
+        for (final (tabella, colonna, bucket) in const [
+          ('edizioni', 'cover_image', 'covers'),
+          ('serie', 'cover_image', 'covers'),
+          ('scansioni', 'image', 'scansioni'),
+        ]) {
+          await m.database.customStatement(
+            'INSERT OR IGNORE INTO coda_file (bucket, percorso) '
+            "SELECT '$bucket', \"$colonna\" FROM \"$tabella\" "
+            'WHERE EXISTS (SELECT 1 FROM stato_sincronizzazione) '
+            "AND \"$colonna\" IS NOT NULL AND \"$colonna\" NOT LIKE 'http://%' "
+            "AND \"$colonna\" NOT LIKE 'https://%'",
+          );
+        }
+      },
       from17To18: (m, schema) async {
         await m.createTable(schema.statoSincronizzazione);
       },

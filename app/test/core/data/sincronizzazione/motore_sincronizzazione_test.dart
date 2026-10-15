@@ -168,6 +168,78 @@ void main() {
     },
   );
 
+  test('dopo un ciclo riuscito scarica le cover in background, con '
+      "l'avanzamento nello stato", () {
+    fakeAsync((async) {
+      crea(async);
+      expect(sync.giriCover, 0);
+      sync.termina();
+      async.flushMicrotasks();
+      expect(sync.giriCover, 1);
+      expect(motore.stato.cover, isNull);
+
+      sync.avanzamentoCover!(3, 10);
+      expect(motore.stato.cover, (scaricate: 3, totale: 10));
+      expect(motore.stato.fase, FaseSincronizzazione.sincronizzata);
+
+      // Un ciclo durante il download conserva l'avanzamento.
+      unawaited(motore.sincronizzaOra());
+      async.flushMicrotasks();
+      expect(motore.stato.fase, FaseSincronizzazione.inCorso);
+      expect(motore.stato.cover, (scaricate: 3, totale: 10));
+      sync.termina();
+      async.flushMicrotasks();
+      expect(sync.giriCover, 1, reason: 'non si sovrappone');
+
+      sync.finisciCover();
+      async.flushMicrotasks();
+      expect(sync.giriCover, 2, reason: 'le cover portate dal secondo ciclo');
+      expect(motore.stato.cover, isNull);
+      sync.finisciCover();
+      async.flushMicrotasks();
+      expect(sync.giriCover, 2);
+    });
+  });
+
+  test('un errore nel download delle cover non cambia lo stato', () {
+    fakeAsync((async) {
+      crea(async);
+      sync.termina();
+      async.flushMicrotasks();
+      sync
+        ..avanzamentoCover!(0, 4)
+        ..fallisciCover(const SocketException('offline'));
+      async.flushMicrotasks();
+      expect(motore.stato.fase, FaseSincronizzazione.sincronizzata);
+      expect(motore.stato.cover, isNull);
+      expect(sync.giriCover, 1);
+    });
+  });
+
+  // Con il tempo reale: `chiudi` aspetta la cancellazione delle iscrizioni,
+  // che fakeAsync non fa avanzare.
+  test('chiudere interrompe il download delle cover e lo aspetta', () async {
+    sync = _Sincronizzatore(scaricata: true);
+    motore = MotoreSincronizzazione(
+      sincronizzatore: sync,
+      rete: _Rete(online: true),
+    );
+    await motore.avvia();
+    sync.termina();
+    await pumpEventQueue();
+    expect(sync.interrompiCover!(), isFalse);
+
+    var chiuso = false;
+    unawaited(motore.chiudi().then((_) => chiuso = true));
+    await pumpEventQueue();
+    expect(sync.interrompiCover!(), isTrue);
+    expect(chiuso, isFalse);
+
+    sync.finisciCover();
+    await pumpEventQueue();
+    expect(chiuso, isTrue);
+  });
+
   test('le righe scartate arrivano alla UI', () {
     fakeAsync((async) {
       crea(async);
@@ -214,6 +286,26 @@ class _Sincronizzatore implements Sincronizzatore {
   }
 
   void fallisci(Object errore) => _ciclo.completeError(errore);
+
+  int giriCover = 0;
+  late Completer<void> _cover;
+  void Function(int, int)? avanzamentoCover;
+  bool Function()? interrompiCover;
+
+  @override
+  Future<void> scaricaCover({
+    void Function(int, int)? avanzamento,
+    bool Function()? interrompi,
+  }) {
+    giriCover++;
+    avanzamentoCover = avanzamento;
+    interrompiCover = interrompi;
+    return (_cover = Completer()).future;
+  }
+
+  void finisciCover() => _cover.complete();
+
+  void fallisciCover(Object errore) => _cover.completeError(errore);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:mycomicbrain/core/data/uuid_v7.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -8,7 +9,8 @@ const _cartellaGrezziScanner = 'scansioni_grezze';
 
 /// Copia il file confermato (già ritagliato/ruotato) di una Scansione nella
 /// directory `<ApplicationSupportDirectory>/scansioni/` (creata se assente),
-/// con nome `<millisecondsSinceEpoch>.jpg`, e ripulisce best-effort il file
+/// con nome `<uuid v7>.jpg` (anche la chiave su Storage, ADR-0008, quindi
+/// unico fra i device), e ripulisce best-effort il file
 /// temporaneo grezzo — un fallimento della ripulizia non deve far fallire il
 /// salvataggio.
 ///
@@ -57,10 +59,7 @@ class ScansioneStorage {
     final dir = Directory(p.join(base.path, _cartellaScansioni));
     await dir.create(recursive: true);
 
-    final destPath = p.join(
-      dir.path,
-      '${DateTime.now().millisecondsSinceEpoch}.jpg',
-    );
+    final destPath = p.join(dir.path, '${uuidV7()}.jpg');
     final salvato = await fileConfermato.copy(destPath);
 
     try {

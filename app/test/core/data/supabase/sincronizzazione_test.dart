@@ -8,6 +8,7 @@ import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/registro_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/sincronizzatore.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/core/domain/formato.dart';
@@ -67,12 +68,17 @@ void main() {
       ),
     );
     chiudere.add(db.close);
+    final cartella = await Directory.systemTemp.createTemp('device_');
+    chiudere.add(() => cartella.delete(recursive: true));
     return _Device(
       db,
+      c,
+      cartella,
       Sincronizzatore(
         db: db,
         canale: CanaleSupabase(c, userId: a.userId),
         userId: a.userId,
+        cartellaProfilo: () async => cartella,
         // Pagine piccole: il primo download passa da più pagine.
         paginaPull: 3,
         lottoPush: 4,
@@ -89,6 +95,49 @@ void main() {
   )..where((c) => c.id.equals(id))).getSingleOrNull();
 
   group('Sincronizzazione fra due device', skip: !configurato, () {
+    test("una cover aggiunta su un device arriva sull'altro", () async {
+      final a = await account();
+      final uno = await device(a);
+      final due = await device(a);
+      final bytes = List<int>.generate(64, (i) => i);
+      File('${uno.cartella.path}/copertine/0199f0c0-cover.jpg')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(bytes);
+      final edizioneId = await uno.repo.aggiungiEdizione(
+        operaId: await uno.repo.aggiungiOpera(title: 'Sandman'),
+        coverImage: 'copertine/0199f0c0-cover.jpg',
+      );
+      await uno.sync.sincronizza();
+
+      await due.sync.sincronizza();
+      final avanzamento = <(int, int)>[];
+      await due.sync.scaricaCover(
+        avanzamento: (n, m) => avanzamento.add((n, m)),
+      );
+
+      final edizioneDue = await (due.db.select(
+        due.db.edizioni,
+      )..where((e) => e.id.equals(edizioneId))).getSingle();
+      expect(edizioneDue.coverImage, 'copertine/0199f0c0-cover.jpg');
+      expect(avanzamento.last, (1, 1));
+      expect(
+        File(
+          '${due.cartella.path}/copertine/0199f0c0-cover.jpg',
+        ).readAsBytesSync(),
+        bytes,
+      );
+
+      // Un oggetto che Storage non ha non è un errore.
+      final canale = CanaleSupabase(due.client, userId: a.userId);
+      expect(
+        await canale.scaricaFile(
+          BucketImmagine.covers,
+          '${await canale.collectionId()}/inesistente.jpg',
+        ),
+        isNull,
+      );
+    });
+
     test(
       'primo download, aggiunta, modifica ed eliminazione convergono',
       () async {
@@ -296,9 +345,14 @@ void main() {
 }
 
 class _Device {
-  _Device(this.db, this.sync) : repo = DriftComicsRepository(db);
+  _Device(this.db, this.client, this.cartella, this.sync)
+    : repo = DriftComicsRepository(db);
 
   final AppDatabase db;
+  final SupabaseClient client;
+
+  /// La cartella del Profilo, base dei percorsi delle immagini.
+  final Directory cartella;
   final Sincronizzatore sync;
   final DriftComicsRepository repo;
 }
