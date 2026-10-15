@@ -493,6 +493,9 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
           'Descrizione',
           '',
           key: const Key('campo-descrizione'),
+          keyboardType: TextInputType.multiline,
+          // Il campo cresce con il testo: tutte le righe restano visibili.
+          maxLines: null,
         ),
         const SizedBox(height: AppSpacing.lg),
         const SectionHeader(label: 'Autori'),
@@ -649,6 +652,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     String hint, {
     Key? key,
     TextInputType? keyboardType,
+    int? maxLines = 1,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,6 +668,7 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
           key: key,
           controller: c,
           keyboardType: keyboardType,
+          maxLines: maxLines,
           style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,

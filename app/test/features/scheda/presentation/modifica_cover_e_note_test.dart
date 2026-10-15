@@ -186,6 +186,18 @@ void main() {
     expect(await salvaECover(tester, edizioneId), 'copertine/originale.jpg');
   });
 
+  testWidgets("la Descrizione dell'Edizione mostra tutte le righe", (
+    tester,
+  ) async {
+    await pumpModifica(tester, ritaglia: (_) async => null);
+
+    final campo = tester.widget<TextField>(
+      find.byKey(const Key('campo-descrizione')),
+    );
+    expect(campo.maxLines, isNull, reason: 'il campo cresce con il testo');
+    expect(campo.keyboardType, TextInputType.multiline);
+  });
+
   testWidgets('le Note della Copia mostrano tutte le righe', (tester) async {
     const note = 'prima riga\nseconda riga\nterza riga\nquarta riga';
     await tester.pumpWidget(
