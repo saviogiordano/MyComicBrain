@@ -70,7 +70,7 @@ Utile in particolare per testare lo scanner (fotocamera reale, permessi, prestaz
 
 ### iOS (iPhone fisico)
 
-1. **Xcode signing** — apri `ios/Runner.xcworkspace` in Xcode (o `open ios/Runner.xcworkspace`), seleziona il target `Runner` → tab *Signing & Capabilities* → abilita *Automatically manage signing* e seleziona il tuo Apple ID/team personale (basta un Apple ID gratuito per il debug su device proprio, senza account developer a pagamento).
+1. **Xcode signing** — apri `ios/MyComicBrain.xcworkspace` in Xcode (o `open ios/MyComicBrain.xcworkspace`), seleziona il target `Runner` → tab *Signing & Capabilities* → abilita *Automatically manage signing* e seleziona il tuo Apple ID/team personale (basta un Apple ID gratuito per il debug su device proprio, senza account developer a pagamento).
 2. **Collega l'iPhone via USB** (o Wi-Fi, dopo il primo pairing via cavo) e sbloccalo.
 3. **Trust del computer** — sull'iPhone conferma il prompt "Trust This Computer?" (serve, se richiesto, anche l'inserimento del passcode del device).
 4. Verifica che compaia nella lista device:
