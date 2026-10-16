@@ -44,7 +44,9 @@ void main() {
       ProviderScope(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
-          if (account != null) statoAccountProvider.overrideWithValue(account),
+          statoAccountProvider.overrideWithValue(
+            account ?? _modalitaLocale,
+          ),
           senzaReteProvider.overrideWithValue(senzaRete),
           ...sincronizzazione,
         ],
@@ -228,7 +230,10 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [appDatabaseProvider.overrideWithValue(db)],
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            statoAccountProvider.overrideWithValue(_modalitaLocale),
+          ],
           child: MaterialApp(theme: AppTheme.dark, home: const DashboardPage()),
         ),
       );
@@ -349,7 +354,7 @@ void main() {
     });
   });
 
-  group('account (login reale dietro flag, #171)', () {
+  group('account (#171)', () {
     SessionState stato({Profilo? profilo, String? emailInAttesa}) =>
         SessionState(
           profilo: profilo,
@@ -357,13 +362,6 @@ void main() {
           modalitaLocaleEsaurita: profilo != null,
           emailInAttesa: emailInAttesa,
         );
-
-    testWidgets('senza flag niente pillola né banner', (tester) async {
-      await pumpDashboard(tester);
-
-      expect(find.text('Modalità locale'), findsNothing);
-      expect(find.text('Account'), findsNothing);
-    });
 
     testWidgets('in Modalità locale mostra la pillola "Modalità locale"', (
       tester,
@@ -450,3 +448,10 @@ void main() {
     });
   });
 }
+
+const _modalitaLocale = SessionState(
+  profilo: null,
+  benvenutoSuperato: true,
+  modalitaLocaleEsaurita: false,
+  emailInAttesa: null,
+);

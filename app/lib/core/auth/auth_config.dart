@@ -1,17 +1,15 @@
-/// Configurazione del login (#171). Il login resta dietro un flag di
-/// sviluppo finché il porting Supabase non è completo (ADR-0007, #181):
-/// senza `--dart-define=ACCOUNT_LOGIN=true` l'app si comporta come prima.
+/// Configurazione del login (#171).
 abstract final class AuthConfig {
-  static const loginAbilitato = bool.fromEnvironment('ACCOUNT_LOGIN');
-
-  /// URL e chiave pubblicabile del progetto `ojfwicezfctlwpouudsa`, passati
-  /// con `--dart-define` insieme al flag (vedi `app/README.md`).
+  /// URL e chiave pubblicabile del progetto `ojfwicezfctlwpouudsa`. La
+  /// chiave è pubblica per costruzione (le tabelle sono protette da RLS);
+  /// entrambi si possono sostituire con `--dart-define`.
   static const supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
     defaultValue: 'https://ojfwicezfctlwpouudsa.supabase.co',
   );
   static const supabasePublishableKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',
+    defaultValue: 'sb_publishable_kV9o89Xp2hfT4ajGFT_RSg_TOeaJi1y',
   );
 
   /// Deep link di ritorno per conferma email e Apple su Android (#168 §3).

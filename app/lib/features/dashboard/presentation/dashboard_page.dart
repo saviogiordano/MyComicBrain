@@ -48,7 +48,7 @@ class DashboardPage extends ConsumerWidget {
     final inAttesaDiRete = ref.watch(senzaReteProvider)
         ? inSospeso.where(inAttesa.contains).length
         : 0;
-    final emailInAttesa = ref.watch(statoAccountProvider)?.emailInAttesa;
+    final emailInAttesa = ref.watch(statoAccountProvider).emailInAttesa;
 
     return Scaffold(
       body: SafeArea(
@@ -335,9 +335,9 @@ class _Header extends ConsumerWidget {
         Row(
           children: [
             const Expanded(child: SectionHeader(label: 'la tua collezione')),
-            if (account?.profilo != null && indicatore != null)
+            if (account.profilo != null && indicatore != null)
               PillolaSincronizzazione(indicatore: indicatore)
-            else if (account != null)
+            else
               AppChip(
                 label: account.profilo != null ? 'Account' : 'Modalità locale',
                 selected: account.profilo != null,

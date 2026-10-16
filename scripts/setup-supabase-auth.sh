@@ -328,7 +328,7 @@ else
   SKIPPED+=("policy password su Supabase da allineare (min 8, lower/upper/digits)")
 fi
 say ""
-say "Ora la prova vera, dall'app con il login abilitato (flag ACCOUNT_LOGIN):"
+say "Ora la prova vera, dall'app:"
 step "Registrati con un indirizzo che NON sia un membro del team Supabase."
 step "Controlla che l'email arrivi da $SMTP_SENDER_EMAIL (anche in Resend → Emails risulta \"Delivered\")."
 step "Tocca il link di conferma sul telefono: deve riaprire l'app e completare l'accesso."

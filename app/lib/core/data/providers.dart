@@ -98,8 +98,8 @@ final driftComicsRepositoryProvider = Provider<DriftComicsRepository>((ref) {
   return repository;
 });
 
-/// Il client Supabase, sostituito da `main.dart` solo con il login
-/// abilitato (`ACCOUNT_LOGIN`): senza, l'app resta tutta su drift.
+/// Il client Supabase, sostituito da `main.dart`; `null` nei test che non
+/// lo sostituiscono, dove l'app resta tutta su drift.
 final supabaseClientProvider = Provider<SupabaseClient?>((ref) => null);
 
 /// L'id dell'utente Supabase autenticato, `null` in Modalità locale. Segue

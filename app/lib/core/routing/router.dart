@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mycomicbrain/core/auth/auth_config.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/routing/app_bottom_nav.dart';
-import 'package:mycomicbrain/core/routing/session.dart';
 import 'package:mycomicbrain/features/collezione/presentation/collezione_page.dart';
 import 'package:mycomicbrain/features/dashboard/presentation/dashboard_page.dart';
 import 'package:mycomicbrain/features/duplicati/presentation/duplicati_page.dart';
@@ -17,7 +15,6 @@ import 'package:mycomicbrain/features/impostazioni/presentation/elimina_account_
 import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
 import 'package:mycomicbrain/features/login/presentation/accedi_page.dart';
 import 'package:mycomicbrain/features/login/presentation/benvenuto_page.dart';
-import 'package:mycomicbrain/features/login/presentation/login_page.dart';
 import 'package:mycomicbrain/features/ricerca/presentation/ricerca_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/revisione_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
@@ -29,20 +26,15 @@ import 'package:mycomicbrain/features/serie/presentation/serie_page.dart';
 import 'package:mycomicbrain/features/sincronizzazione/presentation/primo_download_page.dart';
 import 'package:mycomicbrain/features/statistiche/presentation/statistiche_page.dart';
 
-/// Notifica il router quando la sessione cambia ([sessionProvider] con il
-/// login fittizio, [sessionControllerProvider] con quello reale dietro
-/// flag, #171) o quando la Replica del Profilo risulta scaricata (#217),
+/// Notifica il router quando la sessione cambia ([sessionControllerProvider],
+/// #171) o quando la Replica del Profilo risulta scaricata (#217),
 /// così `redirect` viene rivalutato senza dover ricreare il [GoRouter] (che
 /// perderebbe la sua history interna).
 class _SessionRefresh extends ChangeNotifier {
   _SessionRefresh(Ref ref) {
-    if (AuthConfig.loginAbilitato) {
-      ref
-        ..listen(sessionControllerProvider, (_, _) => notifyListeners())
-        ..listen(_replicaScaricataProvider, (_, _) => notifyListeners());
-    } else {
-      ref.listen<bool>(sessionProvider, (_, _) => notifyListeners());
-    }
+    ref
+      ..listen(sessionControllerProvider, (_, _) => notifyListeners())
+      ..listen(_replicaScaricataProvider, (_, _) => notifyListeners());
   }
 }
 
@@ -104,21 +96,10 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
-    initialLocation: AuthConfig.loginAbilitato ? '/benvenuto' : '/login',
+    initialLocation: '/benvenuto',
     refreshListenable: refresh,
-    redirect: (context, state) {
-      if (AuthConfig.loginAbilitato) return _redirectAccount(ref, state);
-      final inApp = ref.read(sessionProvider);
-      final onLogin = state.matchedLocation == '/login';
-      if (!inApp) return onLogin ? null : '/login';
-      if (onLogin) return '/dashboard';
-      return null;
-    },
+    redirect: (context, state) => _redirectAccount(ref, state),
     routes: [
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginPage(),
-      ),
       GoRoute(
         path: '/primo-download',
         builder: (context, state) => const PrimoDownloadPage(),

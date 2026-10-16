@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 
-/// Logo, headline e statistiche della schermata di ingresso — condivisi fra
-/// `LoginPage` (login fittizio, flag spento) e `BenvenutoPage` (#171).
+/// Logo, headline e statistiche della schermata di benvenuto (#171).
 class LoginHero extends StatelessWidget {
   const LoginHero({super.key});
 

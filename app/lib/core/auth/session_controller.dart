@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mycomicbrain/core/auth/auth_config.dart';
 import 'package:mycomicbrain/core/auth/auth_gateway.dart';
 import 'package:mycomicbrain/core/data/preferences.dart';
 
@@ -73,7 +72,7 @@ final haDatiLocaliProvider = Provider<Future<bool> Function()>(
 
 /// La cancellazione dal device dei dati del Profilo autenticato adesso
 /// (Replica locale, cover e Scansioni, ADR-0008), da eseguire dopo che il
-/// Profilo è uscito; `null` senza Profilo o con il login spento.
+/// Profilo è uscito; `null` senza Profilo.
 final cancellazioneProfiloProvider = Provider<Future<void> Function()?>(
   (ref) => null,
 );
@@ -234,9 +233,7 @@ final sessionControllerProvider =
     NotifierProvider<SessionController, SessionState>(SessionController.new);
 
 /// Lo stato dell'account per le schermate dell'app (pillola e banner della
-/// Dashboard): `null` finché il login reale è dietro flag e spento, così
-/// l'app senza flag resta identica a prima.
-final statoAccountProvider = Provider<SessionState?>(
-  (ref) =>
-      AuthConfig.loginAbilitato ? ref.watch(sessionControllerProvider) : null,
+/// Dashboard).
+final statoAccountProvider = Provider<SessionState>(
+  (ref) => ref.watch(sessionControllerProvider),
 );
