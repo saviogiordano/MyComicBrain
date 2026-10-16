@@ -587,6 +587,11 @@ class ValoreStimatoTable extends Table {
 /// caricarle. [valori] è un oggetto JSON con i campi scritti (tutti per un
 /// inserimento, solo quelli cambiati per una modifica), null per
 /// un'eliminazione; tutti i campi di una voce hanno lo stesso [hlc].
+///
+/// Una voce che `applica_modifiche` ha rifiutato per un errore nei dati è
+/// una Modifica rifiutata (#225): resta qui con [rifiutataCodice],
+/// [rifiutataMessaggio] e la [rifiutataVersione] dell'app che l'ha
+/// inviata, e trattiene le voci successive della stessa riga.
 @DataClassName('VoceRegistro')
 class RegistroModificheTable extends Table {
   @override
@@ -599,6 +604,9 @@ class RegistroModificheTable extends Table {
   TextColumn get tipo => textEnum<TipoVoceRegistro>()();
   TextColumn get valori => text().nullable()();
   TextColumn get hlc => text()();
+  TextColumn get rifiutataCodice => text().nullable()();
+  TextColumn get rifiutataMessaggio => text().nullable()();
+  TextColumn get rifiutataVersione => text().nullable()();
 }
 
 /// L'orologio ibrido (HLC) della Replica (ADR-0008): una sola riga con l'id
@@ -694,7 +702,7 @@ class AppDatabase extends _$AppDatabase {
   final bool replica;
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -702,6 +710,20 @@ class AppDatabase extends _$AppDatabase {
       if (replica) await RegistroModifiche(this).installa();
     },
     onUpgrade: stepByStep(
+      from19To20: (m, schema) async {
+        await m.addColumn(
+          schema.registroModifiche,
+          schema.registroModifiche.rifiutataCodice,
+        );
+        await m.addColumn(
+          schema.registroModifiche,
+          schema.registroModifiche.rifiutataMessaggio,
+        );
+        await m.addColumn(
+          schema.registroModifiche,
+          schema.registroModifiche.rifiutataVersione,
+        );
+      },
       from18To19: (m, schema) async {
         await m.createTable(schema.codaFile);
         // Una Replica già sincronizzata ha cover e Scansioni create prima

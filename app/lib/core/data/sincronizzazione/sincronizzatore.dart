@@ -16,6 +16,7 @@ class EsitoCiclo {
     required this.ricevute,
     required this.scartate,
     this.titoli = const {},
+    this.rifiutate = const [],
   });
 
   /// Le voci del registro accolte da `applica_modifiche`.
@@ -31,6 +32,10 @@ class EsitoCiclo {
 
   /// Il titolo delle [scartate] che lo hanno, letto prima di toglierle.
   final Map<RigaReplicata, String> titoli;
+
+  /// Le voci che `applica_modifiche` ha appena rifiutato e che prima non
+  /// erano Modifiche rifiutate: lo snackbar, una volta per rifiuto.
+  final List<ModificaRifiutata> rifiutate;
 }
 
 /// Un ciclo di Sincronizzazione della Replica locale (ADR-0008): push del
@@ -41,6 +46,11 @@ class EsitoCiclo {
 /// chiave di un file che Storage non ha; le cover arrivate col pull le
 /// scarica [scaricaCover].
 ///
+/// Un'operazione rifiutata dal server resta nel registro come Modifica
+/// rifiutata (#225) e trattiene le voci successive della sua riga; si
+/// ritenta quando cambia la versione dell'app, con [riprova], o si
+/// abbandona con [scarta].
+///
 /// Non sa nulla di inneschi, rete e tentativi: li gestisce
 /// `MotoreSincronizzazione`.
 class Sincronizzatore {
@@ -49,6 +59,7 @@ class Sincronizzatore {
     required CanaleSincronizzazione canale,
     required this.userId,
     required Future<Directory> Function() cartellaProfilo,
+    required Future<String> Function() versioneApp,
     this.lottoPush = 200,
     this.paginaPull = 1000,
     DateTime Function()? ora,
@@ -57,6 +68,7 @@ class Sincronizzatore {
        _registro = RegistroModifiche(db),
        _descrizione = DescrizioneModifiche(db),
        _file = FileReplica(db: db, canale: canale, cartella: cartellaProfilo),
+       _versioneApp = versioneApp,
        _ora = ora ?? DateTime.now;
 
   final AppDatabase _db;
@@ -68,6 +80,10 @@ class Sincronizzatore {
   final int lottoPush;
   final int paginaPull;
   final DateTime Function() _ora;
+
+  /// La versione dell'app (`1.4.0+12`): va a `applica_modifiche` e nel
+  /// registro dei rifiuti, e decide quali Modifiche rifiutate ritentare.
+  final Future<String> Function() _versioneApp;
 
   ConversioneRighe? _conversione;
 
@@ -84,11 +100,15 @@ class Sincronizzatore {
   }) async {
     final conversione = await _conversioneRighe();
     final scartate = <RigaReplicata, String?>{};
-    final inviate = await _push(conversione, scartate);
+    final rifiutate = <String>{};
+    final inviate = await _push(conversione, scartate, rifiutate);
     final ricevute = await _pull(conversione, scartate, avanzamento);
     return EsitoCiclo(
       inviate: inviate,
       ricevute: ricevute,
+      rifiutate: rifiutate.isEmpty
+          ? const []
+          : await _descrizione.rifiutate(rifiutate),
       scartate: scartate.keys.toList(),
       titoli: {
         for (final MapEntry(:key, :value) in scartate.entries) key: ?value,
@@ -109,6 +129,47 @@ class Sincronizzatore {
     interrompi: interrompi,
   );
 
+  /// Le Modifiche rifiutate, per la sezione "Non accettate dal server".
+  Future<List<ModificaRifiutata>> rifiutate() => _descrizione.rifiutate();
+
+  /// Come [rifiutate], aggiornate a ogni rifiuto, Riprova e Scarta.
+  Stream<List<ModificaRifiutata>> watchRifiutate() =>
+      _registro.watchRifiutate().asyncMap((_) => _descrizione.rifiutate());
+
+  /// Riprova: la Modifica rifiutata [voce] torna nel push successivo.
+  Future<void> riprova(String voce) => _registro.riprova(voce);
+
+  /// Scarta: abbandona tutte le Modifiche in sospeso di [riga], rifiutate e
+  /// no. Se Supabase ha la riga, la Replica torna come lì; altrimenti la
+  /// riga esce dalla Replica con i suoi figli e le loro voci, come
+  /// un'eliminazione arrivata dal server. Serve la rete.
+  Future<void> scarta(RigaReplicata riga) async {
+    final conversione = await _conversioneRighe();
+    final remota = await _canale.riga(riga.tabella, riga.id);
+    await _registro.senzaRegistro(() async {
+      if (remota == null) {
+        await _togliConFigli(riga);
+        return;
+      }
+      await _registro.rimuoviRiga(riga);
+      await _scrivi(
+        conversione,
+        riga.tabella,
+        conversione.perLaReplica(riga.tabella, remota),
+        const {},
+        {},
+      );
+      final hlc = ((remota['hlc_campi'] as Map?)?.values ?? const [])
+          .cast<String>()
+          .fold<String?>(
+            null,
+            (massimo, h) =>
+                massimo == null || h.compareTo(massimo) > 0 ? h : massimo,
+          );
+      if (hlc != null) await _registro.ricevi(hlc);
+    });
+  }
+
   Future<ConversioneRighe> _conversioneRighe() async =>
       _conversione ??= ConversioneRighe(
         _db,
@@ -118,27 +179,52 @@ class Sincronizzatore {
 
   // --- Push ----------------------------------------------------------------
 
-  /// [scartate] raccoglie le righe scartate col loro titolo.
+  /// [scartate] raccoglie le righe scartate col loro titolo, [rifiutate] le
+  /// voci appena diventate Modifiche rifiutate.
+  ///
+  /// Un lotto può contenere più voci della stessa riga: se il server ne
+  /// rifiuta una, le successive dello stesso lotto possono essere già
+  /// accolte. Trattenute sono solo quelle dei lotti seguenti (scelta di
+  /// #228, per non spezzare i lotti).
   Future<int> _push(
     ConversioneRighe conversione,
     Map<RigaReplicata, String?> scartate,
+    Set<String> rifiutate,
   ) async {
+    final versione = await _versioneApp();
     var inviate = 0;
     while (true) {
-      final lotto = (await _registro.voci()).take(lottoPush).toList();
+      final lotto = (await _registro.daInviare(
+        versione,
+      )).take(lottoPush).toList();
       // Dopo aver letto il lotto: i trigger mettono in coda il file insieme
       // alla voce, quindi ogni file del lotto è già in coda.
-      await _file.caricaInCoda(conversione);
+      await _file.caricaInCoda(conversione, versioneApp: versione);
       if (lotto.isEmpty) return inviate;
       final ops = [
         for (final voce in lotto) ?_operazione(conversione, voce),
       ];
-      final eliminate = ops.isEmpty
-          ? const <RigaReplicata>[]
-          : await _canale.applicaModifiche(ops);
+      final esito = ops.isEmpty
+          ? (
+              eliminate: const <RigaReplicata>[],
+              rifiutate: const <OperazioneRifiutata>[],
+            )
+          : await _canale.applicaModifiche(ops, versioneApp: versione);
+      final perId = {for (final v in lotto) v.id: v};
+      final rifiutateQui = [
+        for (final r in esito.rifiutate)
+          if (perId.containsKey(r.id)) r,
+      ];
+      final idRifiutate = {for (final r in rifiutateQui) r.id};
       await _registro.senzaRegistro(() async {
-        await _registro.rimuovi(lotto.map((v) => v.id));
-        for (final riga in eliminate) {
+        await _registro.rimuovi(
+          perId.keys.where((id) => !idRifiutate.contains(id)),
+        );
+        await _registro.rifiuta(rifiutateQui, versione);
+        for (final id in idRifiutate) {
+          if (perId[id]!.rifiutataCodice == null) rifiutate.add(id);
+        }
+        for (final riga in esito.eliminate) {
           final scrittaQui = lotto.any(
             (v) =>
                 v.tabella == riga.tabella &&
@@ -149,7 +235,7 @@ class Sincronizzatore {
           if (await _togli(riga) || scrittaQui) scartate[riga] = titolo;
         }
       });
-      inviate += lotto.length;
+      inviate += lotto.length - idRifiutate.length;
     }
   }
 
@@ -331,12 +417,50 @@ class Sincronizzatore {
       },
       updateKind: UpdateKind.delete,
     );
-    await (_db.delete(_db.registroModificheTable)..where(
-          (v) => v.tabella.equals(riga.tabella) & v.riga.equals(riga.id),
-        ))
-        .go();
+    await _registro.rimuoviRiga(riga);
     return tolte > 0;
   }
+
+  /// Toglie [riga] e, prima, i suoi figli nella Replica, come le chiavi
+  /// esterne di Supabase: a cascata, tranne il riferimento a una Serie, che
+  /// si stacca. Le chiavi esterne locali sono quelle di SQLite.
+  Future<void> _togliConFigli(RigaReplicata riga) async {
+    for (final (tabella, colonna) in await _riferimentiA(riga.tabella)) {
+      if (riga.tabella == 'serie') {
+        await _db.customUpdate(
+          'UPDATE "$tabella" SET "$colonna" = NULL WHERE "$colonna" = ?',
+          variables: [Variable(riga.id)],
+          updates: {
+            _db.allTables.firstWhere((t) => t.actualTableName == tabella),
+          },
+          updateKind: UpdateKind.update,
+        );
+        continue;
+      }
+      final figli = await _db
+          .customSelect(
+            'SELECT id FROM "$tabella" WHERE "$colonna" = ?',
+            variables: [Variable(riga.id)],
+          )
+          .map((r) => r.read<String>('id'))
+          .get();
+      for (final figlio in figli) {
+        await _togliConFigli((tabella: tabella, id: figlio));
+      }
+    }
+    await _togli(riga);
+  }
+
+  /// Le colonne delle tabelle replicate che fanno riferimento a [padre].
+  Future<List<(String, String)>> _riferimentiA(String padre) async => [
+    for (final tabella in RegistroModifiche.tabelleReplicate)
+      for (final fk
+          in await _db
+              .customSelect('PRAGMA foreign_key_list("$tabella")')
+              .get())
+        if (fk.read<String>('table') == padre)
+          (tabella, fk.read<String>('from')),
+  ];
 
   static Map<RigaReplicata, _InSospeso> _inSospeso(List<VoceRegistro> voci) {
     final perRiga = <RigaReplicata, _InSospeso>{};

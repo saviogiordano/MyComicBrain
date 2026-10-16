@@ -18,6 +18,29 @@ typedef Cambiamento = ({
   Map<String, Object?>? riga,
 });
 
+/// Un'operazione che `applica_modifiche` ha rifiutato per un errore nei dati
+/// (classi SQLSTATE `22`/`23`/`42`, #225): `id` è quello dell'operazione.
+typedef OperazioneRifiutata = ({String id, String codice, String messaggio});
+
+/// La risposta di `applica_modifiche`: le righe da togliere dalla Replica e
+/// le operazioni rifiutate. Le altre operazioni del lotto sono accolte.
+typedef EsitoApplicaModifiche = ({
+  List<RigaReplicata> eliminate,
+  List<OperazioneRifiutata> rifiutate,
+});
+
+/// Storage ha rifiutato un file per sempre (troppo grande, tipo non
+/// ammesso): riprovare non serve (#225).
+class FileRifiutato implements Exception {
+  const FileRifiutato(this.codice, this.messaggio);
+
+  final String codice;
+  final String messaggio;
+
+  @override
+  String toString() => 'FileRifiutato($codice: $messaggio)';
+}
+
 typedef PaginaCambiamenti = ({
   List<Cambiamento> cambiamenti,
   String cursore,
@@ -31,14 +54,30 @@ abstract interface class CanaleSincronizzazione {
   /// La Collezione di cui l'utente è `owner`.
   Future<String> collectionId();
 
-  /// Applica [ops] in una transazione e restituisce le righe da togliere.
-  Future<List<RigaReplicata>> applicaModifiche(List<Map<String, Object?>> ops);
+  /// Applica [ops] in una transazione. Un'operazione con un errore nei dati
+  /// è rifiutata da sola; ogni altro errore annulla il lotto e arriva come
+  /// eccezione, transitoria. [versioneApp] finisce nel registro dei rifiuti.
+  Future<EsitoApplicaModifiche> applicaModifiche(
+    List<Map<String, Object?>> ops, {
+    required String versioneApp,
+  });
+
+  /// La riga [id] di [tabella] com'è su Supabase, come la porta
+  /// `cambiamenti_da`; null se il server non ce l'ha.
+  Future<Map<String, Object?>?> riga(String tabella, String id);
+
+  /// Annota in `rifiuti_sincronizzazione` un file che Storage ha rifiutato.
+  Future<void> registraRifiutoFile({
+    required String file,
+    required FileRifiutato rifiuto,
+    required String versioneApp,
+  });
 
   Future<PaginaCambiamenti> cambiamentiDa(String? cursore, {int limite});
 
   /// Carica [file] in [bucket] con [chiave], sovrascrivendo: la chiave
   /// dipende solo dal nome del file, quindi ripetere l'upload non cambia
-  /// nulla.
+  /// nulla. Lancia [FileRifiutato] se Storage non accetterà mai il file.
   Future<void> caricaFile(BucketImmagine bucket, String chiave, File file);
 
   /// I byte dell'oggetto [chiave] di [bucket]; null se non esiste (o non è
@@ -78,18 +117,48 @@ class CanaleSupabase implements CanaleSincronizzazione {
   }
 
   @override
-  Future<List<RigaReplicata>> applicaModifiche(
-    List<Map<String, Object?>> ops,
-  ) async {
+  Future<EsitoApplicaModifiche> applicaModifiche(
+    List<Map<String, Object?>> ops, {
+    required String versioneApp,
+  }) async {
     final esito = await _client.rpc<Map<String, dynamic>>(
       'applica_modifiche',
-      params: {'ops': ops},
+      params: {'ops': ops, 'versione_app': versioneApp},
     );
-    return [
-      for (final e in (esito['eliminate'] as List).cast<Map<String, dynamic>>())
-        (tabella: e['tabella'] as String, id: e['id'] as String),
-    ];
+    return (
+      eliminate: [
+        for (final e
+            in (esito['eliminate'] as List).cast<Map<String, dynamic>>())
+          (tabella: e['tabella'] as String, id: e['id'] as String),
+      ],
+      rifiutate: [
+        for (final r
+            in ((esito['rifiutate'] as List?) ?? const [])
+                .cast<Map<String, dynamic>>())
+          (
+            id: r['id'] as String,
+            codice: r['codice'] as String,
+            messaggio: r['messaggio'] as String,
+          ),
+      ],
+    );
   }
+
+  @override
+  Future<Map<String, Object?>?> riga(String tabella, String id) =>
+      _client.from(tabella).select().eq('id', id).maybeSingle();
+
+  @override
+  Future<void> registraRifiutoFile({
+    required String file,
+    required FileRifiutato rifiuto,
+    required String versioneApp,
+  }) => _client.from('rifiuti_sincronizzazione').insert({
+    'file': file,
+    'codice': rifiuto.codice,
+    'messaggio': rifiuto.messaggio,
+    'versione_app': versioneApp,
+  });
 
   @override
   Future<PaginaCambiamenti> cambiamentiDa(
@@ -121,20 +190,37 @@ class CanaleSupabase implements CanaleSincronizzazione {
     String chiave,
     File file,
   ) async {
-    await _client.storage
-        .from(bucket.name)
-        .upload(
-          chiave,
-          file,
-          fileOptions: FileOptions(
-            contentType: switch (p.extension(chiave).toLowerCase()) {
-              '.png' => 'image/png',
-              '.webp' => 'image/webp',
-              _ => 'image/jpeg',
-            },
-            upsert: true,
-          ),
-        );
+    try {
+      await _client.storage
+          .from(bucket.name)
+          .upload(
+            chiave,
+            file,
+            fileOptions: FileOptions(
+              contentType: switch (p.extension(chiave).toLowerCase()) {
+                '.png' => 'image/png',
+                '.webp' => 'image/webp',
+                _ => 'image/jpeg',
+              },
+              upsert: true,
+            ),
+          );
+    } on StorageException catch (e) {
+      if (_rifiutoDefinitivo(e)) {
+        throw FileRifiutato(e.statusCode ?? '4xx', e.message);
+      }
+      rethrow;
+    }
+  }
+
+  /// Un 4xx che riprovare non cambierà: non la sessione scaduta (Storage la
+  /// riporta anche come 400 con "jwt"), né un timeout o un limite di
+  /// richieste.
+  static bool _rifiutoDefinitivo(StorageException e) {
+    final codice = int.tryParse(e.statusCode ?? '');
+    if (codice == null || codice < 400 || codice >= 500) return false;
+    if (const {401, 408, 429}.contains(codice)) return false;
+    return !RegExp('jwt|token', caseSensitive: false).hasMatch(e.message);
   }
 
   @override

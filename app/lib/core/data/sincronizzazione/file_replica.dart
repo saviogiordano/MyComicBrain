@@ -38,19 +38,30 @@ class FileReplica {
   /// Carica su Storage i file in coda, ciascuno con la chiave che il push
   /// manda al server, e li toglie dalla coda. Un file che non c'è più sul
   /// device esce dalla coda senza upload: sugli altri device resterà il
-  /// segnaposto. Un errore (rete) lascia in coda i file non ancora caricati.
-  Future<void> caricaInCoda(ConversioneRighe conversione) async {
+  /// segnaposto. Così anche un file che Storage rifiuta per sempre (troppo
+  /// grande, tipo non ammesso): il rifiuto si annota sul server con
+  /// [versioneApp] (#225). Un altro errore (rete) lascia in coda i file non
+  /// ancora caricati.
+  Future<void> caricaInCoda(
+    ConversioneRighe conversione, {
+    required String versioneApp,
+  }) async {
     for (final inCoda in await _db.select(_db.codaFileTable).get()) {
       final bucket = BucketImmagine.values.byName(inCoda.bucket);
       final file = File(
         await percorso_locale.risolvi(inCoda.percorso, _cartella),
       );
       if (file.existsSync()) {
-        await _canale.caricaFile(
-          bucket,
-          conversione.chiaveStorage(bucket, inCoda.percorso),
-          file,
-        );
+        final chiave = conversione.chiaveStorage(bucket, inCoda.percorso);
+        try {
+          await _canale.caricaFile(bucket, chiave, file);
+        } on FileRifiutato catch (rifiuto) {
+          await _canale.registraRifiutoFile(
+            file: '${bucket.name}/$chiave',
+            rifiuto: rifiuto,
+            versioneApp: versioneApp,
+          );
+        }
       }
       await (_db.delete(_db.codaFileTable)..where(
             (f) =>
