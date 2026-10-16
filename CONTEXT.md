@@ -137,6 +137,10 @@ _Avoid_: Backup (il backup di §18 è una conseguenza, non il meccanismo), sync 
 **Modifica in sospeso**:
 Una modifica o un'eliminazione fatta sulla Replica locale e non ancora accolta da Supabase. Sono queste a far scattare l'avviso al logout: cancellando la Replica andrebbero perse. Deciso su [#200](https://github.com/saviogiordano/MyComicBrain/issues/200).
 
+**Modifica rifiutata**:
+Una Modifica in sospeso che Supabase non ha accettato per un errore nei dati, non per la rete. Resta sul device e conta ancora come in sospeso (al logout andrebbe persa). Le modifiche successive alla stessa riga aspettano. Si ritenta da sola quando l'app viene aggiornata, oppure a mano. L'utente può anche scartarla: la riga torna com'è su Supabase. Deciso su [#225](https://github.com/saviogiordano/MyComicBrain/issues/225).
+_Avoid_: Modifica scartata (è quella persa perché la riga è stata eliminata altrove), errore di sincronizzazione (quello è transitorio e si ritenta da solo), quarantena
+
 **Ruolo**:
 La posizione di un Profilo rispetto a una Collezione (§17.2): **Proprietario** (gestione completa, incluso invitare/rimuovere collaboratori ed eliminare la Collezione — sempre esattamente uno per Collezione, mai co-proprietà), **Editor** (aggiunge/modifica/elimina Opere, Edizioni e Copie, non gestisce i collaboratori) o **Visualizzatore** (accesso in sola lettura). Deciso su [#154](https://github.com/saviogiordano/MyComicBrain/issues/154).
 _Avoid_: Permesso (usare Ruolo per la posizione in una Collezione; "permesso" resta ok in prosa per descrivere cosa un Ruolo consente)
