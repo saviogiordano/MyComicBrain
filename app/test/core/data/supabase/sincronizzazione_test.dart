@@ -80,6 +80,7 @@ void main() {
         canale: CanaleSupabase(c, userId: a.userId),
         userId: a.userId,
         cartellaProfilo: () async => cartella,
+        versioneApp: () async => '1.0.0+1',
         // Pagine piccole: il primo download passa da più pagine.
         paginaPull: 3,
         lottoPush: 4,
@@ -423,6 +424,78 @@ void main() {
       await uno.sync.sincronizza();
       expect(await titolo(uno, operaId), 'Akira 2');
       expect(await titolo(due, operaId), 'Akira 2');
+    });
+  });
+
+  group('Modifiche rifiutate', skip: !configurato, () {
+    test('il server rifiuta una sola operazione: le altre arrivano, la '
+        'rifiutata resta e si scarta', () async {
+      final a = await account();
+      final uno = await device(a);
+      final due = await device(a);
+      final operaId = await uno.repo.aggiungiOpera(title: 'Akira');
+      final copiaId = await uno.repo.aggiungiCopia(
+        edizioneId: await uno.repo.aggiungiEdizione(
+          operaId: operaId,
+          issueNumberLabel: '1',
+        ),
+        status: StatoCopia.posseduta,
+      );
+      await uno.sync.sincronizza();
+
+      // Uno stato che il server non conosce (come da una versione futura
+      // dell'app): viola il check di `copie.status`.
+      await uno.db.customStatement(
+        "UPDATE copie SET status = 'smarrita', notes = 'cercare' WHERE id = ?",
+        [copiaId],
+      );
+      await uno.repo.aggiornaTitoloOpera(operaId: operaId, title: 'Akira!');
+      final esito = await uno.sync.sincronizza();
+
+      expect(esito.rifiutate, hasLength(1));
+      expect(esito.rifiutate.single.riga, (tabella: 'copie', id: copiaId));
+      expect(esito.rifiutate.single.codice, '23514');
+      final voce = (await RegistroModifiche(uno.db).voci()).single;
+      expect(voce.rifiutataVersione, '1.0.0+1');
+      final rifiuti = await uno.client
+          .from('rifiuti_sincronizzazione')
+          .select()
+          .eq('riga', copiaId);
+      expect(rifiuti.single['codice'], '23514');
+      expect(rifiuti.single['versione_app'], '1.0.0+1');
+
+      await due.sync.sincronizza();
+      expect(await titolo(due, operaId), 'Akira!');
+      expect((await copia(due, copiaId))!.notes, isNull);
+
+      await uno.sync.scarta((tabella: 'copie', id: copiaId));
+      expect(await RegistroModifiche(uno.db).voci(), isEmpty);
+      final riallineata = (await copia(uno, copiaId))!;
+      expect(riallineata.status, StatoCopia.posseduta);
+      expect(riallineata.notes, isNull);
+    });
+
+    test('un file oltre il limite di Storage esce dalla coda e il rifiuto '
+        'si registra', () async {
+      final a = await account();
+      final uno = await device(a);
+      File('${uno.cartella.path}/copertine/0199f0c0-grande.jpg')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(List.filled(11 * 1024 * 1024, 0));
+      await uno.repo.aggiungiEdizione(
+        operaId: await uno.repo.aggiungiOpera(title: 'Akira'),
+        coverImage: 'copertine/0199f0c0-grande.jpg',
+      );
+
+      await uno.sync.sincronizza();
+
+      expect(await uno.db.select(uno.db.codaFileTable).get(), isEmpty);
+      expect(await RegistroModifiche(uno.db).voci(), isEmpty);
+      final rifiuti = await uno.client
+          .from('rifiuti_sincronizzazione')
+          .select()
+          .not('file', 'is', null);
+      expect(rifiuti.single['file'], endsWith('/0199f0c0-grande.jpg'));
     });
   });
 }

@@ -41,6 +41,7 @@ void main() {
     canale: canale,
     userId: 'u1',
     cartellaProfilo: () async => cartella,
+    versioneApp: () async => '1.0.0+1',
   );
 
   File file(String percorso, [List<int> bytes = const [1, 2, 3]]) =>
@@ -333,12 +334,26 @@ class _Canale implements CanaleSincronizzazione {
   Future<String> collectionId() async => 'c1';
 
   @override
-  Future<List<RigaReplicata>> applicaModifiche(
-    List<Map<String, Object?>> ops,
-  ) async {
+  Future<EsitoApplicaModifiche> applicaModifiche(
+    List<Map<String, Object?>> ops, {
+    required String versioneApp,
+  }) async {
     eventi.add('applica');
-    return const [];
+    return (
+      eliminate: const <RigaReplicata>[],
+      rifiutate: const <OperazioneRifiutata>[],
+    );
   }
+
+  @override
+  Future<Map<String, Object?>?> riga(String tabella, String id) async => null;
+
+  @override
+  Future<void> registraRifiutoFile({
+    required String file,
+    required FileRifiutato rifiuto,
+    required String versioneApp,
+  }) async {}
 
   @override
   Future<PaginaCambiamenti> cambiamentiDa(

@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/descrizione_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/sincronizzatore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -176,6 +177,7 @@ class MotoreSincronizzazione {
 
   final _stati = StreamController<StatoSincronizzazione>.broadcast();
   final _scartate = StreamController<List<ModificaScartata>>.broadcast();
+  final _rifiuti = StreamController<List<ModificaRifiutata>>.broadcast();
   var _stato = const StatoSincronizzazione(
     fase: FaseSincronizzazione.ferma,
     replicaScaricata: false,
@@ -209,6 +211,34 @@ class MotoreSincronizzazione {
   /// Le righe con Modifiche in sospeso tolte dalla Replica perché eliminate
   /// altrove: l'avviso "modifica non salvata".
   Stream<List<ModificaScartata>> get scartate => _scartate.stream;
+
+  /// Le Modifiche appena rifiutate dal server, una volta per rifiuto: lo
+  /// snackbar (#225).
+  Stream<List<ModificaRifiutata>> get rifiuti => _rifiuti.stream;
+
+  /// Le Modifiche rifiutate, aggiornate a ogni rifiuto, Riprova e Scarta:
+  /// la sezione "Non accettate dal server".
+  Stream<List<ModificaRifiutata>> watchRifiutate() =>
+      _sincronizzatore.watchRifiutate();
+
+  /// Riprova: la Modifica rifiutata [voce] torna nel push, con un ciclo
+  /// subito se c'è rete.
+  Future<void> riprova(String voce) async {
+    await _sincronizzatore.riprova(voce);
+    if (!_chiuso && _online) unawaited(_esegui());
+  }
+
+  /// Scarta: abbandona le Modifiche in sospeso di [riga] e la riallinea a
+  /// Supabase (vedi [Sincronizzatore.scarta]). Aspetta il ciclo in corso,
+  /// così non si accavalla al push della stessa riga. Serve la rete.
+  Future<void> scarta(RigaReplicata riga) async {
+    try {
+      await _cicloInCorso;
+    } on Object {
+      // Già riportato nello stato.
+    }
+    await _sincronizzatore.scarta(riga);
+  }
 
   /// Apertura dell'app: legge dove è arrivata la Replica, si mette in
   /// ascolto degli inneschi e fa partire il primo ciclo (il primo download,
@@ -330,6 +360,9 @@ class MotoreSincronizzazione {
             (riga: riga, titolo: esito.titoli[riga]),
         ]);
       }
+      if (esito.rifiutate.isNotEmpty && !_chiuso) {
+        _rifiuti.add(esito.rifiutate);
+      }
       _emetti(
         _stato._con(
           fase: FaseSincronizzazione.sincronizzata,
@@ -443,5 +476,6 @@ class MotoreSincronizzazione {
     await _coverInCorso;
     await _stati.close();
     await _scartate.close();
+    await _rifiuti.close();
   }
 }

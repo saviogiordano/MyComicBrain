@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/registro_modifiche.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/descrizione_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/motore_sincronizzazione.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/sincronizzatore.dart';
 
@@ -280,6 +282,70 @@ void main() {
       ]);
     });
   });
+  group('Modifiche rifiutate', () {
+    const rifiutata = ModificaRifiutata(
+      voce: 'v1',
+      riga: (tabella: 'copie', id: 'x'),
+      tipo: TipoVoceRegistro.modifica,
+      titolo: 'Dylan Dog 41',
+      descrizione: 'Copia modificata: Dylan Dog 41',
+      codice: '23514',
+      messaggio: 'violates check constraint',
+    );
+
+    test('i nuovi rifiuti di un ciclo arrivano alla UI', () {
+      fakeAsync((async) {
+        crea(async);
+        final rifiuti = <List<ModificaRifiutata>>[];
+        motore.rifiuti.listen(rifiuti.add);
+        sync.termina(rifiutate: [rifiutata]);
+        async.flushMicrotasks();
+        expect(rifiuti, [
+          [rifiutata],
+        ]);
+        // Un ciclo senza nuovi rifiuti non dice nulla.
+        unawaited(motore.sincronizzaOra());
+        async.flushMicrotasks();
+        sync.termina();
+        async.flushMicrotasks();
+        expect(rifiuti, hasLength(1));
+      });
+    });
+
+    test('Riprova rimette la voce e fa partire un ciclo', () {
+      fakeAsync((async) {
+        crea(async);
+        sync.termina();
+        async.flushMicrotasks();
+        final cicli = sync.cicli;
+
+        unawaited(motore.riprova('v1'));
+        async.flushMicrotasks();
+
+        expect(sync.riprovate, ['v1']);
+        expect(sync.cicli, cicli + 1);
+      });
+    });
+
+    test('Scarta aspetta il ciclo in corso', () {
+      fakeAsync((async) {
+        crea(async);
+        var scartata = false;
+        unawaited(
+          motore
+              .scarta((tabella: 'copie', id: 'x'))
+              .then((_) => scartata = true),
+        );
+        async.flushMicrotasks();
+        expect(sync.scartate, isEmpty);
+
+        sync.termina();
+        async.flushMicrotasks();
+        expect(sync.scartate, [(tabella: 'copie', id: 'x')]);
+        expect(scartata, isTrue);
+      });
+    });
+  });
 }
 
 class _Sincronizzatore implements Sincronizzatore {
@@ -309,12 +375,29 @@ class _Sincronizzatore implements Sincronizzatore {
   void termina({
     List<({String tabella, String id})> scartate = const [],
     Map<({String tabella, String id}), String> titoli = const {},
+    List<ModificaRifiutata> rifiutate = const [],
   }) {
     _scaricata = true;
     _ciclo.complete(
-      EsitoCiclo(inviate: 0, ricevute: 0, scartate: scartate, titoli: titoli),
+      EsitoCiclo(
+        inviate: 0,
+        ricevute: 0,
+        scartate: scartate,
+        titoli: titoli,
+        rifiutate: rifiutate,
+      ),
     );
   }
+
+  final riprovate = <String>[];
+  final scartate = <({String tabella, String id})>[];
+
+  @override
+  Future<void> riprova(String voce) async => riprovate.add(voce);
+
+  @override
+  Future<void> scarta(({String tabella, String id}) riga) async =>
+      scartate.add(riga);
 
   void fallisci(Object errore) => _ciclo.completeError(errore);
 

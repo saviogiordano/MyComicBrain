@@ -44,6 +44,7 @@ import 'package:mycomicbrain/core/domain/edizione_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:mycomicbrain/core/domain/serie_dettaglio.dart';
 import 'package:mycomicbrain/core/domain/serie_lista.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -162,6 +163,10 @@ final motoreSincronizzazioneProvider = Provider<MotoreSincronizzazione?>((
       userId: userId,
       cartellaProfilo: () =>
           ref.read(replicheProfiloProvider).cartellaDati(userId),
+      versioneApp: () async {
+        final info = await PackageInfo.fromPlatform();
+        return '${info.version}+${info.buildNumber}';
+      },
     ),
     rete: ReteConnectivity(),
     // Le scritture locali: anche il pull scrive, ma senza registro, quindi
