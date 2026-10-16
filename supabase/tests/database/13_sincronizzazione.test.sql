@@ -56,7 +56,7 @@ select is(
     tests.scrivi(1, 'opere', tests.id(1), '{"title": "Watchmen"}', 100),
     tests.scrivi(2, 'edizioni', tests.id(1), jsonb_build_object('opera_id', tests.id(1), 'issue_number_label', '1'), 100),
     tests.scrivi(3, 'copie', tests.id(1), jsonb_build_object('edizione_id', tests.id(1), 'status', 'posseduta', 'notes', 'a'), 100)),
-  '{"eliminate": []}'::jsonb,
+  '{"eliminate": [], "rifiutate": []}'::jsonb,
   'una Opera, un''Edizione e una Copia nuove si creano senza scarti');
 select is((select collection_id from public.copie where id = tests.id(1)), :'col'::uuid,
   'senza collection_id esplicito la riga va nella Collezione dell''utente');
@@ -96,7 +96,8 @@ select tests.applica(tests.scrivi(9, 'copie', tests.id(1), '{"seller": null}', 4
 select is((select hlc_campi ? 'seller' from public.copie where id = tests.id(1)), true,
   'anche un campo messo a null tiene il suo timestamp');
 
--- Operazioni non valide: la transazione si annulla per intero.
+-- Operazioni non valide, da un client che non passa versione_app (prima dei
+-- rifiuti per operazione, #227): la transazione si annulla per intero.
 select throws_ok(
   $$ select tests.applica(
        tests.scrivi(10, 'copie', tests.id(1), '{"notes": "valida"}', 500),
