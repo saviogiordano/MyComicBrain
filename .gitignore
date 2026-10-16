@@ -36,9 +36,9 @@ app/ios/Flutter/Generated.xcconfig
 app/ios/Flutter/flutter_export_environment.sh
 app/ios/Pods/
 app/ios/.symlinks/
-app/ios/Runner.xcworkspace/xcuserdata/
-app/ios/Runner.xcodeproj/xcuserdata/
-app/ios/Runner.xcodeproj/project.xcworkspace/xcuserdata/
+app/ios/MyComicBrain.xcworkspace/xcuserdata/
+app/ios/MyComicBrain.xcodeproj/xcuserdata/
+app/ios/MyComicBrain.xcodeproj/project.xcworkspace/xcuserdata/
 app/**/*.mode1v3
 app/**/*.mode2v3
 app/**/*.pbxuser
