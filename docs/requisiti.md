@@ -1091,7 +1091,7 @@ Dopo aver validato il flusso principale:
 - notifiche;
 - wishlist;
 - ricerca di fumetti mancanti;
-- integrazione con marketplace — resta idea distinta, non specificata da §35;
+- integrazione con marketplace (acquisto/vendita tramite provider) — resta idea distinta, non specificata da §35; lo scambio fra utenti senza aspetti economici è specificato in §36;
 - valutazione economica — specificata in §35, non più una semplice idea di v2;
 - stima della condizione tramite AI.
 
@@ -1216,7 +1216,8 @@ Altri KPI:
 | Scansione batch | P2 |
 | Stima valore (§35) | P2 |
 | Valutazione condition tramite AI | P3 |
-| Marketplace | P3 |
+| Scambio fumetti (§36) | P3 |
+| Marketplace (acquisto/vendita) | P3 |
 
 ---
 
@@ -1301,7 +1302,178 @@ L'aggregato equivalente in Statistiche (§14) resta fuori scope finché quella s
 
 ## Fuori scope
 
-- Integrazione con marketplace (acquisto/vendita) — resta idea distinta (§29), non specificata qui.
+- Integrazione con marketplace (acquisto/vendita) — resta idea distinta (§29), non specificata qui. Lo scambio fra utenti senza aspetti economici è in §36.
 - Storico/andamento del valore nel tempo (grafico trend) — richiede persistenza di snapshot periodici, sforzo separato non richiesto dalla richiesta originale.
 
 Questa semplicità deve essere il principale criterio di progettazione del prodotto.
+
+---
+
+# 36. Scambio fumetti
+
+Lo Scambio fumetti permette a un utente di cercare e consultare le Copie "In vendita" (vedi `CONTEXT.md`) di altri utenti e di inviare loro una **proposta di scambio**, con un canale di messaggi dedicato per accordarsi sui dettagli. L'app mette in contatto gli utenti e traccia l'esito della proposta, ma **non gestisce alcun aspetto economico**: nessun pagamento, nessun provider di pagamento, nessuna commissione, nessuna gestione di spedizioni o garanzie. Lo scambio fisico avviene fuori dall'app, sotto la responsabilità degli utenti coinvolti.
+
+Si tratta di una funzione distinta dall'integrazione con un marketplace (acquisto/vendita tramite provider, §29), che resta un'idea separata e non specificata.
+
+Richiede un account autenticato e una connessione attiva: non è disponibile in Modalità locale (§17.4) né offline (§19).
+
+## 36.1 Pubblicazione delle copie "In vendita"
+
+Oggi il flag "In vendita" di una Copia è un'intenzione privata del proprietario. Renderla visibile ad altri utenti deve essere una scelta **esplicita e separata**:
+
+- un'impostazione di Profilo "Partecipa agli scambi", disattivata di default; finché è disattivata nessuna Copia del Profilo è visibile ad altri, anche se marcata "In vendita";
+- con l'impostazione attiva, sono visibili agli altri utenti solo le Copie con `inVendita = true` e `status` posseduta — una Copia prestata, venduta o persa non compare;
+- togliere il flag "In vendita", cambiare lo `status` della Copia o disattivare "Partecipa agli scambi" la rimuove immediatamente dai risultati degli altri utenti;
+- per ogni Copia pubblicata il proprietario può aggiungere una **nota per lo scambio** (es. "preferisco scambi con Bonelli", "solo consegna a mano"), distinta dalle note personali (§8.2).
+
+Dati visibili agli altri utenti per ciascuna Copia pubblicata:
+
+- dati bibliografici dell'Edizione (§8.1) e cover;
+- Condizione (§8.6), se impostata;
+- nota per lo scambio;
+- nickname pubblico del proprietario (§36.5) e, se indicata, la sua zona (città/provincia).
+
+Non sono mai visibili: prezzo e data di acquisto, venditore, posizione fisica, note personali, Valore stimato (§35), le altre Copie e il resto della Collezione, le fotografie delle Scansioni.
+
+## 36.2 Ricerca delle copie di altri utenti
+
+Una schermata dedicata nell'area Scambi permette di cercare fra le Copie pubblicate da altri utenti, con filtri strutturati:
+
+- titolo, serie, numero;
+- editore, autore, personaggio;
+- Condizione minima;
+- zona del proprietario.
+
+Requisiti:
+
+- i risultati escludono sempre le Copie dell'utente stesso (e quelle delle Collezioni condivise di cui è membro, §17.2);
+- i risultati sono raggruppati per Edizione, con il numero di Copie disponibili e l'elenco dei proprietari;
+- l'app evidenzia i risultati che corrispondono a **numeri mancanti** delle serie dell'utente (§11) — es. un badge "Ti manca" — e, quando esisterà, alla wishlist (§29);
+- dalla scheda di un'Edizione della propria collezione o dall'elenco dei numeri mancanti di una serie (§11) è possibile aprire direttamente la ricerca Scambi prefiltrata su quell'Edizione;
+- dal risultato si apre la scheda della Copia pubblicata (in sola lettura) e il profilo pubblico del proprietario, con l'elenco delle sue altre Copie pubblicate.
+
+Questa ricerca è distinta dall'Assistente (§10), che opera solo sulla collezione dell'utente.
+
+## 36.3 Proposta di scambio
+
+Un utente può inviare a un altro utente una proposta composta da:
+
+- **copie richieste**: una o più Copie pubblicate del destinatario;
+- **copie offerte**: zero o più Copie dell'utente stesso, scelte fra le proprie Copie possedute (marcarle "In vendita" non è obbligatorio, ma la proposta le rende visibili al destinatario limitatamente ai dati di §36.1);
+- un **messaggio** iniziale facoltativo.
+
+Una proposta senza copie offerte è ammessa (es. "cosa ti interessa in cambio?"): la trattativa prosegue nei messaggi (§36.4).
+
+Stati della proposta:
+
+| Stato | Significato | Chi lo imposta |
+|---|---|---|
+| Inviata | in attesa di risposta | mittente, all'invio |
+| Accettata | entrambi d'accordo, scambio da effettuare | destinatario |
+| Rifiutata | chiusa senza accordo | destinatario |
+| Ritirata | annullata prima della risposta | mittente |
+| Annullata | accordo saltato dopo l'accettazione | uno dei due |
+| Conclusa | scambio fisico avvenuto | conferma di entrambi |
+| Non più disponibile | una copia coinvolta non è più pubblicata/posseduta | sistema |
+
+Requisiti:
+
+- il destinatario può rispondere con una **controproposta** (copie diverse, richieste o offerte): la proposta originale passa a Rifiutata e ne nasce una nuova a parti invertite, collegata alla precedente nello storico;
+- accettare una proposta **non blocca** le Copie coinvolte: altre proposte sulle stesse Copie restano aperte, ma entrambe le parti vedono un avviso;
+- quando una proposta diventa Conclusa, le altre proposte aperte che coinvolgono le stesse Copie passano a Non più disponibile;
+- a proposta Conclusa l'app propone (con conferma esplicita, default "sì") di aggiornare la collezione:
+  - le Copie cedute passano a `status` venduta (§8.3) e perdono il flag "In vendita";
+  - per ogni Copia ricevuta viene creata una nuova Copia della stessa Edizione nella propria Collezione (§8.5), con la Condizione dichiarata dal cedente come valore iniziale, modificabile;
+- l'utente ha uno storico delle proprie proposte (inviate e ricevute), filtrabile per stato.
+
+## 36.4 Messaggi
+
+Ogni proposta ha un proprio **thread di messaggi** fra le due parti, usato per accordarsi su modalità di consegna, verifica della condizione, eventuali conguagli concordati fuori dall'app.
+
+Requisiti:
+
+- non esiste una chat libera fra utenti: il thread nasce solo con una proposta e resta legato ad essa (riduce lo spam e mantiene il contesto della trattativa);
+- messaggi di testo; possibilità di allegare fotografie della Copia, utili a verificarne la condizione;
+- il thread resta consultabile dopo la chiusura della proposta, ma non accetta nuovi messaggi quando la proposta è Rifiutata, Ritirata o Non più disponibile;
+- notifiche (push e badge in-app) per nuova proposta, cambio di stato e nuovo messaggio, disattivabili in Impostazioni (§12);
+- l'app non mostra mai l'email dell'utente: i recapiti personali (indirizzo, telefono) vengono condivisi solo se gli utenti scelgono di scriverli nei messaggi.
+
+## 36.5 Profilo pubblico
+
+Per partecipare agli scambi l'utente imposta un profilo pubblico, distinto dai dati dell'account:
+
+- **nickname** univoco (obbligatorio);
+- avatar (facoltativo);
+- zona — città/provincia (facoltativa), mai l'indirizzo.
+
+Il profilo pubblico mostra solo nickname, avatar, zona, data di iscrizione e Copie pubblicate.
+
+## 36.6 Sicurezza e moderazione
+
+- un utente può **bloccare** un altro utente: non vede più le sue Copie, non riceve proposte né messaggi da lui;
+- un utente può **segnalare** un altro utente, una proposta o un messaggio;
+- rate limiting sull'invio di proposte e messaggi (§27);
+- l'accesso ai dati è enforced da RLS (§21, ADR-0003): le Copie di altri utenti sono leggibili solo se pubblicate secondo §36.1, e solo con i campi elencati lì; proposte e messaggi sono leggibili solo dalle due parti;
+- l'app mostra un avviso esplicito che non è parte dello scambio e non ne garantisce l'esito.
+
+## 36.7 Privacy
+
+Coerentemente con §20:
+
+- l'esportazione dei dati include proposte e messaggi dell'utente;
+- l'eliminazione dell'account rimuove profilo pubblico, Copie pubblicate e proposte aperte (che passano a Non più disponibile per l'altra parte); nei thread già esistenti i messaggi dell'utente eliminato vengono sostituiti da un segnaposto "Utente eliminato";
+- disattivare "Partecipa agli scambi" nasconde subito profilo pubblico e Copie, senza cancellare lo storico delle proposte.
+
+## 36.8 Modello dati indicativo
+
+Da formalizzare in un ADR dedicato, coerente con lo schema Postgres + RLS di ADR-0004.
+
+```text
+PublicProfile
+  user_id
+  nickname
+  avatar_url
+  area
+  trading_enabled
+
+PhysicalCopy (campi aggiuntivi)
+  trade_note
+
+TradeProposal
+  id
+  from_user_id
+  to_user_id
+  status
+  previous_proposal_id   -- controproposta
+  created_at / updated_at
+
+TradeProposalItem
+  proposal_id
+  physical_copy_id
+  side                   -- richiesta | offerta
+
+TradeMessage
+  id
+  proposal_id
+  author_user_id
+  text
+  attachment_url
+  created_at
+
+UserBlock / UserReport
+```
+
+## Questioni aperte
+
+- **Collezioni condivise** (§17.2): chi può pubblicare una Copia di una Collezione condivisa e a nome di chi riceve le proposte — solo il Proprietario, o anche gli Editor?
+- **Prezzo indicativo**: se ammettere un campo "prezzo richiesto" sulla Copia pubblicata, pur senza gestire il pagamento, o lasciare ogni accordo economico ai messaggi.
+- **Ricerca tramite Assistente**: se in futuro l'Assistente (§10) debba poter cercare anche fra le Copie pubblicate da altri ("chi ha Dylan Dog #4 in scambio?"), in deroga al principio di §10 che lo limita alla propria collezione.
+- **Moderazione delle segnalazioni**: chi le gestisce e con quali strumenti, dato che non esiste un backend custom (§21).
+
+## Fuori scope
+
+- pagamenti, provider di pagamento, commissioni, escrow;
+- spedizioni, etichette, tracciamento;
+- feedback/reputazione fra utenti dopo uno scambio concluso — possibile evoluzione successiva;
+- aste e offerte a tempo;
+- ricerca per distanza geografica precisa (geolocalizzazione).
