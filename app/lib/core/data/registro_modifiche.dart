@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:mycomicbrain/core/data/database.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/conversione_righe.dart';
 import 'package:mycomicbrain/core/data/uuid_v7.dart';
 
@@ -110,6 +111,74 @@ class RegistroModifiche {
   Future<void> rimuovi(Iterable<String> ids) => (_db.delete(
     _db.registroModificheTable,
   )..where((v) => v.id.isIn(ids))).go();
+
+  /// Toglie dal registro tutte le voci di [riga], rifiutate e no.
+  Future<void> rimuoviRiga(RigaReplicata riga) =>
+      (_db.delete(_db.registroModificheTable)..where(
+            (v) => v.tabella.equals(riga.tabella) & v.riga.equals(riga.id),
+          ))
+          .go();
+
+  /// Le voci da caricare, nell'ordine: tutte tranne le Modifiche rifiutate
+  /// con [versioneApp] e le voci successive della loro riga, trattenute
+  /// finché la riga ha una Modifica rifiutata (#225). Una voce rifiutata
+  /// da un'altra versione dell'app si ritenta.
+  Future<List<VoceRegistro>> daInviare(String versioneApp) async {
+    final trattenute = <RigaReplicata>{};
+    final daInviare = <VoceRegistro>[];
+    for (final voce in await voci()) {
+      final riga = (tabella: voce.tabella, id: voce.riga);
+      if (trattenute.contains(riga)) continue;
+      if (voce.rifiutataCodice != null &&
+          voce.rifiutataVersione == versioneApp) {
+        trattenute.add(riga);
+      } else {
+        daInviare.add(voce);
+      }
+    }
+    return daInviare;
+  }
+
+  /// Segna come Modifiche rifiutate le voci di [rifiutate], con la
+  /// [versioneApp] che le ha inviate. Un nuovo rifiuto aggiorna codice,
+  /// messaggio e versione.
+  Future<void> rifiuta(
+    Iterable<OperazioneRifiutata> rifiutate,
+    String versioneApp,
+  ) => _db.batch((b) {
+    for (final r in rifiutate) {
+      b.update(
+        _db.registroModificheTable,
+        RegistroModificheTableCompanion(
+          rifiutataCodice: Value(r.codice),
+          rifiutataMessaggio: Value(r.messaggio),
+          rifiutataVersione: Value(versioneApp),
+        ),
+        where: (v) => v.id.equals(r.id),
+      );
+    }
+  });
+
+  /// Riprova: la voce [id] non è più rifiutata e torna nel push successivo,
+  /// insieme alle voci della sua riga che tratteneva.
+  Future<void> riprova(String id) =>
+      (_db.update(
+        _db.registroModificheTable,
+      )..where((v) => v.id.equals(id))).write(
+        const RegistroModificheTableCompanion(
+          rifiutataCodice: Value(null),
+          rifiutataMessaggio: Value(null),
+          rifiutataVersione: Value(null),
+        ),
+      );
+
+  /// Le Modifiche rifiutate, nell'ordine del registro, aggiornate a ogni
+  /// cambiamento.
+  Stream<List<VoceRegistro>> watchRifiutate() =>
+      (_db.select(_db.registroModificheTable)
+            ..where((v) => v.rifiutataCodice.isNotNull())
+            ..orderBy([(v) => OrderingTerm.asc(v.sequenza)]))
+          .watch();
 
   /// Esegue [azione] in una transazione le cui scritture non finiscono nel
   /// registro: è il modo di applicare alla Replica ciò che arriva da

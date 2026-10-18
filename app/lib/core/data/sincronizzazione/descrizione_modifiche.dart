@@ -3,6 +3,49 @@ import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/registro_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/canale_sincronizzazione.dart';
 
+/// Una Modifica rifiutata (#225) come la vede l'utente: la sezione "Non
+/// accettate dal server", con Riprova, Scarta e Copia dettagli, e lo
+/// snackbar per un nuovo rifiuto.
+class ModificaRifiutata {
+  const ModificaRifiutata({
+    required this.voce,
+    required this.riga,
+    required this.tipo,
+    required this.descrizione,
+    required this.codice,
+    required this.messaggio,
+    this.titolo,
+    this.versioneApp,
+  });
+
+  /// L'id della voce del registro, per Riprova.
+  final String voce;
+
+  /// La riga, per Scarta.
+  final RigaReplicata riga;
+  final TipoVoceRegistro tipo;
+
+  /// Il nome della riga ("Dylan Dog 41"), se ce l'ha.
+  final String? titolo;
+
+  /// "Copia modificata: Dylan Dog 41".
+  final String descrizione;
+  final String codice;
+  final String messaggio;
+  final String? versioneApp;
+
+  /// Il testo di "Copia dettagli".
+  String get dettagli => [
+    descrizione,
+    'Codice: $codice',
+    'Messaggio: $messaggio',
+    'Tabella: ${riga.tabella}',
+    'Id: ${riga.id}',
+    'Operazione: $voce',
+    "Versione dell'app: ${versioneApp ?? '-'}",
+  ].join('\n');
+}
+
 /// Le Modifiche in sospeso raccontate all'utente (prototipo #201): l'elenco
 /// dello sheet e di Impostazioni › Sincronizzazione ("Copia modificata:
 /// Dylan Dog 41") e il titolo dell'avviso per le modifiche scartate.
@@ -43,6 +86,33 @@ class DescrizioneModifiche {
     return [
       for (final e in elenco)
         if (e.volte == 1) e.testo else '${e.testo} (×${e.volte})',
+    ];
+  }
+
+  /// Le Modifiche rifiutate, nell'ordine del registro; solo quelle delle
+  /// [voci] indicate, se ci sono.
+  Future<List<ModificaRifiutata>> rifiutate([Set<String>? voci]) async {
+    final rifiutate = [
+      for (final v in await _registro.voci())
+        if (v.rifiutataCodice != null && (voci == null || voci.contains(v.id)))
+          v,
+    ];
+    final titoli = await this.titoli({
+      for (final v in rifiutate) (tabella: v.tabella, id: v.riga),
+    });
+    return [
+      for (final v in rifiutate)
+        if ((tabella: v.tabella, id: v.riga) case final riga)
+          ModificaRifiutata(
+            voce: v.id,
+            riga: riga,
+            tipo: v.tipo,
+            titolo: titoli[riga],
+            descrizione: _testo(v.tabella, v.tipo, titoli[riga]),
+            codice: v.rifiutataCodice!,
+            messaggio: v.rifiutataMessaggio ?? '',
+            versioneApp: v.rifiutataVersione,
+          ),
     ];
   }
 
