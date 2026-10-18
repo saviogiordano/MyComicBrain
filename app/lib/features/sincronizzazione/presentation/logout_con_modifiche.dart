@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/registro_modifiche.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/descrizione_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/motore_sincronizzazione.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/sincronizzazione/application/sincronizzazione_providers.dart';
@@ -46,7 +47,9 @@ Future<bool> confermaLogout(BuildContext context, WidgetRef ref) async {
 
 /// "Modifiche non sincronizzate": la collezione viene tolta dal telefono
 /// al logout, quindi le Modifiche in sospeso (Scansioni in attesa di rete
-/// comprese) andrebbero perse.
+/// comprese) andrebbero perse. Le Modifiche rifiutate dal server (#225) si
+/// perdono comunque: il dialog le indica a parte e, se dopo "Sincronizza e
+/// esci" restano solo loro, chiede una seconda conferma.
 class DialogModificheNonSincronizzate extends ConsumerStatefulWidget {
   const DialogModificheNonSincronizzate({super.key});
 
@@ -70,12 +73,21 @@ class _DialogModificheNonSincronizzateState
     final esito = await motore.sincronizzaOra();
     if (!mounted) return;
     // Esce solo se sul telefono non resta nulla: una scrittura fatta
-    // durante il ciclo, o un'operazione rifiutata, resterebbe in sospeso.
+    // durante il ciclo resterebbe in sospeso. Se restano solo le righe
+    // trattenute da Modifiche rifiutate, chiede prima conferma.
     final db = ref.read(replicaDelProfiloProvider);
     final restano = db == null ? 0 : await RegistroModifiche(db).conteggio();
+    final rifiutate = db == null
+        ? ref.read(modificheRifiutateProvider).valueOrNull ?? const []
+        : await DescrizioneModifiche(db).rifiutate();
     if (!mounted) return;
-    if (esito is SincronizzazioneRiuscita && restano == 0) {
-      Navigator.of(context).pop(true);
+    final righeRifiutate = {for (final r in rifiutate) r.riga}.length;
+    if (esito is SincronizzazioneRiuscita && restano <= righeRifiutate) {
+      if (rifiutate.isEmpty || await _confermaRifiutate(rifiutate.length)) {
+        if (mounted) Navigator.of(context).pop(true);
+        return;
+      }
+      if (mounted) setState(() => _sincronizzo = false);
       return;
     }
     setState(() {
@@ -83,6 +95,36 @@ class _DialogModificheNonSincronizzateState
       _fallita = true;
     });
   }
+
+  Future<bool> _confermaRifiutate(int n) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.warning_amber_rounded, color: AppColors.amber),
+          title: Text(
+            n == 1 ? '1 modifica non accettata' : '$n modifiche non accettate',
+          ),
+          content: Text(
+            'Il resto è stato sincronizzato. '
+            '${n == 1 ? 'Questa modifica non è stata accettata dal server e, uscendo, andrà persa.' : 'Queste modifiche non sono state accettate dal server e, uscendo, andranno perse.'}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: AppColors.textPrimary,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Esci e perdi le modifiche'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 
   Future<void> _esciComunque(int inSospeso, int scansioni) async {
     final conferma = await showDialog<bool>(
@@ -122,6 +164,12 @@ class _DialogModificheNonSincronizzateState
   Widget build(BuildContext context) {
     final inSospeso = ref.watch(modificheInSospesoProvider).valueOrNull ?? 0;
     final scansioni = ref.watch(scansioniInAttesaProvider).valueOrNull?.length;
+    final rifiutate = {
+      for (final r
+          in ref.watch(modificheRifiutateProvider).valueOrNull ??
+              const <ModificaRifiutata>[])
+        r.riga,
+    }.length;
     final offline =
         ref.watch(statoSincronizzazioneProvider).valueOrNull?.fase ==
         FaseSincronizzazione.offline;
@@ -144,6 +192,16 @@ class _DialogModificheNonSincronizzateState
                       'Uscendo verrebbero perse, perché la collezione viene '
                       'tolta da questo telefono.',
           ),
+          if (rifiutate > 0) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              rifiutate == 1
+                  ? '1 non è stata accettata dal server e andrà persa comunque.'
+                  : '$rifiutate non sono state accettate dal server e andranno '
+                        'perse comunque.',
+              style: AppTypography.bodySmall.copyWith(color: AppColors.amber),
+            ),
+          ],
           if (_fallita) ...[
             const SizedBox(height: AppSpacing.sm),
             Container(

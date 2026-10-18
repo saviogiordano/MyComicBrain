@@ -35,6 +35,17 @@ final elencoModificheProvider = StreamProvider<List<String>>((ref) {
   ).watchConteggio().asyncMap((_) => descrizione.elenco());
 });
 
+/// Le Modifiche rifiutate dal server (#225), per la pillola "N da
+/// controllare" e la sezione "Non accettate dal server"; vuote in Modalità
+/// locale.
+final modificheRifiutateProvider = StreamProvider<List<ModificaRifiutata>>((
+  ref,
+) {
+  final motore = ref.watch(motoreSincronizzazioneProvider);
+  if (motore == null) return Stream.value(const []);
+  return motore.watchRifiutate();
+});
+
 /// L'ora, aggiornata ogni 30 secondi: fa scorrere "riprovo tra N min" e
 /// "N min fa" anche quando lo stato non cambia.
 final oraProvider = StreamProvider<DateTime>((ref) async* {
@@ -52,6 +63,8 @@ final indicatoreSincronizzazioneProvider =
         return IndicatoreSincronizzazione.da(
           stato,
           inSospeso: ref.watch(modificheInSospesoProvider).valueOrNull ?? 0,
+          rifiutate:
+              ref.watch(modificheRifiutateProvider).valueOrNull ?? const [],
           ora: ref.watch(oraProvider).valueOrNull ?? DateTime.now(),
         );
       },

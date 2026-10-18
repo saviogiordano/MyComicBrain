@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +15,9 @@ import 'package:mycomicbrain/core/design_system/app_theme.dart';
 import 'package:mycomicbrain/core/routing/router.dart';
 import 'package:mycomicbrain/features/importazione/application/importazione_controller.dart';
 import 'package:mycomicbrain/features/login/presentation/avviso_accesso.dart';
+import 'package:mycomicbrain/features/sincronizzazione/presentation/avviso_modifiche_rifiutate.dart';
 import 'package:mycomicbrain/features/sincronizzazione/presentation/avviso_modifiche_scartate.dart';
+import 'package:mycomicbrain/features/sincronizzazione/presentation/stato_sincronizzazione.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -101,7 +105,18 @@ class MyComicBrainApp extends ConsumerWidget {
       routerConfig: router,
       builder: (context, child) => AvvisoAccesso(
         vaiAllaDashboard: () => router.go('/dashboard'),
-        child: AvvisoModificheScartate(child: child!),
+        child: AvvisoModificheScartate(
+          child: AvvisoModificheRifiutate(
+            apriDettagli: () {
+              final navigatore = router.routerDelegate.navigatorKey;
+              final context = navigatore.currentContext;
+              if (context != null) {
+                unawaited(mostraSheetSincronizzazione(context));
+              }
+            },
+            child: child!,
+          ),
+        ),
       ),
     );
   }

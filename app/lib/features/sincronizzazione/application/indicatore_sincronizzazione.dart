@@ -1,12 +1,21 @@
+import 'package:mycomicbrain/core/data/sincronizzazione/descrizione_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/motore_sincronizzazione.dart';
 
 /// Il colore dell'indicatore, uno per stato.
-enum TonoIndicatore { offline, errore, inCorso, cover, sincronizzato }
+enum TonoIndicatore {
+  offline,
+  errore,
+  inCorso,
+  daControllare,
+  cover,
+  sincronizzato,
+}
 
 /// Che cosa racconta l'indicatore della Sincronizzazione (prototipo #201,
 /// punto 1, variante A): la pillola in Dashboard ([breve]) e lo sheet o
 /// Impostazioni ([spiegazione]). Una sola regola di priorità:
-/// offline › errore › in corso › cover N/M › sincronizzato.
+/// offline › errore › in corso › da controllare (#225) › cover N/M ›
+/// sincronizzato.
 class IndicatoreSincronizzazione {
   const IndicatoreSincronizzazione._({
     required this.tono,
@@ -15,12 +24,14 @@ class IndicatoreSincronizzazione {
     this.gira = false,
   });
 
-  /// [inSospeso] sono le righe con Modifiche in sospeso; [ora] serve al
-  /// conto alla rovescia del prossimo tentativo e a "N min fa".
+  /// [inSospeso] sono le righe con Modifiche in sospeso, comprese quelle
+  /// trattenute dalle Modifiche [rifiutate]; [ora] serve al conto alla
+  /// rovescia del prossimo tentativo e a "N min fa".
   factory IndicatoreSincronizzazione.da(
     StatoSincronizzazione stato, {
     required int inSospeso,
     required DateTime ora,
+    List<ModificaRifiutata> rifiutate = const [],
   }) {
     final n = inSospeso;
     switch (stato.fase) {
@@ -53,8 +64,23 @@ class IndicatoreSincronizzazione {
       case FaseSincronizzazione.ferma || FaseSincronizzazione.inCorso:
         return IndicatoreSincronizzazione._inCorso(n);
       case FaseSincronizzazione.sincronizzata:
-        // Una scrittura appena fatta: il ciclo parte dopo il debounce.
-        if (n > 0) return IndicatoreSincronizzazione._inCorso(n);
+        // Una scrittura appena fatta: il ciclo parte dopo il debounce. Le
+        // righe con una Modifica rifiutata restano in sospeso ma il push le
+        // salta.
+        final trattenute = {for (final r in rifiutate) r.riga}.length;
+        if (n > trattenute) {
+          return IndicatoreSincronizzazione._inCorso(n - trattenute);
+        }
+        if (rifiutate.isNotEmpty) {
+          final r = rifiutate.length;
+          return IndicatoreSincronizzazione._(
+            tono: TonoIndicatore.daControllare,
+            breve: '$r da controllare',
+            spiegazione:
+                '${r == 1 ? '1 modifica non è stata accettata' : '$r modifiche non sono state accettate'} '
+                'dal server. Le altre si sincronizzano normalmente.',
+          );
+        }
         final cover = stato.cover;
         if (cover != null) {
           return IndicatoreSincronizzazione._(
