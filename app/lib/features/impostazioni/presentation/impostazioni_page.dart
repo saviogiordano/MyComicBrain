@@ -139,6 +139,16 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
     await ref
         .read(settingsRepositoryProvider)
         .impostaProviderAi(ruolo, provider);
+    // Il client del ruolo è scelto una volta sola dal provider attivo
+    // (`coverAnalysisClientProvider`/`assistenteClientProvider`), che non
+    // ha modo di sapere da solo quando `SettingsRepository` cambia: senza
+    // invalidarlo la pipeline restava sul provider letto al primo accesso,
+    // fallendo con "Configurazione mancante" pur con il nuovo verificato
+    // (segnalato da utente).
+    ref.invalidate(switch (ruolo) {
+      RuoloProviderAi.visivo => coverAnalysisClientProvider,
+      RuoloProviderAi.testuale => assistenteClientProvider,
+    });
     _invalidaAssistenteConfiguratoSe(ruolo);
     if (!mounted) return;
     setState(() => _providerAttivo[ruolo] = provider);

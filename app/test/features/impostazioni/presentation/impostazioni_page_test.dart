@@ -319,6 +319,52 @@ void main() {
   );
 
   testWidgets(
+    'selezionare "Attivo" su un altro provider Visivo cambia il client usato '
+    "dall'Analisi Copertina (segnalato da utente: restava quello letto al "
+    'primo accesso, fallendo con "Configura provider" pur verificato)',
+    (tester) async {
+      final client = _FakeCoverAnalysisClient();
+      await pumpImpostazioni(
+        tester,
+        aiClientPer: AiProvider.openai,
+        aiClient: client,
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ImpostazioniPage)),
+      );
+      // Già letto prima della scelta, come fa la pipeline all'avvio.
+      expect(container.read(coverAnalysisClientProvider), isNot(client));
+
+      await tester.tap(rigaProvider('OpenAI', 'Attivo'));
+      await tester.pumpAndSettle();
+
+      expect(container.read(coverAnalysisClientProvider), client);
+    },
+  );
+
+  testWidgets(
+    'selezionare "Attivo" su un altro provider Testuale cambia il client '
+    "usato dall'Assistente",
+    (tester) async {
+      final client = _FakeAssistenteClient();
+      await pumpImpostazioni(
+        tester,
+        assistenteClientPer: AiProvider.openai,
+        assistenteClient: client,
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ImpostazioniPage)),
+      );
+      expect(container.read(assistenteClientProvider), isNot(client));
+
+      await tester.tap(rigaProvider('OpenAI', 'Attivo', testuale: true));
+      await tester.pumpAndSettle();
+
+      expect(container.read(assistenteClientProvider), client);
+    },
+  );
+
+  testWidgets(
     'URL non valido per il provider Locale mostra un errore e non salva',
     (
       tester,

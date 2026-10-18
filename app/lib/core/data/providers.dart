@@ -250,6 +250,16 @@ final scansioneStorageProvider = Provider<ScansioneStorage>((ref) {
   return ScansioneStorage(baseDirectory: () => repliche.cartellaDati(userId));
 });
 
+/// Il file sul device dell'immagine di una Scansione, per valore di
+/// `Scansioni.image` — da usare per mostrarla, mai il valore grezzo: il
+/// percorso assoluto salvato punta al container iOS dell'installazione
+/// che l'ha scritto, che cambia a ogni reinstallazione (segnalato da
+/// utente: miniature delle Scansioni in sospeso sparite).
+final FutureProviderFamily<String, String> fileScansioneProvider =
+    FutureProvider.family<String, String>(
+      (ref, image) => ref.watch(scansioneStorageProvider).risolvi(image),
+    );
+
 final claudeCoverAnalysisClientProvider = Provider<ClaudeCoverAnalysisClient>(
   (ref) => ClaudeCoverAnalysisClient(
     settingsRepository: ref.watch(settingsRepositoryProvider),
