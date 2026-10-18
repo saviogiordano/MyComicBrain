@@ -1093,6 +1093,30 @@ void contrattoIdentificazione(CreaAdapter crea) {
     },
   );
 
+  test(
+    'coverImagePerScansione trova la Scansione anche se il container iOS è '
+    'cambiato (segnalato da utente: cover assente in Inserisci manualmente '
+    'dopo una reinstallazione)',
+    () async {
+      final repoConBase = repoConCover();
+      File('${tempBase.path}/scansioni/vecchia.jpg')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([4, 5, 6]);
+      // Percorso assoluto scritto da un'installazione precedente.
+      final scansioneId = await repo.aggiungiScansione(
+        image:
+            '/var/mobile/Containers/Data/Application/VECCHIO/Library/'
+            'Application Support/scansioni/vecchia.jpg',
+      );
+
+      final cover = await repoConBase.coverImagePerScansione(scansioneId);
+
+      expect(cover, 'scansioni/vecchia.jpg');
+      final risolta = await repoConBase.risolviCoverImage(cover);
+      expect(File(risolta!).readAsBytesSync(), [4, 5, 6]);
+    },
+  );
+
   test('ripristinaCoverMancantiDaScansione ridà la cover della Scansione alle '
       'sole Edizioni senza cover con una Copia scansionata', () async {
     final repoConBase = repoConCover();
@@ -1124,4 +1148,33 @@ void contrattoIdentificazione(CreaAdapter crea) {
     expect(await repo.coverImageGrezzoDi(conCover), 'https://example/42.jpg');
     expect(await repo.coverImageGrezzoDi(senzaScansione), isNull);
   });
+
+  test(
+    'ripristinaCoverMancantiDaScansione trova la Scansione anche se il '
+    'container iOS è cambiato',
+    () async {
+      final repoConBase = repoConCover();
+      File('${tempBase.path}/scansioni/vecchia.jpg')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([4, 5, 6]);
+      final operaId = await repo.aggiungiOpera(title: 'Batman');
+      final edizioneId = await repo.aggiungiEdizione(operaId: operaId);
+      await repo.aggiungiCopia(
+        edizioneId: edizioneId,
+        status: StatoCopia.posseduta,
+        scansioneId: await repo.aggiungiScansione(
+          image:
+              '/var/mobile/Containers/Data/Application/VECCHIO/Library/'
+              'Application Support/scansioni/vecchia.jpg',
+        ),
+      );
+
+      await repoConBase.ripristinaCoverMancantiDaScansione();
+
+      expect(
+        await repoConBase.coverImageGrezzoDi(edizioneId),
+        'scansioni/vecchia.jpg',
+      );
+    },
+  );
 }

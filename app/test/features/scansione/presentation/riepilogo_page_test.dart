@@ -12,7 +12,9 @@ import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
+import 'package:mycomicbrain/core/data/settings_repository.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
 import 'package:path/path.dart' as p;
@@ -149,9 +151,12 @@ void main() {
     ComicsRepository? repository,
     bool ripresa = false,
     bool senzaRete = false,
+    SettingsRepository? settings,
   }) async {
     final risultato = _RisultatoPop();
-    final rotta = ripresa ? '/scansione/riepilogo/ripresa' : '/scansione/riepilogo';
+    final rotta = ripresa
+        ? '/scansione/riepilogo/ripresa'
+        : '/scansione/riepilogo';
     final router = GoRouter(
       initialLocation: '/scansione',
       routes: [
@@ -211,6 +216,9 @@ void main() {
           if (repository != null)
             comicsRepositoryProvider.overrideWithValue(repository),
           senzaReteProvider.overrideWithValue(senzaRete),
+          settingsRepositoryProvider.overrideWithValue(
+            settings ?? SettingsRepository.inMemoria(),
+          ),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
@@ -519,6 +527,59 @@ void main() {
         isEmpty,
         reason: 'il tocco apre le Impostazioni, non riprova',
       );
+    },
+  );
+
+  testWidgets(
+    'la chip "Configura provider" riprova se nel frattempo il provider è '
+    'stato configurato (segnalato da utente: restava bloccata)',
+    (tester) async {
+      final db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      addTearDown(db.close);
+      final repository = DriftComicsRepository(db);
+      final scansioni = scansioniFinte(1);
+      await repository.aggiungiScansione(image: scansioni.single.path);
+      final scansioneId = await repository.idScansionePerImmagine(
+        scansioni.single.path,
+      );
+      final analisiId = await repository.avviaAnalisiCopertina(
+        scansioneId: scansioneId,
+      );
+      await repository.fallisciAnalisiCopertina(
+        id: analisiId,
+        errorMessage:
+            'CoverAnalysisException: Configurazione mancante: Nessuna API key configurata per Claude nelle Impostazioni.',
+      );
+      final settings = SettingsRepository.inMemoria();
+      await settings.impostaProviderAi(
+        RuoloProviderAi.visivo,
+        AiProvider.openai,
+      );
+      await settings.impostaApiKeyAi(
+        RuoloProviderAi.visivo,
+        AiProvider.openai,
+        'chiave-openai',
+      );
+
+      final pipeline = _FakeAnalisiCopertinaPipeline();
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        pipeline: pipeline,
+        repository: repository,
+        settings: settings,
+      );
+
+      await tester.tap(find.text('Configura provider'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Impostazioni'), findsNothing);
+      expect(pipeline.riprovati, [scansioni.single.path]);
     },
   );
 
@@ -972,44 +1033,47 @@ void main() {
       },
     );
 
-    testWidgets('"Elimina tutte" rimuove tutte le scansioni (file e righe DB)', (
-      tester,
-    ) async {
-      final db = AppDatabase(
-        DatabaseConnection(
-          NativeDatabase.memory(),
-          closeStreamsSynchronously: true,
-        ),
-      );
-      addTearDown(db.close);
-      final repository = DriftComicsRepository(db);
-      final scansioni = scansioniFinte(2);
-      for (final s in scansioni) {
-        await repository.aggiungiScansione(image: s.path);
-      }
-
-      await pumpRiepilogo(
+    testWidgets(
+      '"Elimina tutte" rimuove tutte le scansioni (file e righe DB)',
+      (
         tester,
-        scansioni,
-        repository: repository,
-        ripresa: true,
-      );
+      ) async {
+        final db = AppDatabase(
+          DatabaseConnection(
+            NativeDatabase.memory(),
+            closeStreamsSynchronously: true,
+          ),
+        );
+        addTearDown(db.close);
+        final repository = DriftComicsRepository(db);
+        final scansioni = scansioniFinte(2);
+        for (final s in scansioni) {
+          await repository.aggiungiScansione(image: s.path);
+        }
 
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Elimina tutte'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Rimuovi tutte'));
-        await tester.pumpAndSettle();
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-        await tester.pump();
-      });
+        await pumpRiepilogo(
+          tester,
+          scansioni,
+          repository: repository,
+          ripresa: true,
+        );
 
-      expect(find.text('Riepilogo batch'), findsOneWidget);
-      final righeRimaste = await db.select(db.scansioni).get();
-      expect(righeRimaste, isEmpty);
-      for (final s in scansioni) {
-        expect(File(s.path).existsSync(), isFalse);
-      }
-    });
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Elimina tutte'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Rimuovi tutte'));
+          await tester.pumpAndSettle();
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          await tester.pump();
+        });
+
+        expect(find.text('Riepilogo batch'), findsOneWidget);
+        final righeRimaste = await db.select(db.scansioni).get();
+        expect(righeRimaste, isEmpty);
+        for (final s in scansioni) {
+          expect(File(s.path).existsSync(), isFalse);
+        }
+      },
+    );
   });
 }

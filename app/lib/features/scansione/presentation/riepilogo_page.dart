@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/errore_configurazione.dart';
 
@@ -405,7 +406,10 @@ class _RigaScansione extends ConsumerWidget {
           ClipRRect(
             borderRadius: AppRadii.smRadius,
             child: Image.file(
-              File(scansione.path),
+              File(
+                ref.watch(fileScansioneProvider(scansione.path)).valueOrNull ??
+                    scansione.path,
+              ),
               width: 48,
               height: 48,
               fit: BoxFit.cover,
@@ -443,6 +447,21 @@ class _RigaScansione extends ConsumerWidget {
             onRiprova: () => ref
                 .read(analisiCopertinaPipelineProvider)
                 .riprova(scansione.path),
+            onConfiguraProvider: () async {
+              // Configurato dopo il fallimento: l'errore persistito non va
+              // più rimandato alle Impostazioni, dove risulta tutto a posto
+              // (segnalato da utente) — si riprova.
+              final configurato = await ref
+                  .read(settingsRepositoryProvider)
+                  .configurato(RuoloProviderAi.visivo);
+              if (configurato) {
+                await ref
+                    .read(analisiCopertinaPipelineProvider)
+                    .riprova(scansione.path);
+              } else if (context.mounted) {
+                context.go('/impostazioni');
+              }
+            },
           ),
         ],
       ),
@@ -459,6 +478,9 @@ class _RigaScansione extends ConsumerWidget {
 /// provider AI non configurato (nessuna API key, deciso su #108), la chip
 /// diventa un link diretto alle Impostazioni invece del retry: riprovare
 /// senza aver configurato nulla fallirebbe di nuovo con lo stesso errore.
+/// Se invece il provider è stato configurato dopo il fallimento, la stessa
+/// chip riprova (`onConfiguraProvider`): l'errore persistito resta
+/// "Configurazione mancante" anche a configurazione sistemata.
 /// `confermata` (già esiste una `Copia` per questa Scansione, richiesta
 /// utente) scavalca sempre lo stato di `AnalisiCopertina`: una riga già
 /// confermata resta "Salvata" per distinguerla da quelle ancora da
@@ -479,6 +501,7 @@ class _ChipStatoAnalisi extends StatelessWidget {
     required this.confermata,
     required this.errorMessage,
     required this.onRiprova,
+    required this.onConfiguraProvider,
   });
 
   final StatoAnalisiCopertina? stato;
@@ -489,6 +512,7 @@ class _ChipStatoAnalisi extends StatelessWidget {
   final bool confermata;
   final String? errorMessage;
   final VoidCallback onRiprova;
+  final VoidCallback onConfiguraProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -553,9 +577,7 @@ class _ChipStatoAnalisi extends StatelessWidget {
       },
       child: InkWell(
         borderRadius: AppRadii.pillRadius,
-        onTap: configurazioneMancante
-            ? () => context.go('/impostazioni')
-            : onRiprova,
+        onTap: configurazioneMancante ? onConfiguraProvider : onRiprova,
         child: chip,
       ),
     );

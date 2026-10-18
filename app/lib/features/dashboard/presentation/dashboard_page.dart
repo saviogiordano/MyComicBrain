@@ -147,7 +147,7 @@ class _ConfermaEmailBanner extends StatelessWidget {
 /// delle scansioni in sospeso, non solo un'icona generica (richiesta utente
 /// dopo test manuale: senza anteprima non si riconosce di che batch si
 /// tratta prima di rientrare nel riepilogo).
-class _BatchInSospesoBanner extends StatelessWidget {
+class _BatchInSospesoBanner extends ConsumerWidget {
   const _BatchInSospesoBanner({
     required this.percorsi,
     required this.inAttesaDiRete,
@@ -160,7 +160,7 @@ class _BatchInSospesoBanner extends StatelessWidget {
   final int inAttesaDiRete;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final n = percorsi.length;
     final attesa = inAttesaDiRete > 0;
     return AppCard(
@@ -216,7 +216,10 @@ class _BatchInSospesoBanner extends StatelessWidget {
               itemBuilder: (context, i) => ClipRRect(
                 borderRadius: AppRadii.smRadius,
                 child: Image.file(
-                  File(percorsi[i]),
+                  File(
+                    ref.watch(fileScansioneProvider(percorsi[i])).valueOrNull ??
+                        percorsi[i],
+                  ),
                   width: 48,
                   height: 64,
                   fit: BoxFit.cover,

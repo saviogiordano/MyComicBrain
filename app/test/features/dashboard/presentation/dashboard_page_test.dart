@@ -12,6 +12,7 @@ import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
+import 'package:mycomicbrain/core/data/scansione_storage.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/motore_sincronizzazione.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
@@ -290,6 +291,35 @@ void main() {
           find.text('Tocca per riprendere il riconoscimento AI'),
           findsOneWidget,
         );
+      },
+    );
+
+    testWidgets(
+      'la miniatura trova il file anche se il container iOS è cambiato '
+      '(segnalato da utente: cover sparite dopo una reinstallazione)',
+      (tester) async {
+        final base = Directory.systemTemp.createTempSync('scansioni_base');
+        addTearDown(() => base.deleteSync(recursive: true));
+        final file = File('${base.path}/scansioni/x.jpg')
+          ..createSync(recursive: true);
+        // Percorso assoluto scritto da un'installazione precedente.
+        await repo.aggiungiScansione(
+          image:
+              '/var/mobile/Containers/Data/Application/VECCHIO/Library/'
+              'Application Support/scansioni/x.jpg',
+        );
+
+        await pumpDashboard(
+          tester,
+          sincronizzazione: [
+            scansioneStorageProvider.overrideWithValue(
+              ScansioneStorage(baseDirectory: () async => base),
+            ),
+          ],
+        );
+
+        final immagine = tester.widget<Image>(find.byType(Image));
+        expect((immagine.image as FileImage).file.path, file.path);
       },
     );
 

@@ -506,7 +506,18 @@ class DriftComicsRepository implements ComicsRepository {
       _db.scansioni,
     )..where((s) => s.id.equals(scansioneId))).getSingle();
     final base = await _copertinaDownloader.baseDirectory();
-    return percorso_locale.relativizza(riga.image, base);
+    return _coverDaScansione(riga.image, base);
+  }
+
+  /// La cover di un'Edizione presa dall'immagine di una Scansione, relativa
+  /// a [base]. Risolta prima di relativizzare: il percorso assoluto di una
+  /// Scansione scritta da un'installazione precedente punta al vecchio
+  /// container iOS, e relativizzato così com'è diventerebbe un `../..` che
+  /// non esiste (segnalato da utente: cover assente dopo una
+  /// reinstallazione).
+  Future<String> _coverDaScansione(String image, Directory base) async {
+    final assoluto = await percorso_locale.risolvi(image, () async => base);
+    return percorso_locale.relativizza(assoluto, base);
   }
 
   @override
@@ -1800,7 +1811,7 @@ ORDER BY p.n
       final edizioneId = riga.readTable(_db.edizioni).id;
       if (daRipristinare.containsKey(edizioneId)) continue;
       final immagine = riga.readTable(_db.scansioni).image;
-      daRipristinare[edizioneId] = percorso_locale.relativizza(immagine, base);
+      daRipristinare[edizioneId] = await _coverDaScansione(immagine, base);
     }
 
     for (final entry in daRipristinare.entries) {

@@ -85,7 +85,7 @@ class ScansioneStorage {
   /// deve far fallire la rimozione.
   Future<void> elimina(String path) async {
     try {
-      await File(path).delete();
+      await File(await risolvi(path)).delete();
     } on FileSystemException {
       // Best-effort: il file già assente non invalida la rimozione della Scansione.
     }
