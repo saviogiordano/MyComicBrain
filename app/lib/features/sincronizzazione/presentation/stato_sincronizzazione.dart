@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/descrizione_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/motore_sincronizzazione.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/sincronizzazione/application/indicatore_sincronizzazione.dart';
@@ -11,7 +13,7 @@ import 'package:mycomicbrain/features/sincronizzazione/application/sincronizzazi
 
 /// Il colore di ogni stato dell'indicatore.
 Color coloreIndicatore(TonoIndicatore tono) => switch (tono) {
-  TonoIndicatore.offline => AppColors.amber,
+  TonoIndicatore.offline || TonoIndicatore.daControllare => AppColors.amber,
   TonoIndicatore.errore => AppColors.dangerLight,
   TonoIndicatore.inCorso || TonoIndicatore.cover => AppColors.accent,
   TonoIndicatore.sincronizzato => AppColors.success,
@@ -85,6 +87,7 @@ class IconaIndicatore extends StatelessWidget {
       TonoIndicatore.offline => Icons.cloud_off_outlined,
       TonoIndicatore.errore => Icons.error_outline,
       TonoIndicatore.inCorso => Icons.sync,
+      TonoIndicatore.daControllare => Icons.warning_amber_rounded,
       TonoIndicatore.cover => Icons.downloading_outlined,
       TonoIndicatore.sincronizzato => null,
     };
@@ -208,9 +211,9 @@ class SezioneSincronizzazione extends ConsumerWidget {
   }
 }
 
-/// Stato, ultima sincronizzazione, Modifiche in sospeso con l'elenco, cover
-/// in arrivo, spiegazione e "Sincronizza ora": lo stesso contenuto nello
-/// sheet e in Impostazioni.
+/// Le Modifiche rifiutate in cima, poi stato, ultima sincronizzazione,
+/// Modifiche in sospeso con l'elenco, cover in arrivo, spiegazione e
+/// "Sincronizza ora": lo stesso contenuto nello sheet e in Impostazioni.
 class DettaglioSincronizzazione extends ConsumerWidget {
   const DettaglioSincronizzazione({super.key});
 
@@ -223,6 +226,8 @@ class DettaglioSincronizzazione extends ConsumerWidget {
     final stato = ref.watch(statoSincronizzazioneProvider).valueOrNull;
     if (indicatore == null || stato == null) return const SizedBox.shrink();
     final inSospeso = ref.watch(modificheInSospesoProvider).valueOrNull ?? 0;
+    final rifiutate =
+        ref.watch(modificheRifiutateProvider).valueOrNull ?? const [];
     final elenco = inSospeso == 0
         ? const <String>[]
         : ref.watch(elencoModificheProvider).valueOrNull ?? const <String>[];
@@ -253,6 +258,10 @@ class DettaglioSincronizzazione extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (rifiutate.isNotEmpty) ...[
+          _NonAccettate(rifiutate: rifiutate, offline: offline),
+          const SizedBox(height: AppSpacing.md),
+        ],
         riga(
           'Stato',
           Row(
@@ -325,6 +334,186 @@ class DettaglioSincronizzazione extends ConsumerWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// "Non accettate dal server" (#225): le Modifiche rifiutate, ciascuna con
+/// Riprova, Scarta e Copia dettagli. Niente "Riprova tutte".
+class _NonAccettate extends StatelessWidget {
+  const _NonAccettate({required this.rifiutate, required this.offline});
+
+  final List<ModificaRifiutata> rifiutate;
+  final bool offline;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.sm),
+    decoration: BoxDecoration(
+      color: AppColors.amber.withValues(alpha: 0.08),
+      borderRadius: AppRadii.smRadius,
+      border: Border.all(color: AppColors.amber.withValues(alpha: 0.4)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              size: 16,
+              color: AppColors.amber,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Non accettate dal server',
+              style: AppTypography.labelLarge.copyWith(color: AppColors.amber),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          'Restano su questo telefono. Riprova, oppure scartale per tornare '
+          'a come sono nel tuo account.',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textTertiary,
+          ),
+        ),
+        for (final r in rifiutate)
+          _VoceRifiutata(key: ValueKey(r.voce), rifiutata: r, offline: offline),
+      ],
+    ),
+  );
+}
+
+class _VoceRifiutata extends ConsumerStatefulWidget {
+  const _VoceRifiutata({
+    required this.rifiutata,
+    required this.offline,
+    super.key,
+  });
+
+  final ModificaRifiutata rifiutata;
+  final bool offline;
+
+  @override
+  ConsumerState<_VoceRifiutata> createState() => _VoceRifiutataState();
+}
+
+class _VoceRifiutataState extends ConsumerState<_VoceRifiutata> {
+  var _lavoro = false;
+  var _copiati = false;
+  String? _errore;
+
+  Future<void> _esegui(
+    Future<void> Function(MotoreSincronizzazione motore) azione,
+    String errore,
+  ) async {
+    final motore = ref.read(motoreSincronizzazioneProvider);
+    if (motore == null) return;
+    setState(() {
+      _lavoro = true;
+      _errore = null;
+    });
+    try {
+      await azione(motore);
+    } on Object {
+      if (mounted) setState(() => _errore = errore);
+    } finally {
+      if (mounted) setState(() => _lavoro = false);
+    }
+  }
+
+  Future<void> _scarta() async {
+    final titolo = widget.rifiutata.titolo;
+    final conferma = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Scartare le modifiche?'),
+        content: Text(
+          titolo == null
+              ? 'Le modifiche a questo dato fatte su questo telefono andranno '
+                    'perse.'
+              : 'Le modifiche a «$titolo» fatte su questo telefono andranno '
+                    'perse.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: AppColors.textPrimary,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Scarta le modifiche'),
+          ),
+        ],
+      ),
+    );
+    if (conferma != true || !mounted) return;
+    await _esegui(
+      (motore) => motore.scarta(widget.rifiutata.riga),
+      'Non è stato possibile scartare. Riprova più tardi.',
+    );
+  }
+
+  Future<void> _copia() async {
+    await Clipboard.setData(ClipboardData(text: widget.rifiutata.dettagli));
+    if (mounted) setState(() => _copiati = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.rifiutata;
+    const piccolo = AppTypography.labelMedium;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            r.descrizione,
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textPrimary,
+            ),
+          ),
+          if (_errore != null)
+            Text(
+              _errore!,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.dangerLight,
+              ),
+            ),
+          Wrap(
+            spacing: AppSpacing.xxs,
+            children: [
+              TextButton(
+                onPressed: _lavoro
+                    ? null
+                    : () => _esegui(
+                        (motore) => motore.riprova(r.voce),
+                        'Non è stato possibile riprovare.',
+                      ),
+                child: const Text('Riprova', style: piccolo),
+              ),
+              TextButton(
+                onPressed: _lavoro || widget.offline ? null : _scarta,
+                child: const Text('Scarta', style: piccolo),
+              ),
+              TextButton(
+                onPressed: _copia,
+                child: Text(
+                  _copiati ? 'Copiati' : 'Copia dettagli',
+                  style: piccolo,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

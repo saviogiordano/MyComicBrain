@@ -1,9 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mycomicbrain/core/data/registro_modifiche.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/descrizione_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/motore_sincronizzazione.dart';
 import 'package:mycomicbrain/features/sincronizzazione/application/indicatore_sincronizzazione.dart';
 
 /// Che cosa dice l'indicatore della Sincronizzazione (prototipo #201, punto
-/// 1): offline › errore › in corso › cover N/M › sincronizzato.
+/// 1, e #225): offline › errore › in corso › da controllare › cover N/M ›
+/// sincronizzato.
 void main() {
   final ora = DateTime.utc(2026, 10, 15, 12);
 
@@ -23,7 +26,23 @@ void main() {
   IndicatoreSincronizzazione indicatore(
     StatoSincronizzazione s, {
     int inSospeso = 0,
-  }) => IndicatoreSincronizzazione.da(s, inSospeso: inSospeso, ora: ora);
+    List<ModificaRifiutata> rifiutate = const [],
+  }) => IndicatoreSincronizzazione.da(
+    s,
+    inSospeso: inSospeso,
+    rifiutate: rifiutate,
+    ora: ora,
+  );
+
+  ModificaRifiutata rifiutata(String voce, {String riga = 'c1'}) =>
+      ModificaRifiutata(
+        voce: voce,
+        riga: (tabella: 'copie', id: riga),
+        tipo: TipoVoceRegistro.modifica,
+        descrizione: 'Copia modificata: Dylan Dog 41',
+        codice: '23514',
+        messaggio: 'violazione del vincolo',
+      );
 
   test('offline, con e senza Modifiche in sospeso', () {
     final senza = indicatore(stato(FaseSincronizzazione.offline));
@@ -149,5 +168,82 @@ void main() {
     expect(fa(const Duration(hours: 2, minutes: 5)), '2 h fa');
     expect(fa(const Duration(days: 3)), '3 giorni fa');
     expect(fa(const Duration(days: 1, hours: 2)), 'ieri');
+  });
+
+  test('da controllare, quando il server ha rifiutato qualcosa', () {
+    final una = indicatore(
+      stato(FaseSincronizzazione.sincronizzata),
+      inSospeso: 1,
+      rifiutate: [rifiutata('v1')],
+    );
+    expect(una.tono, TonoIndicatore.daControllare);
+    expect(una.breve, '1 da controllare');
+    expect(
+      una.spiegazione,
+      '1 modifica non è stata accettata dal server. Le altre si '
+      'sincronizzano normalmente.',
+    );
+
+    // Due voci rifiutate della stessa riga: la riga è in sospeso una volta.
+    final due = indicatore(
+      stato(FaseSincronizzazione.sincronizzata),
+      inSospeso: 1,
+      rifiutate: [rifiutata('v1'), rifiutata('v2')],
+    );
+    expect(due.breve, '2 da controllare');
+    expect(
+      due.spiegazione,
+      '2 modifiche non sono state accettate dal server. Le altre si '
+      'sincronizzano normalmente.',
+    );
+  });
+
+  test('da controllare copre le cover in arrivo', () {
+    final i = indicatore(
+      stato(
+        FaseSincronizzazione.sincronizzata,
+        cover: (scaricate: 4, totale: 9),
+      ),
+      inSospeso: 1,
+      rifiutate: [rifiutata('v1')],
+    );
+    expect(i.tono, TonoIndicatore.daControllare);
+  });
+
+  test('in corso, offline ed errore vincono su da controllare', () {
+    final rifiutate = [rifiutata('v1')];
+    // Un'altra riga in sospeso, oltre a quella rifiutata: il ciclo parte.
+    expect(
+      indicatore(
+        stato(FaseSincronizzazione.sincronizzata),
+        inSospeso: 2,
+        rifiutate: rifiutate,
+      ).tono,
+      TonoIndicatore.inCorso,
+    );
+    expect(
+      indicatore(
+        stato(FaseSincronizzazione.inCorso),
+        inSospeso: 1,
+        rifiutate: rifiutate,
+      ).tono,
+      TonoIndicatore.inCorso,
+    );
+    expect(
+      indicatore(
+        stato(FaseSincronizzazione.offline),
+        inSospeso: 1,
+        rifiutate: rifiutate,
+      ).tono,
+      TonoIndicatore.offline,
+    );
+    expect(
+      indicatore(
+        stato(FaseSincronizzazione.errore),
+        inSospeso: 1,
+        rifiutate: rifiutate,
+      ).tono,
+      TonoIndicatore.errore,
+    );
   });
 }

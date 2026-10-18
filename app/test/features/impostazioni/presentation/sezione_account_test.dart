@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/auth/auth_gateway.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
+import 'package:mycomicbrain/core/data/registro_modifiche.dart';
+import 'package:mycomicbrain/core/data/sincronizzazione/descrizione_modifiche.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/motore_sincronizzazione.dart';
 import 'package:mycomicbrain/core/data/sincronizzazione/sincronizzatore.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/sezione_account.dart';
@@ -121,7 +123,13 @@ void main() {
       motore = _Motore();
     });
 
-    List<Override> sincronizzazione({bool offline = false}) => [
+    List<Override> sincronizzazione({
+      bool offline = false,
+      List<ModificaRifiutata> rifiutate = const [],
+    }) => [
+      modificheRifiutateProvider.overrideWith(
+        (ref) => Stream.value(rifiutate),
+      ),
       modificheInSospesoProvider.overrideWith((ref) => Stream.value(3)),
       scansioniInAttesaProvider.overrideWith(
         (ref) => Stream.value({'scansione.jpg'}),
@@ -224,6 +232,59 @@ void main() {
         find.text('Sei offline: collegati per sincronizzare.'),
         findsOneWidget,
       );
+    });
+
+    group('con Modifiche rifiutate (#225)', () {
+      const rifiutata = ModificaRifiutata(
+        voce: 'v1',
+        riga: (tabella: 'copie', id: 'c1'),
+        tipo: TipoVoceRegistro.modifica,
+        titolo: 'Maus',
+        descrizione: 'Copia modificata: Maus',
+        codice: '23514',
+        messaggio: 'violazione del vincolo',
+      );
+
+      List<Override> conRifiutate() =>
+          sincronizzazione(rifiutate: const [rifiutata]);
+
+      testWidgets('il dialog le indica a parte', (tester) async {
+        await mostra(tester, sincronizzazione: conRifiutate());
+        await tester.pumpAndSettle();
+        await apriLogout(tester);
+
+        expect(
+          find.text(
+            '1 non è stata accettata dal server e andrà persa comunque.',
+          ),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('"Sincronizza e esci" chiede la seconda conferma se '
+          'restano', (tester) async {
+        final container = await mostra(
+          tester,
+          sincronizzazione: conRifiutate(),
+        );
+        await tester.pumpAndSettle();
+        await apriLogout(tester);
+
+        await tester.tap(find.text('Sincronizza e esci'));
+        await tester.pumpAndSettle();
+        expect(find.text('1 modifica non accettata'), findsOneWidget);
+
+        await tester.tap(find.text('Annulla').last);
+        await tester.pumpAndSettle();
+        expect(find.text('Modifiche non sincronizzate'), findsOneWidget);
+        expect(container.read(sessionControllerProvider).profilo, isNotNull);
+
+        await tester.tap(find.text('Sincronizza e esci'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Esci e perdi le modifiche'));
+        await tester.pumpAndSettle();
+        expect(container.read(sessionControllerProvider).profilo, isNull);
+      });
     });
 
     testWidgets('senza Modifiche in sospeso resta il dialog semplice', (
