@@ -284,9 +284,18 @@ class _ModificaSchedaPageState extends ConsumerState<ModificaSchedaPage> {
     String? serieId;
     final nomeSerie = _serie.text.trim();
     if (_faParteDiSerie && nomeSerie.isNotEmpty) {
-      serieId = (nomeSerie == _serieNomeOriginale && _serieIdOriginale != null)
-          ? _serieIdOriginale
-          : await repository.aggiungiSerie(name: nomeSerie);
+      final originale = _serieIdOriginale;
+      serieId = switch (originale) {
+        null => await repository.aggiungiSerie(name: nomeSerie),
+        _ when nomeSerie == _serieNomeOriginale => originale,
+        // Un refuso si corregge sul posto; la Serie lasciata vuota la
+        // cancella aggiornaEdizione.
+        _ => await repository.nomeSerieDiEdizione(
+          edizioneId: widget.edizioneId,
+          serieId: originale,
+          nome: nomeSerie,
+        ),
+      };
     }
 
     final numero = numeroPulito(_numero.text) ?? '';

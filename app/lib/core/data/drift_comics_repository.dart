@@ -133,6 +133,49 @@ class DriftComicsRepository implements ComicsRepository {
   }
 
   @override
+  Future<String> nomeSerieDiEdizione({
+    required String edizioneId,
+    required String serieId,
+    required String nome,
+  }) {
+    return _db.transaction(() async {
+      final nomeNormalizzato = nome.trim();
+      final altreEdizioni =
+          await (_db.select(_db.edizioni)..where(
+                (e) =>
+                    e.serieId.equals(serieId) & e.id.equals(edizioneId).not(),
+              ))
+              .get();
+      final omonima =
+          await (_db.select(_db.serieTable)..where(
+                (s) =>
+                    s.name.lower().equals(nomeNormalizzato.toLowerCase()) &
+                    s.id.equals(serieId).not(),
+              ))
+              .get();
+      if (altreEdizioni.isNotEmpty || omonima.isNotEmpty) {
+        return aggiungiSerie(name: nomeNormalizzato);
+      }
+      await (_db.update(_db.serieTable)..where((s) => s.id.equals(serieId)))
+          .write(SerieTableCompanion(name: Value(nomeNormalizzato)));
+      return serieId;
+    });
+  }
+
+  /// Cancella la Serie [serieId] se non ha più Edizioni: una Serie è solo
+  /// un raggruppamento, vuota non ha senso (e gonfia i KPI).
+  Future<void> _eliminaSerieSeVuota(String? serieId) async {
+    if (serieId == null) return;
+    final edizioni = await (_db.select(
+      _db.edizioni,
+    )..where((e) => e.serieId.equals(serieId))).get();
+    if (edizioni.isNotEmpty) return;
+    await (_db.delete(
+      _db.serieTable,
+    )..where((s) => s.id.equals(serieId))).go();
+  }
+
+  @override
   Future<void> unisciSerieDuplicate() {
     return _db.transaction(() async {
       final tutte = await _db.select(_db.serieTable).get();
@@ -1804,25 +1847,33 @@ ORDER BY p.n
     int? year,
     FormatoEdizione? format,
   }) {
-    return (_db.update(_db.edizioni)..where((e) => e.id.equals(id))).write(
-      EdizioniCompanion(
-        serieId: Value(serieId),
-        publisher: Value(publisher),
-        issueNumber: Value(issueNumber),
-        issueNumberLabel: Value(issueNumberLabel),
-        coverImage: Value(coverImage),
-        releaseDate: Value(releaseDate),
-        coverPrice: Value(coverPrice),
-        pageCount: Value(pageCount),
-        language: Value(language),
-        color: Value(color),
-        ean: Value(ean),
-        volume: Value(volume),
-        description: Value(description),
-        year: Value(year),
-        format: Value(format),
-      ),
-    );
+    return _db.transaction(() async {
+      final prima = await (_db.select(
+        _db.edizioni,
+      )..where((e) => e.id.equals(id))).getSingleOrNull();
+      await (_db.update(_db.edizioni)..where((e) => e.id.equals(id))).write(
+        EdizioniCompanion(
+          serieId: Value(serieId),
+          publisher: Value(publisher),
+          issueNumber: Value(issueNumber),
+          issueNumberLabel: Value(issueNumberLabel),
+          coverImage: Value(coverImage),
+          releaseDate: Value(releaseDate),
+          coverPrice: Value(coverPrice),
+          pageCount: Value(pageCount),
+          language: Value(language),
+          color: Value(color),
+          ean: Value(ean),
+          volume: Value(volume),
+          description: Value(description),
+          year: Value(year),
+          format: Value(format),
+        ),
+      );
+      if (prima?.serieId != serieId) {
+        await _eliminaSerieSeVuota(prima?.serieId);
+      }
+    });
   }
 
   @override
@@ -1929,12 +1980,16 @@ ORDER BY p.n
   /// Copie siano già state eliminate dal chiamante ([rimuoviCopia],
   /// [eliminaEdizione]).
   Future<void> _eliminaEdizioneSenzaCopie(String edizioneId) async {
+    final edizione = await (_db.select(
+      _db.edizioni,
+    )..where((e) => e.id.equals(edizioneId))).getSingleOrNull();
     await (_db.delete(
       _db.comicCreator,
     )..where((c) => c.edizioneId.equals(edizioneId))).go();
     await (_db.delete(
       _db.edizioni,
     )..where((e) => e.id.equals(edizioneId))).go();
+    await _eliminaSerieSeVuota(edizione?.serieId);
   }
 
   // --- Collezione (§9, deciso su #79/#90, split indice/hydration #113). ---

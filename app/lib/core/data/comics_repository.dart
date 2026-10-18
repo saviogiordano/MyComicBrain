@@ -58,6 +58,18 @@ abstract interface class ComicsRepository {
     String? issn,
   });
 
+  /// La Serie da dare all'Edizione [edizioneId], oggi nella Serie
+  /// [serieId], quando nella Modifica della Scheda il nome della Serie
+  /// diventa [nome]: se [serieId] contiene solo questa Edizione e nessun'altra
+  /// Serie si chiama già [nome], la rinomina sul posto (numero totale, ISSN e
+  /// cover restano); altrimenti è [aggiungiSerie] con [nome]. La Serie
+  /// lasciata vuota la cancella poi [aggiornaEdizione].
+  Future<String> nomeSerieDiEdizione({
+    required String edizioneId,
+    required String serieId,
+    required String nome,
+  });
+
   /// Ripara i dati creati prima della deduplica di [aggiungiSerie]: unisce
   /// le Serie con lo stesso nome (case-insensitive, a meno di spazi) in
   /// un'unica riga — quella con l'id più basso (la prima creata) — spostando
@@ -610,7 +622,9 @@ abstract interface class ComicsRepository {
 
   /// Aggiorna i campi bibliografici di un'Edizione (§8.1, flusso deciso su
   /// #67) — esclusi titolo ([aggiornaTitoloOpera]) e Autori
-  /// ([collegaCreatorAEdizione]/[rimuoviCreatorDaEdizione]).
+  /// ([collegaCreatorAEdizione]/[rimuoviCreatorDaEdizione]). Se l'Edizione
+  /// cambia Serie, o non ne ha più, la Serie di prima si cancella quando
+  /// resta senza Edizioni.
   Future<void> aggiornaEdizione({
     required String id,
     String? serieId,
@@ -671,11 +685,13 @@ abstract interface class ComicsRepository {
   /// Rimuove una singola Copia (§8.4). Se era l'ultima Copia della sua
   /// Edizione, elimina anche l'Edizione (deciso su #68: nessuno stato
   /// "orfana, 0 copie") — ritorna `true` in quel caso, così il chiamante
-  /// (la Scheda) sa di dover navigare via.
+  /// (la Scheda) sa di dover navigare via. Come [eliminaEdizione], cancella
+  /// anche la Serie rimasta senza Edizioni.
   Future<bool> rimuoviCopia(String id);
 
   /// Elimina un'intera Edizione con tutte le sue Copie (§8.4) — il bottone
-  /// "Elimina edizione" sempre visibile deciso su #65/#68.
+  /// "Elimina edizione" sempre visibile deciso su #65/#68. La Serie rimasta
+  /// senza Edizioni si cancella.
   Future<void> eliminaEdizione(String edizioneId);
 
   // --- Collezione (§9, deciso su #79/#90, split indice/hydration #113). ---

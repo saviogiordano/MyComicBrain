@@ -44,7 +44,10 @@ void contrattoScheda(CreaAdapter crea) {
       ))!.copie.singleWhere((c) => c.id == copiaId);
 
   test('watchEdizione ritorna null per un\'Edizione inesistente', () async {
-    expect(await repo.watchEdizione('00000000-0000-7000-8000-000000000999').first, isNull);
+    expect(
+      await repo.watchEdizione('00000000-0000-7000-8000-000000000999').first,
+      isNull,
+    );
   });
 
   test('watchEdizione risolve titolo (Opera), Copie e Autori', () async {
@@ -551,5 +554,120 @@ void contrattoScheda(CreaAdapter crea) {
     // Nessuna lettura dei Generi nella Scheda: il contratto qui è che le
     // sostituzioni ripetute non falliscano (vincolo unique su Supabase).
     expect(await dettaglioDi(edizioneId), isNotNull);
+  });
+
+  group('Serie rimaste senza fumetti', () {
+    Future<bool> esiste(String serieId) async =>
+        await repo.watchSerieDettaglio(serieId).first != null;
+
+    test('aggiornaEdizione che sposta il fumetto cancella la Serie rimasta '
+        'vuota', () async {
+      final vecchia = await repo.aggiungiSerie(name: 'Dylan Dog');
+      final nuova = await repo.aggiungiSerie(name: 'Dylan Dog Color Fest');
+      final edizioneId = await edizione(serieId: vecchia);
+
+      await repo.aggiornaEdizione(id: edizioneId, serieId: nuova);
+
+      expect(await esiste(vecchia), isFalse);
+      expect((await dettaglioDi(edizioneId))!.serieId, nuova);
+    });
+
+    test(
+      'aggiornaEdizione che toglie la Serie la cancella se resta vuota',
+      () async {
+        final serie = await repo.aggiungiSerie(name: 'Dylan Dog');
+        final edizioneId = await edizione(serieId: serie);
+
+        await repo.aggiornaEdizione(id: edizioneId);
+
+        expect(await esiste(serie), isFalse);
+      },
+    );
+
+    test('la Serie con altri fumetti resta', () async {
+      final vecchia = await repo.aggiungiSerie(name: 'Dylan Dog');
+      final nuova = await repo.aggiungiSerie(name: 'Martin Mystère');
+      final edizioneId = await edizione(serieId: vecchia);
+      await edizione(serieId: vecchia);
+
+      await repo.aggiornaEdizione(id: edizioneId, serieId: nuova);
+
+      expect(await esiste(vecchia), isTrue);
+    });
+
+    test("eliminaEdizione cancella la Serie se era l'ultimo fumetto", () async {
+      final serie = await repo.aggiungiSerie(name: 'Dylan Dog');
+      final edizioneId = await edizione(serieId: serie);
+      final altra = await edizione(serieId: serie);
+
+      await repo.eliminaEdizione(edizioneId);
+      expect(await esiste(serie), isTrue);
+
+      final copia = await repo.aggiungiCopia(
+        edizioneId: altra,
+        status: StatoCopia.posseduta,
+      );
+      await repo.rimuoviCopia(copia);
+      expect(await esiste(serie), isFalse);
+    });
+  });
+
+  group('nomeSerieDiEdizione', () {
+    test(
+      'rinomina sul posto la Serie che contiene solo questo fumetto',
+      () async {
+        final serie = await repo.aggiungiSerie(
+          name: 'Dylan Dgo',
+          totalIssues: 400,
+        );
+        final edizioneId = await edizione(serieId: serie);
+
+        final id = await repo.nomeSerieDiEdizione(
+          edizioneId: edizioneId,
+          serieId: serie,
+          nome: 'Dylan Dog',
+        );
+
+        expect(id, serie);
+        final dettaglio = (await repo.watchSerieDettaglio(serie).first)!;
+        expect(dettaglio.nome, 'Dylan Dog');
+        expect(dettaglio.numeriTotali, 400);
+      },
+    );
+
+    test(
+      'con altri fumetti nella Serie ne usa un\'altra col nuovo nome',
+      () async {
+        final serie = await repo.aggiungiSerie(name: 'Dylan Dog');
+        final edizioneId = await edizione(serieId: serie);
+        await edizione(serieId: serie);
+
+        final id = await repo.nomeSerieDiEdizione(
+          edizioneId: edizioneId,
+          serieId: serie,
+          nome: 'Dylan Dog Color Fest',
+        );
+
+        expect(id, isNot(serie));
+        expect(
+          (await repo.watchSerieDettaglio(serie).first)!.nome,
+          'Dylan Dog',
+        );
+      },
+    );
+
+    test('se il nuovo nome è già di un\'altra Serie usa quella', () async {
+      final esistente = await repo.aggiungiSerie(name: 'Martin Mystère');
+      final serie = await repo.aggiungiSerie(name: 'Martin Mistere');
+      final edizioneId = await edizione(serieId: serie);
+
+      final id = await repo.nomeSerieDiEdizione(
+        edizioneId: edizioneId,
+        serieId: serie,
+        nome: 'martin mystère',
+      );
+
+      expect(id, esistente);
+    });
   });
 }
