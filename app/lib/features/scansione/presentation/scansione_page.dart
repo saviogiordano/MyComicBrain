@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
+import 'package:mycomicbrain/prototype_tutorial/tutorial_prototype.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// Stato di errore dello scanner (deciso su #25, riusato su #89): "permanente"
@@ -338,6 +339,7 @@ class _FineButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
+      key: TutorialPrototypeKeys.fine,
       color: AppColors.accent,
       borderRadius: AppRadii.pillRadius,
       child: InkWell(
@@ -375,6 +377,7 @@ class _BottomBar extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: FilledButton.icon(
+              key: TutorialPrototypeKeys.fotocamera,
               onPressed: scansioneAbilitata ? onScansiona : null,
               icon: scansioneAbilitata
                   ? const Icon(Icons.document_scanner_outlined)
@@ -407,6 +410,7 @@ class _GalleryThumbButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: AppRadii.smRadius,
         child: Container(
+          key: TutorialPrototypeKeys.galleria,
           width: 48,
           height: 48,
           clipBehavior: Clip.antiAlias,

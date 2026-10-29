@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:mycomicbrain/core/design_system/tokens.dart';
+import 'package:mycomicbrain/prototype_tutorial/tutorial_prototype.dart';
 
 class _NavDestination {
   const _NavDestination({
@@ -154,6 +155,7 @@ class _RaisedScanButton extends StatelessWidget {
     return Transform.translate(
       offset: const Offset(0, -14),
       child: Container(
+        key: TutorialPrototypeKeys.scan,
         width: 44,
         height: 44,
         decoration: BoxDecoration(
