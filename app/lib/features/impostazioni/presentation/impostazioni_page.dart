@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/data/importazione_schema.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
@@ -10,6 +11,7 @@ import 'package:mycomicbrain/features/impostazioni/application/esportazione_serv
 import 'package:mycomicbrain/features/impostazioni/application/importazione_service.dart';
 import 'package:mycomicbrain/features/impostazioni/presentation/sezione_account.dart';
 import 'package:mycomicbrain/features/sincronizzazione/presentation/stato_sincronizzazione.dart';
+import 'package:mycomicbrain/features/tutorial/application/tutorial_inserimento.dart';
 
 /// Schermo Impostazioni (§12, deciso su #104): elenco di righe stile
 /// impostazioni di sistema — il valore corrente in trailing, ogni riga apre
@@ -313,6 +315,14 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
         ],
       ),
     );
+  }
+
+  /// Riarma tutto il Tutorial di inserimento (PRD #242) e torna alla
+  /// Dashboard, dove la scheda introduttiva parte subito.
+  Future<void> _riapriTutorialInserimento() async {
+    await ref.read(tutorialInserimentoProvider.notifier).riapri();
+    if (!mounted) return;
+    context.go('/dashboard');
   }
 
   /// Ripristina le cover cancellate dal bug di `ModificaSchedaPage` (voce di
@@ -744,6 +754,21 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                           onTap: _ripristinoCoverInCorso
                               ? null
                               : _ripristinaCoverMancanti,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const SectionHeader(label: 'Aiuto'),
+                  const SizedBox(height: AppSpacing.sm),
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        _Riga(
+                          titolo: 'Come aggiungere un fumetto',
+                          valore: '',
+                          onTap: _riapriTutorialInserimento,
                         ),
                       ],
                     ),

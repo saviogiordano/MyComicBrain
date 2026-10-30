@@ -18,6 +18,7 @@ import 'package:mycomicbrain/features/login/presentation/avviso_accesso.dart';
 import 'package:mycomicbrain/features/sincronizzazione/presentation/avviso_modifiche_rifiutate.dart';
 import 'package:mycomicbrain/features/sincronizzazione/presentation/avviso_modifiche_scartate.dart';
 import 'package:mycomicbrain/features/sincronizzazione/presentation/stato_sincronizzazione.dart';
+import 'package:mycomicbrain/features/tutorial/application/tutorial_inserimento.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -25,6 +26,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final sharedPreferences = await SharedPreferences.getInstance();
   final account = await _overridesAccount(sharedPreferences);
+  // Prima che l'utente possa superare il benvenuto: la regola per gli
+  // utenti esistenti guarda `benvenutoSuperato` com'era all'avvio (#238).
+  await TutorialInserimentoController.allAvvio(
+    SharedPreferencesAdapter(sharedPreferences),
+  );
 
   runApp(
     ProviderScope(

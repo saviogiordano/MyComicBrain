@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/analisi_copertina_pipeline.dart';
+import 'package:mycomicbrain/core/data/preferences.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
@@ -18,6 +20,8 @@ import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
 import 'package:path/path.dart' as p;
+
+import '../../../core/auth/fake_auth_gateway.dart';
 
 /// Sostituisce la pipeline reale (rete/DB) nei test: registra i batch
 /// ricevuti da "Fine" invece di chiamare Claude davvero.
@@ -152,6 +156,7 @@ void main() {
     bool ripresa = false,
     bool senzaRete = false,
     SettingsRepository? settings,
+    Preferences? preferenze,
   }) async {
     final risultato = _RisultatoPop();
     final rotta = ripresa
@@ -218,6 +223,9 @@ void main() {
           senzaReteProvider.overrideWithValue(senzaRete),
           settingsRepositoryProvider.overrideWithValue(
             settings ?? SettingsRepository.inMemoria(),
+          ),
+          accountPreferencesProvider.overrideWithValue(
+            preferenze ?? PreferencesInMemoria(),
           ),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
@@ -1075,5 +1083,131 @@ void main() {
         }
       },
     );
+  });
+
+  group('Tutorial di inserimento, tappa Riepilogo (PRD #242)', () {
+    const testo =
+        'Sto riconoscendo le tue cover. Quando una riga è Completata, toccala';
+
+    PreferencesInMemoria inAttesa() =>
+        PreferencesInMemoria()
+          ..valori['tutorial.inserimento.fase'] = 'inAttesaPrimaScansione';
+
+    Future<SettingsRepository> visivoConfigurato() async {
+      final settings = SettingsRepository.inMemoria();
+      await settings.impostaProviderAi(
+        RuoloProviderAi.visivo,
+        AiProvider.openai,
+      );
+      await settings.impostaApiKeyAi(
+        RuoloProviderAi.visivo,
+        AiProvider.openai,
+        'chiave-openai',
+      );
+      return settings;
+    }
+
+    testWidgets('compare dopo il primo "Fine" e solo una volta', (
+      tester,
+    ) async {
+      final preferenze = inAttesa();
+      await pumpRiepilogo(
+        tester,
+        scansioniFinte(1),
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+        settings: await visivoConfigurato(),
+        preferenze: preferenze,
+      );
+      expect(find.text(testo), findsNothing);
+
+      await tester.tap(find.text('Fine'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(testo), findsOneWidget);
+      expect(
+        preferenze.valori['tutorial.inserimento.tappaRiepilogoMostrata'],
+        'true',
+      );
+      expect(
+        preferenze.valori['tutorial.inserimento.fase'],
+        'inAttesaPrimaScansione',
+        reason: 'il tutorial si chiude solo su "Possibile corrispondenza"',
+      );
+
+      await tester.tap(find.text('Ho capito'));
+      await tester.pumpAndSettle();
+      expect(find.text(testo), findsNothing);
+    });
+
+    testWidgets('senza Provider AI Visivo configurato si rimanda', (
+      tester,
+    ) async {
+      final preferenze = inAttesa();
+      await pumpRiepilogo(
+        tester,
+        scansioniFinte(1),
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+        preferenze: preferenze,
+      );
+
+      await tester.tap(find.text('Fine'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(testo), findsNothing);
+      expect(
+        preferenze.valori.containsKey(
+          'tutorial.inserimento.tappaRiepilogoMostrata',
+        ),
+        isFalse,
+      );
+    });
+
+    testWidgets('compare anche su un Riepilogo ripreso dalla Dashboard', (
+      tester,
+    ) async {
+      await pumpRiepilogo(
+        tester,
+        scansioniFinte(1),
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+        ripresa: true,
+        settings: await visivoConfigurato(),
+        preferenze: inAttesa(),
+      );
+
+      expect(find.text(testo), findsOneWidget);
+    });
+
+    testWidgets('"Salta" chiude tutto il tutorial', (tester) async {
+      final preferenze = inAttesa();
+      await pumpRiepilogo(
+        tester,
+        scansioniFinte(1),
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+        settings: await visivoConfigurato(),
+        preferenze: preferenze,
+      );
+      await tester.tap(find.text('Fine'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Salta'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(testo), findsNothing);
+      expect(preferenze.valori['tutorial.inserimento.fase'], 'visto');
+    });
+
+    testWidgets('a tutorial visto non compare', (tester) async {
+      await pumpRiepilogo(
+        tester,
+        scansioniFinte(1),
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+        settings: await visivoConfigurato(),
+      );
+
+      await tester.tap(find.text('Fine'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(testo), findsNothing);
+    });
   });
 }

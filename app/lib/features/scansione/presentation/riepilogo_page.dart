@@ -10,6 +10,8 @@ import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 import 'package:mycomicbrain/core/domain/errore_configurazione.dart';
+import 'package:mycomicbrain/features/tutorial/application/tutorial_inserimento.dart';
+import 'package:mycomicbrain/features/tutorial/presentation/spotlight.dart';
 
 /// Schermata `/scansione/riepilogo` (S-B — Lista con stato, deciso su #20):
 /// una riga per Scansione appena confermata, con thumbnail e chip di stato
@@ -62,6 +64,33 @@ class RiepilogoPage extends ConsumerStatefulWidget {
 class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
   late final _scansioni = List<XFile>.of(widget.scansioni);
   bool _avviato = false;
+  bool _tappaTutorial = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Un batch ripreso ha il riconoscimento già avviato.
+    if (widget.ripresa) unawaited(_valutaTappaTutorial());
+  }
+
+  /// Tappa Riepilogo del Tutorial di inserimento (PRD #242): alla prima
+  /// apertura con il riconoscimento avviato, solo se il Provider AI Visivo
+  /// è configurato — altrimenti "Sto riconoscendo" sarebbe falso e si
+  /// rimanda alla volta successiva. La mancanza di rete non si controlla.
+  Future<void> _valutaTappaTutorial() async {
+    if (_scansioni.isEmpty) return;
+    if (!ref.read(tutorialInserimentoProvider).mostraTappaRiepilogo) return;
+    final configurato = await ref
+        .read(settingsRepositoryProvider)
+        .configurato(RuoloProviderAi.visivo);
+    if (!configurato || !mounted) return;
+    setState(() => _tappaTutorial = true);
+    unawaited(
+      ref.read(tutorialInserimentoProvider.notifier).avviaTappaRiepilogo(),
+    );
+  }
+
+  void _chiudiTappaTutorial() => setState(() => _tappaTutorial = false);
 
   /// Solo le righe ancora `In sospeso` (nessuna `AnalisiCopertina` già
   /// creata per quella Scansione) entrano in `avviaBatch` — anche col
@@ -78,6 +107,7 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
   /// retry manuale dalla chip (`riprova`), non passano da qui.
   void _fine() {
     setState(() => _avviato = true);
+    unawaited(_valutaTappaTutorial());
     final daInviare = _scansioni.where((s) {
       final stato = ref
           .read(statoAnalisiCopertinaProvider(s.path))
@@ -198,7 +228,7 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
     final notaSenzaRete =
         ref.watch(senzaReteProvider) &&
         _scansioni.any((s) => inAttesa.contains(s.path));
-    return Scaffold(
+    final pagina = Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
       body: SafeArea(
         child: Column(
@@ -301,6 +331,31 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
           ],
         ),
       ),
+    );
+    // Sempre nello Stack: aggiungerlo solo per la tappa rimonterebbe la
+    // pagina.
+    return Stack(
+      children: [
+        pagina,
+        if (_tappaTutorial)
+          Spotlight(
+            passi: [
+              PassoSpotlight(
+                bersaglio: TutorialInserimentoKeys.chipRiepilogo,
+                testo:
+                    'Sto riconoscendo le tue cover. Quando una riga è '
+                    'Completata, toccala',
+              ),
+            ],
+            onSalta: () {
+              unawaited(
+                ref.read(tutorialInserimentoProvider.notifier).salta(),
+              );
+              _chiudiTappaTutorial();
+            },
+            onFine: _chiudiTappaTutorial,
+          ),
+      ],
     );
   }
 }
@@ -440,6 +495,7 @@ class _RigaScansione extends ConsumerWidget {
             ),
           ),
           _ChipStatoAnalisi(
+            key: indice == 0 ? TutorialInserimentoKeys.chipRiepilogo : null,
             stato: stato?.stato,
             inAttesa: inAttesa,
             confermata: confermata,
@@ -502,6 +558,7 @@ class _ChipStatoAnalisi extends StatelessWidget {
     required this.errorMessage,
     required this.onRiprova,
     required this.onConfiguraProvider,
+    super.key,
   });
 
   final StatoAnalisiCopertina? stato;

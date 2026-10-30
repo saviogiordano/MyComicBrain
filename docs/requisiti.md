@@ -124,6 +124,29 @@ Prima dell'analisi l'app dovrebbe poter:
 - ridurre riflessi;
 - ruotare l'immagine.
 
+## 5.2 Tutorial di inserimento
+
+Un nuovo utente deve essere guidato, sulle schermate reali, a inserire il primo fumetto. Il tutorial è distinto dalla guida all'acquisizione di §5.1 e non dà consigli di ripresa (dettaglio in [PRD — Tutorial di inserimento di un nuovo fumetto](https://github.com/saviogiordano/MyComicBrain/issues/242)).
+
+Il tutorial deve:
+
+- partire da solo al primo ingresso nella Dashboard su quel dispositivo, in Modalità locale o dopo l'accesso, mai sopra benvenuto, importazione o primo download;
+- presentare una scheda introduttiva con i modi di aggiungere un fumetto (fotografare la cover, più cover di fila, inserimento a mano quando nessun Candidato è giusto), con "Mostrami" e "Salta";
+- con "Mostrami", evidenziare sulle schermate reali il pulsante per aggiungere un fumetto, la Fotocamera, la Galleria e "Fine";
+- alla prima Scansione vera, spiegare nel Riepilogo che il riconoscimento è partito e che una riga si apre quando è "Completata" (solo con il Provider AI Visivo configurato), e in "Possibile corrispondenza" come confermare un Candidato o inserire a mano; senza Candidati, indicare solo l'inserimento a mano;
+- essere sempre saltabile con un tocco: saltato o interrotto conta come visto;
+- ricordare il "già visto" per dispositivo, senza sincronizzarlo;
+- non comparire in automatico a chi usava già l'app prima della sua introduzione;
+- essere riapribile per intero da Impostazioni (§12).
+
+Esempio:
+
+> **Aggiungi il tuo primo fumetto**
+> 📷 Fotografa la cover: riconosco io il fumetto e ti propongo le corrispondenze.
+> 📚 Ne hai tanti? Scatta più cover di fila, poi tocca "Fine".
+> ✍️ Non trovo quello giusto? Lo inserisci a mano.
+> [Mostrami] [Salta]
+
 ---
 
 # 6. Analisi AI della copertina e identificazione
@@ -526,6 +549,10 @@ API key: ••••••••••••
 ```
 
 Le chiavi API sono dati sensibili e devono essere conservate in modo sicuro sul device (vedi §27 Sicurezza).
+
+## Aiuto
+
+- "Come aggiungere un fumetto": riapre per intero il Tutorial di inserimento (§5.2).
 
 ---
 
