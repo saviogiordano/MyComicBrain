@@ -88,6 +88,10 @@ _Avoid_: confondere con "Tag di stile copertina"/"Tag di elementi visivi caratte
 Un raggruppamento temporaneo, non persistito, di più Scansioni prodotte consecutivamente (fotocamera e/o galleria) prima che l'utente termini con "Fine". Esiste solo come stato della UI: non sopravvive a un riavvio e non ha una propria riga nel database — solo le Scansioni che produce vengono salvate.
 _Avoid_: Batch (ok in prosa tecnica, non come termine di dominio)
 
+**Tutorial di inserimento**:
+La spiegazione, mostrata sulle schermate reali, di come si aggiunge un fumetto alla collezione: fotografare una o più cover, scegliere fra i Candidati, oppure inserire a mano quando nessun Candidato è quello giusto. Si svolge in due momenti (il primo ingresso nell'app e la prima Scansione vera), è sempre saltabile e si può rivedere da Impostazioni. Il "già visto" vale per il dispositivo, non per il Profilo. Deciso su [Mappa — Tutorial di inserimento di un nuovo fumetto](https://github.com/saviogiordano/MyComicBrain/issues/237).
+_Avoid_: onboarding (si confonde con benvenuto, importazione e primo download); guida (si confonde con la guida all'acquisizione della cover di §5.1)
+
 **Candidato**:
 Un'ipotesi di corrispondenza fra una Scansione (tramite la sua Analisi Copertina) e un'Edizione — proposta dal riconoscimento (§6.3) durante l'Identificazione. Può provenire dal catalogo interno (un'Edizione già catalogata: confermarlo aggiunge una nuova Copia a quell'Edizione) o da un database esterno di fumetti (un'Edizione non ancora catalogata: confermarlo crea Opera/Edizione/Copia da zero). Porta un Punteggio di confidenza. Persiste come riga propria non appena proposto (non solo se confermato); confermarlo marca quella riga come scelta e collega/crea la Copia risultante — vedi [Mappa — Identificazione del fumetto](https://github.com/saviogiordano/MyComicBrain/issues/50), [#52](https://github.com/saviogiordano/MyComicBrain/issues/52), [#53](https://github.com/saviogiordano/MyComicBrain/issues/53).
 _Avoid_: Risultato, match (ok in prosa tecnica, non come termine di modello)
