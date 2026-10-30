@@ -164,9 +164,11 @@ class _SchedaIntroduttiva extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Aggiungi il tuo primo fumetto',
-                      style: AppTypography.headline,
+                      style: AppTypography.titleLarge.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     riga(
@@ -181,18 +183,18 @@ class _SchedaIntroduttiva extends StatelessWidget {
                     ),
                     riga('✍️', 'Non trovo quello giusto? Lo inserisci a mano.'),
                     const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: onSalta,
-                          child: const Text('Salta'),
-                        ),
-                        const Spacer(),
-                        FilledButton(
-                          onPressed: onMostrami,
-                          child: const Text('Mostrami'),
-                        ),
-                      ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: onMostrami,
+                        child: const Text('Mostrami'),
+                      ),
+                    ),
+                    Center(
+                      child: TextButton(
+                        onPressed: onSalta,
+                        child: const Text('Salta'),
+                      ),
                     ),
                   ],
                 ),

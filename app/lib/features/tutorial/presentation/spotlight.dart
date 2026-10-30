@@ -226,7 +226,12 @@ class _Fumetto extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(testo, style: AppTypography.bodyLarge),
+            Text(
+              testo,
+              style: AppTypography.bodyLarge.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
             const SizedBox(height: AppSpacing.sm),
             Row(
               children: [
@@ -240,7 +245,18 @@ class _Fumetto extends StatelessWidget {
                 const Spacer(),
                 TextButton(onPressed: onSalta, child: const Text('Salta')),
                 const SizedBox(width: AppSpacing.xs),
-                FilledButton(onPressed: onAvanti, child: Text(etichettaAvanti)),
+                FilledButton(
+                  // Il tema dà ai FilledButton solo padding verticale:
+                  // pensato per i pulsanti a tutta larghezza.
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.xs,
+                    ),
+                  ),
+                  onPressed: onAvanti,
+                  child: Text(etichettaAvanti),
+                ),
               ],
             ),
           ],
