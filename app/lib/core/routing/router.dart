@@ -25,6 +25,7 @@ import 'package:mycomicbrain/features/serie/presentation/serie_dettaglio_page.da
 import 'package:mycomicbrain/features/serie/presentation/serie_page.dart';
 import 'package:mycomicbrain/features/sincronizzazione/presentation/primo_download_page.dart';
 import 'package:mycomicbrain/features/statistiche/presentation/statistiche_page.dart';
+import 'package:mycomicbrain/features/tutorial/presentation/primo_momento.dart';
 
 /// Notifica il router quando la sessione cambia ([sessionControllerProvider],
 /// #171) o quando la Replica del Profilo risulta scaricata (#217),
@@ -270,12 +271,17 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: AppBottomNav(
-        currentIndex: navigationShell.currentIndex,
-        onDestinationSelected: navigationShell.goBranch,
-      ),
+    return Stack(
+      children: [
+        Scaffold(
+          body: navigationShell,
+          bottomNavigationBar: AppBottomNav(
+            currentIndex: navigationShell.currentIndex,
+            onDestinationSelected: navigationShell.goBranch,
+          ),
+        ),
+        PrimoMomentoTutorial(navigationShell: navigationShell),
+      ],
     );
   }
 }

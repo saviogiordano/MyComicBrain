@@ -4,13 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
+import 'package:mycomicbrain/core/data/preferences.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/conferma_candidato_page.dart';
+
+import '../../../core/auth/fake_auth_gateway.dart';
 
 void main() {
   late AppDatabase db;
@@ -35,6 +39,7 @@ void main() {
     WidgetTester tester, {
     required String scansioneId,
     List<Override> overrides = const [],
+    Preferences? preferenze,
   }) async {
     final router = GoRouter(
       initialLocation: '/base',
@@ -74,6 +79,9 @@ void main() {
       ProviderScope(
         overrides: [
           comicsRepositoryProvider.overrideWithValue(repository),
+          accountPreferencesProvider.overrideWithValue(
+            preferenze ?? PreferencesInMemoria(),
+          ),
           ...overrides,
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
@@ -330,4 +338,126 @@ void main() {
       );
     },
   );
+
+  group('Tutorial di inserimento, tappa "Possibile corrispondenza" (PRD #242)', () {
+    const testoCandidato =
+        'Ecco le corrispondenze, la più probabile in alto. Scegli e conferma';
+    const testoManuale =
+        'Nessuna è quella giusta? Inseriscilo a mano, la foto resta collegata';
+    const testoSenzaCandidati =
+        'Non ho trovato una corrispondenza: inseriscilo a mano, la foto resta '
+        'collegata';
+
+    PreferencesInMemoria inAttesa() =>
+        PreferencesInMemoria()
+          ..valori['tutorial.inserimento.fase'] = 'inAttesaPrimaScansione';
+
+    Future<String> conUnCandidato() async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repository.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repository.aggiungiCandidato(
+        identificazioneId: identificazioneId,
+        source: FonteCandidato.esterno,
+        punteggio: 80,
+        seriesName: 'Batman',
+        issueNumberLabel: '41',
+        publisher: 'DC Comics',
+      );
+      await repository.completaIdentificazione(id: identificazioneId);
+      return scansioneId;
+    }
+
+    testWidgets('con Candidati: Candidato e poi "Inserisci manualmente", e '
+        'il tutorial è visto', (tester) async {
+      final preferenze = inAttesa();
+      await pumpConfermaCandidato(
+        tester,
+        scansioneId: await conUnCandidato(),
+        preferenze: preferenze,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(testoCandidato), findsOneWidget);
+      expect(preferenze.valori['tutorial.inserimento.fase'], 'visto');
+
+      await tester.tap(find.text('Avanti'));
+      await tester.pumpAndSettle();
+      expect(find.text(testoManuale), findsOneWidget);
+
+      await tester.tap(find.text('Ho capito'));
+      await tester.pumpAndSettle();
+      expect(find.text(testoManuale), findsNothing);
+    });
+
+    testWidgets('senza Candidati: solo "Inserisci manualmente"', (
+      tester,
+    ) async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repository.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repository.completaIdentificazione(id: identificazioneId);
+      final preferenze = inAttesa();
+
+      await pumpConfermaCandidato(
+        tester,
+        scansioneId: scansioneId,
+        preferenze: preferenze,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(testoSenzaCandidati), findsOneWidget);
+      expect(find.text(testoCandidato), findsNothing);
+      expect(preferenze.valori['tutorial.inserimento.fase'], 'visto');
+    });
+
+    testWidgets('Identificazione fallita: solo "Inserisci manualmente"', (
+      tester,
+    ) async {
+      final scansioneId = await scansione();
+      final identificazioneId = await repository.avviaIdentificazione(
+        scansioneId: scansioneId,
+      );
+      await repository.fallisciIdentificazione(
+        id: identificazioneId,
+        errorMessage: 'ComicVine irraggiungibile',
+      );
+
+      await pumpConfermaCandidato(
+        tester,
+        scansioneId: scansioneId,
+        preferenze: inAttesa(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(testoSenzaCandidati), findsOneWidget);
+    });
+
+    testWidgets("aspetta la fine dell'Identificazione", (tester) async {
+      final scansioneId = await scansione();
+      await repository.avviaIdentificazione(scansioneId: scansioneId);
+      final preferenze = inAttesa();
+
+      await pumpConfermaCandidato(
+        tester,
+        scansioneId: scansioneId,
+        preferenze: preferenze,
+      );
+
+      expect(find.text(testoSenzaCandidati), findsNothing);
+      expect(
+        preferenze.valori['tutorial.inserimento.fase'],
+        'inAttesaPrimaScansione',
+      );
+    });
+
+    testWidgets('a tutorial visto non compare', (tester) async {
+      await pumpConfermaCandidato(tester, scansioneId: await conUnCandidato());
+      await tester.pumpAndSettle();
+
+      expect(find.text(testoCandidato), findsNothing);
+    });
+  });
 }

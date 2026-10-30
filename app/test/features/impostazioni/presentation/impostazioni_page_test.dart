@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
@@ -136,6 +137,7 @@ void main() {
     AssistenteClient? assistenteClient,
     ComicVineClient? comicVineClient,
     EsportazioneService? esportazioneService,
+    PreferencesInMemoria? preferenze,
   }) async {
     // Viewport ingrandita (§12, dopo #111): con le 4 card provider AI sempre
     // espanse il contenuto eccede gli 800x600 di default e lo `SliverList`
@@ -154,7 +156,7 @@ void main() {
           settingsRepositoryProvider.overrideWithValue(repo),
           authGatewayProvider.overrideWithValue(FakeAuthGateway()),
           accountPreferencesProvider.overrideWithValue(
-            PreferencesInMemoria()
+            (preferenze ?? PreferencesInMemoria())
               ..valori['account.benvenutoSuperato'] = 'true',
           ),
           haDatiLocaliProvider.overrideWithValue(() async => false),
@@ -171,9 +173,22 @@ void main() {
           if (esportazioneService != null)
             esportazioneServiceProvider.overrideWithValue(esportazioneService),
         ],
-        child: MaterialApp(
+        child: MaterialApp.router(
           theme: AppTheme.dark,
-          home: const ImpostazioniPage(),
+          routerConfig: GoRouter(
+            initialLocation: '/impostazioni',
+            routes: [
+              GoRoute(
+                path: '/impostazioni',
+                builder: (context, state) => const ImpostazioniPage(),
+              ),
+              GoRoute(
+                path: '/dashboard',
+                builder: (context, state) =>
+                    const Scaffold(body: Text('Dashboard')),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -723,5 +738,23 @@ void main() {
         },
       );
     }
+  });
+
+  testWidgets('Aiuto → "Come aggiungere un fumetto" riarma il Tutorial di '
+      'inserimento e torna alla Dashboard', (tester) async {
+    final preferenze = PreferencesInMemoria()
+      ..valori['tutorial.inserimento.fase'] = 'visto'
+      ..valori['tutorial.inserimento.tappaRiepilogoMostrata'] = 'true';
+    await pumpImpostazioni(tester, preferenze: preferenze);
+
+    await tester.tap(find.text('Come aggiungere un fumetto'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dashboard'), findsOneWidget);
+    expect(preferenze.valori['tutorial.inserimento.fase'], 'daMostrare');
+    expect(
+      preferenze.valori['tutorial.inserimento.tappaRiepilogoMostrata'],
+      'false',
+    );
   });
 }

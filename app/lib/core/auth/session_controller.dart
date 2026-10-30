@@ -83,6 +83,11 @@ const _chiaveBenvenutoSuperato = 'account.benvenutoSuperato';
 const _chiaveModalitaLocaleEsaurita = 'account.modalitaLocaleEsaurita';
 const _chiaveEmailInAttesa = 'account.emailInAttesa';
 
+/// Il dispositivo è già entrato nell'app almeno una volta: letto anche dal
+/// Tutorial di inserimento per riconoscere gli utenti esistenti (#238).
+bool benvenutoGiaSuperato(Preferences preferences) =>
+    preferences.getString(_chiaveBenvenutoSuperato) == 'true';
+
 class SessionController extends Notifier<SessionState> {
   Preferences get _preferences => ref.read(accountPreferencesProvider);
   AuthGateway get _gateway => ref.read(authGatewayProvider);
@@ -109,8 +114,7 @@ class SessionController extends Notifier<SessionState> {
     }
     return SessionState(
       profilo: gateway.profiloCorrente,
-      benvenutoSuperato:
-          preferences.getString(_chiaveBenvenutoSuperato) == 'true',
+      benvenutoSuperato: benvenutoGiaSuperato(preferences),
       modalitaLocaleEsaurita:
           preferences.getString(_chiaveModalitaLocaleEsaurita) == 'true',
       emailInAttesa: _nonVuota(preferences.getString(_chiaveEmailInAttesa)),

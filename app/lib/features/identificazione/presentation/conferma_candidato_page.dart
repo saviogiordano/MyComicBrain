@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,8 @@ import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/errore_configurazione.dart';
 import 'package:mycomicbrain/core/domain/identificazione.dart';
+import 'package:mycomicbrain/features/tutorial/application/tutorial_inserimento.dart';
+import 'package:mycomicbrain/features/tutorial/presentation/spotlight.dart';
 
 /// Schermo "Possibile corrispondenza" (§6.3, deciso su #54 — Variante B,
 /// elenco ordinato): tutti i Candidati di un'Identificazione visibili subito
@@ -28,6 +31,69 @@ class ConfermaCandidatoPage extends ConsumerStatefulWidget {
 class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
   int _selezionato = 0;
   bool _confermando = false;
+
+  /// Passi della tappa "Possibile corrispondenza" del Tutorial di
+  /// inserimento (PRD #242), `null` finché non è in corso.
+  List<PassoSpotlight>? _tappaTutorial;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.listenManual(
+      identificazioneProvider(widget.scansioneId),
+      (_, identificazione) => WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _valutaTappaTutorial(identificazione),
+      ),
+      fireImmediately: true,
+    );
+  }
+
+  /// La tappa chiude il tutorial appena compare. Senza Candidati
+  /// (Identificazione vuota o fallita) resta solo "Inserisci manualmente".
+  void _valutaTappaTutorial(AsyncValue<EsitoIdentificazione> identificazione) {
+    if (!mounted || _tappaTutorial != null) return;
+    if (!ref.read(tutorialInserimentoProvider).mostraTappaCorrispondenza) {
+      return;
+    }
+    final esito = identificazione.valueOrNull;
+    final List<PassoSpotlight> passi;
+    if (identificazione.hasError && esito == null ||
+        esito?.stato == StatoIdentificazione.fallita ||
+        esito?.stato == StatoIdentificazione.completata &&
+            esito!.candidati.isEmpty) {
+      passi = [
+        PassoSpotlight(
+          bersaglio: TutorialInserimentoKeys.inserisciManualmente,
+          testo:
+              'Non ho trovato una corrispondenza: inseriscilo a mano, la '
+              'foto resta collegata',
+        ),
+      ];
+    } else if (esito?.stato == StatoIdentificazione.completata) {
+      passi = [
+        PassoSpotlight(
+          bersaglio: TutorialInserimentoKeys.primoCandidato,
+          testo:
+              'Ecco le corrispondenze, la più probabile in alto. Scegli e '
+              'conferma',
+        ),
+        PassoSpotlight(
+          bersaglio: TutorialInserimentoKeys.inserisciManualmente,
+          testo:
+              'Nessuna è quella giusta? Inseriscilo a mano, la foto resta '
+              'collegata',
+        ),
+      ];
+    } else {
+      return;
+    }
+    setState(() => _tappaTutorial = passi);
+    unawaited(
+      ref.read(tutorialInserimentoProvider.notifier).avviaTappaCorrispondenza(),
+    );
+  }
+
+  void _chiudiTappaTutorial() => setState(() => _tappaTutorial = const []);
 
   void _inserisciManualmente() {
     context.push(
@@ -58,7 +124,7 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
         .valueOrNull
         ?.description;
 
-    return Scaffold(
+    final pagina = Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
       appBar: AppBar(
         backgroundColor: AppColors.surfaceDeepest,
@@ -74,6 +140,25 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
               )
             : _corpo(identificazione.valueOrNull, descrizioneAi),
       ),
+    );
+    final passi = _tappaTutorial;
+    // Sempre nello Stack: aggiungerlo solo per la tappa rimonterebbe la
+    // pagina.
+    return Stack(
+      children: [
+        pagina,
+        if (passi != null && passi.isNotEmpty)
+          Spotlight(
+            passi: passi,
+            onSalta: () {
+              unawaited(
+                ref.read(tutorialInserimentoProvider.notifier).salta(),
+              );
+              _chiudiTappaTutorial();
+            },
+            onFine: _chiudiTappaTutorial,
+          ),
+      ],
     );
   }
 
@@ -119,6 +204,7 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
             itemBuilder: (context, i) {
               final c = esito.candidati[i];
               return _RigaCandidato(
+                key: i == 0 ? TutorialInserimentoKeys.primoCandidato : null,
                 candidato: c,
                 descrizioneAi: descrizioneAi,
                 selezionato: i == _selezionato,
@@ -147,6 +233,7 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
                 ),
               ),
               TextButton(
+                key: TutorialInserimentoKeys.inserisciManualmente,
                 onPressed: _confermando ? null : _inserisciManualmente,
                 child: const Text('Inserisci manualmente'),
               ),
@@ -164,6 +251,7 @@ class _RigaCandidato extends StatelessWidget {
     required this.descrizioneAi,
     required this.selezionato,
     required this.onTap,
+    super.key,
   });
 
   final Candidato candidato;
@@ -511,6 +599,7 @@ class _EmptyState extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
+                key: TutorialInserimentoKeys.inserisciManualmente,
                 onPressed: onInserisciManualmente,
                 child: const Text('Inserisci manualmente'),
               ),
@@ -582,6 +671,7 @@ class _ErroreIdentificazione extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               TextButton(
+                key: TutorialInserimentoKeys.inserisciManualmente,
                 onPressed: onInserisciManualmente,
                 child: const Text('Inserisci manualmente'),
               ),
@@ -589,6 +679,7 @@ class _ErroreIdentificazione extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
+                  key: TutorialInserimentoKeys.inserisciManualmente,
                   onPressed: onInserisciManualmente,
                   child: const Text('Inserisci manualmente'),
                 ),
