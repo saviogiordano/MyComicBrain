@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#22B8CF</color>
+    <color name="ic_launcher_background">#0DC2D0</color>
     <color name="brand_ink">#0B1416</color>
     <!-- Sfondo della schermata di lancio nativa: stesso valore esatto di
          AppColors.surfaceBase (app/lib/core/design_system/tokens.dart) —
