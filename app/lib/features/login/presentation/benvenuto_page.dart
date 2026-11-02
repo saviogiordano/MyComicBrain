@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
+import 'package:mycomicbrain/core/config/funzionalita.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/login/presentation/accesso_ui.dart';
 import 'package:mycomicbrain/features/login/presentation/login_hero.dart';
@@ -20,12 +21,19 @@ class BenvenutoPage extends ConsumerWidget {
   ];
   static const _puntoSoloDispositivo =
       'I fumetti restano solo su questo dispositivo: se lo perdi, li perdi.';
+
+  /// Build senza cloud: nessun account a cui rimandare, solo il backup.
+  static const _puntoSoloDispositivoSenzaCloud =
+      'I fumetti restano solo su questo dispositivo. Per non perderli, '
+      'esporta un backup da Impostazioni.';
   static const _puntoAccountDopo =
       'Puoi creare un account quando vuoi, da Impostazioni, e importarli.';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final cloud = ref.watch(cloudAbilitatoProvider);
     final soloAccesso =
+        cloud &&
         ref.watch(sessionControllerProvider).ingresso == Ingresso.soloAccesso;
     final controller = ref.read(sessionControllerProvider.notifier);
 
@@ -61,7 +69,24 @@ class BenvenutoPage extends ConsumerWidget {
                         ],
                       ],
                     ),
-                    if (soloAccesso)
+                    if (!cloud)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            _puntoSoloDispositivoSenzaCloud,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          PulsanteIngresso(
+                            etichetta: 'Inizia',
+                            onPressed: controller.continuaSenzaAccount,
+                          ),
+                        ],
+                      )
+                    else if (soloAccesso)
                       Column(
                         children: [
                           PulsanteIngresso(

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/auth/auth_gateway.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
+import 'package:mycomicbrain/core/config/funzionalita.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
 import 'package:mycomicbrain/core/data/database.dart';
 import 'package:mycomicbrain/core/data/drift_comics_repository.dart';
@@ -40,11 +41,13 @@ void main() {
     SessionState? account,
     bool senzaRete = false,
     List<Override> sincronizzazione = const [],
+    bool cloud = true,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          cloudAbilitatoProvider.overrideWithValue(cloud),
           statoAccountProvider.overrideWithValue(
             account ?? _modalitaLocale,
           ),
@@ -399,6 +402,14 @@ void main() {
       await pumpDashboard(tester, account: stato());
 
       expect(find.text('Modalità locale'), findsOneWidget);
+    });
+
+    testWidgets('senza cloud non mostra la pillola "Modalità locale"', (
+      tester,
+    ) async {
+      await pumpDashboard(tester, account: stato(), cloud: false);
+
+      expect(find.text('Modalità locale'), findsNothing);
     });
 
     testWidgets('con un Profilo autenticato mostra la pillola "Account"', (

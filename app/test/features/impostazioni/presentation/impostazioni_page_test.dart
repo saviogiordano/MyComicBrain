@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
+import 'package:mycomicbrain/core/config/funzionalita.dart';
 import 'package:mycomicbrain/core/data/assistente_client.dart';
 import 'package:mycomicbrain/core/data/comic_vine_client.dart';
 import 'package:mycomicbrain/core/data/comics_repository.dart';
@@ -138,6 +139,7 @@ void main() {
     ComicVineClient? comicVineClient,
     EsportazioneService? esportazioneService,
     PreferencesInMemoria? preferenze,
+    bool cloud = true,
   }) async {
     // Viewport ingrandita (§12, dopo #111): con le 4 card provider AI sempre
     // espanse il contenuto eccede gli 800x600 di default e lo `SliverList`
@@ -154,6 +156,7 @@ void main() {
       ProviderScope(
         overrides: [
           settingsRepositoryProvider.overrideWithValue(repo),
+          cloudAbilitatoProvider.overrideWithValue(cloud),
           authGatewayProvider.overrideWithValue(FakeAuthGateway()),
           accountPreferencesProvider.overrideWithValue(
             (preferenze ?? PreferencesInMemoria())
@@ -756,5 +759,20 @@ void main() {
       preferenze.valori['tutorial.inserimento.tappaRiepilogoMostrata'],
       'false',
     );
+  });
+
+  testWidgets("senza cloud la sezione Account non c'è", (tester) async {
+    await pumpImpostazioni(tester, cloud: false);
+
+    expect(find.text('Crea account o accedi'), findsNothing);
+    expect(sezioneRuolo(), findsOneWidget);
+  });
+
+  testWidgets("con il cloud la sezione Account propone l'accesso", (
+    tester,
+  ) async {
+    await pumpImpostazioni(tester);
+
+    expect(find.text('Crea account o accedi'), findsOneWidget);
   });
 }

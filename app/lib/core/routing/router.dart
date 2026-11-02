@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
+import 'package:mycomicbrain/core/config/funzionalita.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/routing/app_bottom_nav.dart';
 import 'package:mycomicbrain/features/collezione/presentation/collezione_page.dart';
@@ -53,6 +54,7 @@ String? _redirectAccount(Ref ref, GoRouterState state) => redirectAccount(
   ref.read(sessionControllerProvider),
   replicaScaricata: ref.read(_replicaScaricataProvider),
   posizione: state.matchedLocation,
+  cloudAbilitato: ref.read(cloudAbilitatoProvider),
 );
 
 /// Gate del login reale (#171): fuori dall'app solo benvenuto e accesso,
@@ -62,12 +64,24 @@ String? _redirectAccount(Ref ref, GoRouterState state) => redirectAccount(
 /// dentro, `/accedi` resta raggiungibile in Modalità locale (da
 /// Impostazioni) ma non con un Profilo già autenticato. [replicaScaricata]
 /// è null finché non si sa.
+///
+/// Senza cloud ([cloudAbilitato] falso) esistono solo il benvenuto e
+/// l'app: si entra appena superato il benvenuto, anche su un device dove
+/// la Modalità locale risulta esaurita, e le schermate di account,
+/// importazione e Sincronizzazione non sono raggiungibili.
 @visibleForTesting
 String? redirectAccount(
   SessionState sessione, {
   required bool? replicaScaricata,
   required String posizione,
+  bool cloudAbilitato = true,
 }) {
+  if (!cloudAbilitato) {
+    if (!sessione.benvenutoSuperato) {
+      return posizione == '/benvenuto' ? null : '/benvenuto';
+    }
+    return _soloCloud.contains(posizione) ? '/dashboard' : null;
+  }
   final suBenvenuto = posizione == '/benvenuto';
   final suAccedi = posizione == '/accedi';
   final suPrimoDownload = posizione == '/primo-download';
@@ -89,6 +103,15 @@ String? redirectAccount(
   }
   return null;
 }
+
+/// Le schermate che esistono solo con il cloud.
+const _soloCloud = {
+  '/benvenuto',
+  '/accedi',
+  '/primo-download',
+  '/importazione',
+  '/account/elimina',
+};
 
 /// Router unico dell'app. Costruito come provider così la gate di sessione
 /// (Login → shell) è gestita con Riverpod invece che con stato locale.

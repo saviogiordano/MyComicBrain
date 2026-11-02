@@ -4,9 +4,11 @@ import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mycomicbrain/core/auth/auth_config.dart';
+import 'package:mycomicbrain/core/auth/auth_gateway_assente.dart';
 import 'package:mycomicbrain/core/auth/secure_session_storage.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
 import 'package:mycomicbrain/core/auth/supabase_auth_gateway.dart';
+import 'package:mycomicbrain/core/config/funzionalita.dart';
 import 'package:mycomicbrain/core/data/preferences_shared_preferences_adapter.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/data/secure_storage_flutter_adapter.dart';
@@ -25,7 +27,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final sharedPreferences = await SharedPreferences.getInstance();
-  final account = await _overridesAccount(sharedPreferences);
+  final account = Funzionalita.cloud
+      ? await _overridesAccount(sharedPreferences)
+      : _overridesSoloLocale(sharedPreferences);
   // Prima che l'utente possa superare il benvenuto: la regola per gli
   // utenti esistenti guarda `benvenutoSuperato` com'era all'avvio (#238).
   await TutorialInserimentoController.allAvvio(
@@ -42,6 +46,17 @@ Future<void> main() async {
     ),
   );
 }
+
+/// Build senza cloud ([Funzionalita.cloud] spento): Supabase non viene
+/// inizializzato e nessuno si autentica, così `supabaseClientProvider`
+/// resta `null` e con lui Replica e Sincronizzazione.
+List<Override> _overridesSoloLocale(SharedPreferences sharedPreferences) => [
+  authGatewayProvider.overrideWithValue(const AuthGatewayAssente()),
+  accountPreferencesProvider.overrideWithValue(
+    SharedPreferencesAdapter(sharedPreferences),
+  ),
+  haDatiLocaliProvider.overrideWithValue(() async => false),
+];
 
 /// Account (#171, ADR-0008): inizializza Supabase con la sessione nello
 /// storage sicuro, che `initialize` ripristina prima di restituire — così
