@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
+import 'package:mycomicbrain/core/config/funzionalita.dart';
 import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/dashboard_kpis.dart';
@@ -338,7 +339,9 @@ class _Header extends ConsumerWidget {
         Row(
           children: [
             const Expanded(child: SectionHeader(label: 'la tua collezione')),
-            if (account.profilo != null && indicatore != null)
+            if (!ref.watch(cloudAbilitatoProvider))
+              const SizedBox.shrink()
+            else if (account.profilo != null && indicatore != null)
               PillolaSincronizzazione(indicatore: indicatore)
             else
               AppChip(

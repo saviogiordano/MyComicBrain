@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mycomicbrain/core/auth/session_controller.dart';
+import 'package:mycomicbrain/core/config/funzionalita.dart';
 import 'package:mycomicbrain/features/login/presentation/benvenuto_page.dart';
 
 import '../../../core/auth/fake_auth_gateway.dart';
@@ -11,9 +12,13 @@ void main() {
 
   setUp(() => preferences = PreferencesInMemoria());
 
-  Future<ProviderContainer> mostra(WidgetTester tester) async {
+  Future<ProviderContainer> mostra(
+    WidgetTester tester, {
+    bool cloud = true,
+  }) async {
     final container = ProviderContainer(
       overrides: [
+        cloudAbilitatoProvider.overrideWithValue(cloud),
         authGatewayProvider.overrideWithValue(FakeAuthGateway()),
         accountPreferencesProvider.overrideWithValue(preferences),
         haDatiLocaliProvider.overrideWithValue(() async => false),
@@ -66,5 +71,32 @@ void main() {
       find.textContaining('la collezione è già passata a un account'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('senza cloud offre solo "Inizia", che entra nell\'app', (
+    tester,
+  ) async {
+    final container = await mostra(tester, cloud: false);
+
+    expect(find.text('Crea un account'), findsNothing);
+    expect(find.text('Accedi'), findsNothing);
+    expect(find.text('Usa senza account'), findsNothing);
+    expect(find.textContaining('esporta un backup'), findsOneWidget);
+
+    await tester.tap(find.text('Inizia'));
+    await tester.pumpAndSettle();
+
+    expect(container.read(sessionControllerProvider).benvenutoSuperato, isTrue);
+  });
+
+  testWidgets('senza cloud ignora la Modalità locale esaurita', (
+    tester,
+  ) async {
+    preferences.valori['account.modalitaLocaleEsaurita'] = 'true';
+
+    await mostra(tester, cloud: false);
+
+    expect(find.text('Continua con Apple'), findsNothing);
+    expect(find.text('Inizia'), findsOneWidget);
   });
 }

@@ -53,4 +53,48 @@ void main() {
     expect(vai(s, '/primo-download'), '/dashboard');
     expect(vai(s, '/collezione'), isNull);
   });
+
+  group('senza cloud', () {
+    String? senzaCloud(SessionState s, String posizione) => redirectAccount(
+      s,
+      replicaScaricata: null,
+      posizione: posizione,
+      cloudAbilitato: false,
+    );
+
+    SessionState locale({required bool benvenuto, bool esaurita = false}) =>
+        SessionState(
+          profilo: null,
+          benvenutoSuperato: benvenuto,
+          modalitaLocaleEsaurita: esaurita,
+          emailInAttesa: null,
+        );
+
+    test('al primo avvio resta sul benvenuto', () {
+      final s = locale(benvenuto: false);
+      expect(senzaCloud(s, '/benvenuto'), isNull);
+      expect(senzaCloud(s, '/dashboard'), '/benvenuto');
+      expect(senzaCloud(s, '/accedi'), '/benvenuto');
+    });
+
+    test('superato il benvenuto le schermate del cloud portano alla '
+        'Dashboard', () {
+      final s = locale(benvenuto: true);
+      for (final posizione in [
+        '/benvenuto',
+        '/accedi',
+        '/primo-download',
+        '/importazione',
+        '/account/elimina',
+      ]) {
+        expect(senzaCloud(s, posizione), '/dashboard', reason: posizione);
+      }
+      expect(senzaCloud(s, '/collezione'), isNull);
+    });
+
+    test('con la Modalità locale esaurita si entra lo stesso', () {
+      final s = locale(benvenuto: true, esaurita: true);
+      expect(senzaCloud(s, '/dashboard'), isNull);
+    });
+  });
 }
