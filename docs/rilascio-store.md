@@ -66,12 +66,12 @@ Per una nuova versione visibile agli utenti cambia la prima parte
    scripts/build-store.sh ios --build-number=<N>
    ```
    Lo script produce:
-   - `app/build/ios/archive/Runner.xcarchive`, l'archive;
+   - `app/build/ios/archive/MyComicBrain.xcarchive`, l'archive;
    - `app/build/ios/ipa/*.ipa`, il file da caricare.
 3. Carica la build in uno di questi modi:
    - **Xcode Organizer** (il più semplice):
      ```bash
-     open app/build/ios/archive/Runner.xcarchive
+     open app/build/ios/archive/MyComicBrain.xcarchive
      ```
      poi Distribute App → App Store Connect → Upload.
    - **Transporter** (app gratuita del Mac App Store): trascini dentro il
