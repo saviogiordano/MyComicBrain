@@ -15,6 +15,7 @@ import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/features/identificazione/presentation/inserisci_manualmente_page.dart';
+import '../../../core/data/ai_abilitata_fissa.dart';
 
 void main() {
   late AppDatabase db;
@@ -81,10 +82,10 @@ void main() {
 
     // Router a tre livelli, sul modello reale (`RiepilogoPage` ->
     // `ConfermaCandidatoPage` -> `InserisciManualmentePage`, tutti
-    // `context.push`): `InserisciManualmentePage._salva()` fa due `pop()`
-    // (deciso dopo un bug osservato — vedi il test dedicato sotto), quindi
-    // serve davvero uno stub intermedio da attraversare, non un solo
-    // livello, o il secondo `pop()` non avrebbe nulla da rimuovere.
+    // `context.push`): `InserisciManualmentePage._salva()` chiude sé stessa
+    // con `true` e lo stub intermedio si chiude a sua volta, come
+    // `ConfermaCandidatoPage` (deciso dopo un bug osservato — vedi il test
+    // dedicato sotto).
     final router = GoRouter(
       initialLocation: '/scansione/riepilogo',
       routes: [
@@ -107,10 +108,13 @@ void main() {
           builder: (context, state) => Scaffold(
             body: Center(
               child: ElevatedButton(
-                onPressed: () => context.push(
-                  '/scansione/inserisci-manualmente',
-                  extra: state.extra,
-                ),
+                onPressed: () async {
+                  final salvata = await context.push<bool>(
+                    '/scansione/inserisci-manualmente',
+                    extra: state.extra,
+                  );
+                  if ((salvata ?? false) && context.mounted) context.pop();
+                },
                 child: const Text('Conferma'),
               ),
             ),
@@ -125,7 +129,10 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [comicsRepositoryProvider.overrideWithValue(repository)],
+        overrides: [
+          aiAbilitata(),
+          comicsRepositoryProvider.overrideWithValue(repository),
+        ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
     );
@@ -421,12 +428,13 @@ void main() {
             builder: (context, state) => Scaffold(
               body: Center(
                 child: ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     confermeCandidato++;
-                    context.push(
+                    final salvata = await context.push<bool>(
                       '/scansione/inserisci-manualmente',
                       extra: scansioneId,
                     );
+                    if ((salvata ?? false) && context.mounted) context.pop();
                   },
                   child: const Text('Conferma'),
                 ),
@@ -443,7 +451,10 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [comicsRepositoryProvider.overrideWithValue(repository)],
+          overrides: [
+            aiAbilitata(),
+            comicsRepositoryProvider.overrideWithValue(repository),
+          ],
           child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
         ),
       );
@@ -481,6 +492,63 @@ void main() {
         hasLength(1),
         reason: 'una sola Copia per la Scansione, non due',
       );
+    },
+  );
+
+  testWidgets(
+    "senza Analisi Copertina (AI spenta) parte vuoto, salva e chiude solo sé "
+    'stesso',
+    (tester) async {
+      final scansioneId = await repository.aggiungiScansione(
+        image: '/scansioni/1.jpg',
+      );
+      tester.view.physicalSize = const Size(800, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = GoRouter(
+        initialLocation: '/scansione/riepilogo',
+        routes: [
+          GoRoute(
+            path: '/scansione/riepilogo',
+            builder: (context, state) => const Scaffold(
+              body: Center(child: Text('Riepilogo batch')),
+            ),
+          ),
+          GoRoute(
+            path: '/scansione/inserisci-manualmente',
+            builder: (context, state) =>
+                InserisciManualmentePage(scansioneId: state.extra! as String),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [comicsRepositoryProvider.overrideWithValue(repository)],
+          child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
+        ),
+      );
+      unawaited(
+        router.push('/scansione/inserisci-manualmente', extra: scansioneId),
+      );
+      await tester.pumpAndSettle();
+
+      final titolo = tester.widget<TextField>(
+        find.byKey(const Key('campo-titolo')),
+      );
+      expect(titolo.controller!.text, isEmpty);
+
+      await tester.enterText(
+        find.byKey(const Key('campo-titolo')),
+        'Dylan Dog',
+      );
+      await tester.pump();
+      await tester.tap(find.text('Salva'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Riepilogo batch'), findsOneWidget);
+      final copie = await db.select(db.copie).get();
+      expect(copie.single.scansioneId, scansioneId);
     },
   );
 }

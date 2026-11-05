@@ -96,6 +96,13 @@ class TutorialInserimentoController extends Notifier<StatoTutorialInserimento> {
     await _preferences.setString(_chiaveTappaRiepilogo, 'true');
   }
 
+  /// Con l'AI spenta la pagina dei Candidati non arriva: la tappa sul
+  /// Riepilogo è anche l'ultima.
+  Future<void> avviaTappaRiepilogoSenzaAi() async {
+    await avviaTappaRiepilogo();
+    await _impostaFase(FaseTutorialInserimento.visto);
+  }
+
   Future<void> avviaTappaCorrispondenza() =>
       _impostaFase(FaseTutorialInserimento.visto);
 

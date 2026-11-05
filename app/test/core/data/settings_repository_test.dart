@@ -260,4 +260,15 @@ void main() {
 
     expect(await repo.apiKeyValutazione, isNull);
   });
+
+  test("l'AI è spenta finché non viene accesa, e la scelta resta", () async {
+    final repository = SettingsRepository.inMemoria();
+    expect(repository.aiAbilitata, isFalse);
+
+    await repository.impostaAiAbilitata(abilitata: true);
+    expect(repository.aiAbilitata, isTrue);
+
+    await repository.impostaAiAbilitata(abilitata: false);
+    expect(repository.aiAbilitata, isFalse);
+  });
 }

@@ -13,6 +13,7 @@ import 'package:mycomicbrain/features/scansione/presentation/revisione_page.dart
 import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart';
 import 'package:mycomicbrain/features/scansione/presentation/scansione_page.dart';
 import 'package:path/path.dart' as p;
+import '../../../core/data/ai_abilitata_fissa.dart';
 
 void main() {
   const scannerChannel = MethodChannel('cunning_document_scanner');
@@ -81,7 +82,7 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      ProviderScope(overrides: overrides, child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router)),
+      ProviderScope(overrides: [aiAbilitata(), ...overrides], child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router)),
     );
     await tester.pumpAndSettle();
   }
@@ -194,6 +195,7 @@ void main() {
       await pumpScanner(
         tester,
         overrides: [
+          aiAbilitata(),
           scansioneStorageProvider.overrideWithValue(ScansioneStorage(baseDirectory: () async => tempDir)),
         ],
         // Stub della revisione: l'editor nativo di image_cropper non è

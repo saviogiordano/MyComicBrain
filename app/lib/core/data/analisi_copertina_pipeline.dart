@@ -32,18 +32,24 @@ import 'package:mycomicbrain/core/domain/analisi_copertina.dart';
 /// Solo il device che ha il file la avvia: gli altri, che ricevono la
 /// Scansione con la Sincronizzazione ma non l'immagine, la lasciano
 /// `pending`, così la stessa chiamata AI non si paga due volte.
+///
+/// Con l'AI spenta in Impostazioni non parte nessuna nuova chiamata: niente
+/// viene accodato, le righe `pending` restano ferme e [riprova] non fa nulla.
+/// Una chiamata già partita arriva in fondo.
 class AnalisiCopertinaPipeline {
   AnalisiCopertinaPipeline({
     required ComicsRepository repository,
     CoverAnalysisClient? client,
     IdentificazionePipeline? identificazionePipeline,
     Future<String> Function(String image)? risolviImmagine,
+    bool Function()? aiAbilitata,
   }) : _repository = repository,
        _client = client ?? ClaudeCoverAnalysisClient(),
        _identificazionePipeline =
            identificazionePipeline ??
            IdentificazionePipeline(repository: repository),
-       _risolviImmagine = risolviImmagine ?? _stessoPercorso;
+       _risolviImmagine = risolviImmagine ?? _stessoPercorso,
+       _aiAbilitata = aiAbilitata ?? _sempreAbilitata;
 
   final ComicsRepository _repository;
   final CoverAnalysisClient _client;
@@ -54,7 +60,12 @@ class AnalisiCopertinaPipeline {
   /// device ha un percorso relativo alla cartella del Profilo.
   final Future<String> Function(String image) _risolviImmagine;
 
+  /// Letta a ogni passo: l'utente può spegnere l'AI a batch in corso.
+  final bool Function() _aiAbilitata;
+
   static Future<String> _stessoPercorso(String image) async => image;
+
+  static bool _sempreAbilitata() => true;
 
   Future<void>? _inAttesaInCorso;
   var _inAttesaDiNuovo = false;
@@ -73,6 +84,7 @@ class AnalisiCopertinaPipeline {
   /// hanno già un'Analisi Copertina (hanno il loro retry, [riprova]) e
   /// quelle il cui file non è su questo device.
   Future<void> accoda(Iterable<String> percorsiImmagine) async {
+    if (!_aiAbilitata()) return;
     for (final percorso in percorsiImmagine) {
       final String scansioneId;
       try {
@@ -110,6 +122,7 @@ class AnalisiCopertinaPipeline {
     do {
       _inAttesaDiNuovo = false;
       while (true) {
+        if (!_aiAbilitata()) return;
         final inAttesa = await _repository
             .watchScansioniInAttesaDiAnalisi()
             .first;
@@ -146,6 +159,7 @@ class AnalisiCopertinaPipeline {
   /// riprende a sua volta la propria riga invece di duplicarla — vedi
   /// `IdentificazionePipeline.identifica`.
   Future<void> riprova(String percorsoImmagine) async {
+    if (!_aiAbilitata()) return;
     final scansioneId = await _repository.idScansionePerImmagine(
       percorsoImmagine,
     );

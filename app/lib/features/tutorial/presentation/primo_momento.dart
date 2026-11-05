@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mycomicbrain/core/data/providers.dart';
 import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/features/tutorial/application/tutorial_inserimento.dart';
 import 'package:mycomicbrain/features/tutorial/presentation/spotlight.dart';
@@ -68,6 +69,7 @@ class _PrimoMomentoTutorialState extends ConsumerState<PrimoMomentoTutorial> {
     return switch (_fase) {
       _Fase.nessuna => const SizedBox.shrink(),
       _Fase.scheda => _SchedaIntroduttiva(
+        aiAbilitata: ref.watch(aiAbilitataProvider),
         onMostrami: () => setState(() => _fase = _Fase.spotlight),
         onSalta: () {
           unawaited(_controller.salta());
@@ -114,8 +116,13 @@ class _PrimoMomentoTutorialState extends ConsumerState<PrimoMomentoTutorial> {
 }
 
 class _SchedaIntroduttiva extends StatelessWidget {
-  const _SchedaIntroduttiva({required this.onMostrami, required this.onSalta});
+  const _SchedaIntroduttiva({
+    required this.aiAbilitata,
+    required this.onMostrami,
+    required this.onSalta,
+  });
 
+  final bool aiAbilitata;
   final VoidCallback onMostrami;
   final VoidCallback onSalta;
 
@@ -173,15 +180,23 @@ class _SchedaIntroduttiva extends StatelessWidget {
                     const SizedBox(height: AppSpacing.lg),
                     riga(
                       '📷',
-                      'Fotografa la cover: riconosco io il fumetto e ti '
-                          'propongo le corrispondenze.',
+                      aiAbilitata
+                          ? 'Fotografa la cover: riconosco io il fumetto e ti '
+                                'propongo le corrispondenze.'
+                          : 'Fotografa la cover: la foto resta collegata al '
+                                'fumetto.',
                     ),
                     riga(
                       '📚',
                       'Ne hai tanti? Scatta più cover di fila, poi tocca '
                           '"Fine".',
                     ),
-                    riga('✍️', 'Non trovo quello giusto? Lo inserisci a mano.'),
+                    riga(
+                      '✍️',
+                      aiAbilitata
+                          ? 'Non trovo quello giusto? Lo inserisci a mano.'
+                          : 'Poi tocca ogni riga e compila la scheda a mano.',
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     SizedBox(
                       width: double.infinity,

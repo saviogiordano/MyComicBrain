@@ -202,7 +202,9 @@ class _BatchInSospesoBanner extends ConsumerWidget {
           Text(
             attesa
                 ? 'Verranno riconosciute appena torna la connessione'
-                : 'Tocca per riprendere il riconoscimento AI',
+                : ref.watch(aiAbilitataProvider)
+                ? 'Tocca per riprendere il riconoscimento AI'
+                : 'Tocca per compilare le schede',
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textSecondary,
             ),
@@ -503,13 +505,13 @@ Color _kpiColor(_KpiTone tone, bool isZero) {
 /// L'invito alla prima scansione (righe 104-111 del prototipo).
 /// [emphasized] ingrandisce icona e tipografia per lo stato a zero,
 /// dove è l'unica azione disponibile sulla Dashboard.
-class _ScanCta extends StatelessWidget {
+class _ScanCta extends ConsumerWidget {
   const _ScanCta({this.emphasized = false});
 
   final bool emphasized;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final iconSize = emphasized ? 52.0 : 44.0;
 
     return Material(
@@ -563,7 +565,9 @@ class _ScanCta extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Fotografa → riconosci → conferma',
+                      ref.watch(aiAbilitataProvider)
+                          ? 'Fotografa → riconosci → conferma'
+                          : 'Fotografa → compila → salva',
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                       ),

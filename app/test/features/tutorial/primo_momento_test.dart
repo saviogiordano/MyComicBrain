@@ -8,6 +8,7 @@ import 'package:mycomicbrain/core/routing/router.dart';
 import 'package:mycomicbrain/features/tutorial/presentation/spotlight.dart';
 
 import '../../core/auth/fake_auth_gateway.dart';
+import '../../core/data/ai_abilitata_fissa.dart';
 
 /// La Scansione vera richiede scanner e permessi: qui bastano i suoi tre
 /// elementi illuminati, con le stesse chiavi.
@@ -57,6 +58,7 @@ void main() {
     WidgetTester tester, {
     String? faseIniziale,
     String initialLocation = '/dashboard',
+    bool ai = true,
   }) async {
     if (faseIniziale != null) {
       preferenze.valori['tutorial.inserimento.fase'] = faseIniziale;
@@ -84,7 +86,10 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [accountPreferencesProvider.overrideWithValue(preferenze)],
+        overrides: [
+          aiAbilitata(abilitata: ai),
+          accountPreferencesProvider.overrideWithValue(preferenze),
+        ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
     );
@@ -175,5 +180,17 @@ void main() {
     await pumpShell(tester, faseIniziale: 'visto');
 
     expect(find.text('Aggiungi il tuo primo fumetto'), findsNothing);
+  });
+
+  testWidgets("con l'AI spenta la scheda non promette il riconoscimento", (
+    tester,
+  ) async {
+    await pumpShell(tester, faseIniziale: 'daMostrare', ai: false);
+
+    expect(find.textContaining('riconosco io'), findsNothing);
+    expect(
+      find.text('Poi tocca ogni riga e compila la scheda a mano.'),
+      findsOneWidget,
+    );
   });
 }

@@ -65,8 +65,17 @@ void main() {
         ),
         GoRoute(
           path: '/scansione/inserisci-manualmente',
-          builder: (context, state) =>
-              Scaffold(body: Text('inserisci manualmente #${state.extra}')),
+          builder: (context, state) => Scaffold(
+            body: ListView(
+              children: [
+                Text('inserisci manualmente #${state.extra}'),
+                ElevatedButton(
+                  onPressed: () => context.pop(true),
+                  child: const Text('salva a mano'),
+                ),
+              ],
+            ),
+          ),
         ),
         GoRoute(
           path: '/impostazioni',
@@ -459,5 +468,22 @@ void main() {
 
       expect(find.text(testoCandidato), findsNothing);
     });
+  });
+
+  testWidgets('dopo il salvataggio a mano la pagina si chiude', (tester) async {
+    final scansioneId = await scansione();
+    final identificazioneId = await repository.avviaIdentificazione(
+      scansioneId: scansioneId,
+    );
+    await repository.completaIdentificazione(id: identificazioneId);
+    await pumpConfermaCandidato(tester, scansioneId: scansioneId);
+
+    await tester.tap(find.text('Inserisci manualmente'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('salva a mano'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('vai'), findsOneWidget);
+    expect(find.text('Nessuna corrispondenza trovata'), findsNothing);
   });
 }
