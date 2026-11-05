@@ -19,6 +19,8 @@ const _esempiRichiesta = [
 
 const _testoBloccato =
     "Configura il Provider AI Testuale per usare l'Assistente.";
+const _testoAiSpenta =
+    "Abilita l'AI nelle Impostazioni per usare l'Assistente.";
 
 /// Copy del Messaggio di sistema per il fallback STT Android — verbatim da
 /// `docs/requisiti.md` §24 (deciso su #124, implementato su #138):
@@ -225,6 +227,7 @@ class _CercaState extends ConsumerState<_Cerca> {
             _InputBar(
               controller: _controller,
               abilitato: widget.configurato && !_inviando && !_ascoltando,
+              aiSpenta: !ref.watch(aiAbilitataProvider),
               microfonoAbilitato: widget.configurato && !_inviando,
               ascoltando: _ascoltando,
               onInvia: _invia,
@@ -739,11 +742,11 @@ class _BubbleCaricamentoState extends State<_BubbleCaricamento>
   }
 }
 
-class _BannerBloccato extends StatelessWidget {
+class _BannerBloccato extends ConsumerWidget {
   const _BannerBloccato();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -778,7 +781,9 @@ class _BannerBloccato extends StatelessWidget {
                 const SizedBox(width: AppSpacing.xs),
                 Expanded(
                   child: Text(
-                    _testoBloccato,
+                    ref.watch(aiAbilitataProvider)
+                        ? _testoBloccato
+                        : _testoAiSpenta,
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -808,6 +813,7 @@ class _InputBar extends StatelessWidget {
   const _InputBar({
     required this.controller,
     required this.abilitato,
+    required this.aiSpenta,
     required this.microfonoAbilitato,
     required this.ascoltando,
     required this.onInvia,
@@ -816,6 +822,7 @@ class _InputBar extends StatelessWidget {
 
   final TextEditingController controller;
   final bool abilitato;
+  final bool aiSpenta;
   final bool microfonoAbilitato;
   final bool ascoltando;
   final ValueChanged<String> onInvia;
@@ -863,6 +870,8 @@ class _InputBar extends StatelessWidget {
                       ? 'Ascolto…'
                       : abilitato
                       ? 'Scrivi o chiedi qualcosa…'
+                      : aiSpenta
+                      ? "Abilita l'AI per continuare"
                       : 'Configura il Provider per continuare',
                   hintStyle: AppTypography.bodyMedium.copyWith(
                     color: AppColors.textDisabled,

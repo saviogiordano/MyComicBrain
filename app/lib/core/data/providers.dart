@@ -65,6 +65,29 @@ final sharedPreferencesProvider = Provider<SharedPreferences>(
   ),
 );
 
+/// Se l'AI è accesa su questo dispositivo, per i widget: accenderla o
+/// spegnerla aggiorna subito Impostazioni, riepilogo, Dashboard e Cerca.
+class AiAbilitataNotifier extends Notifier<bool> {
+  @override
+  bool build() => ref.watch(settingsRepositoryProvider).aiAbilitata;
+
+  /// Riaccesa, riparte ciò che era rimasto `pending`. Le Scansioni mai
+  /// mandate al riconoscimento partono da "Fine" nel riepilogo.
+  Future<void> imposta({required bool abilitata}) async {
+    state = abilitata;
+    await ref
+        .read(settingsRepositoryProvider)
+        .impostaAiAbilitata(abilitata: abilitata);
+    if (abilitata && !ref.read(senzaReteProvider)) {
+      unawaited(ref.read(analisiCopertinaPipelineProvider).avviaInAttesa());
+    }
+  }
+}
+
+final aiAbilitataProvider = NotifierProvider<AiAbilitataNotifier, bool>(
+  AiAbilitataNotifier.new,
+);
+
 final copertinaDownloaderProvider = Provider<CopertinaDownloader>(
   (ref) => CopertinaDownloader(),
 );
@@ -400,7 +423,8 @@ final assistenteOrchestratorProvider = Provider<AssistenteOrchestrator>((ref) {
 /// dopo ogni scrittura sul ruolo Testuale, soddisfacendo il requisito di
 /// reattività "senza refresh manuale" di #123 senza introdurre un
 /// osservatore delle Impostazioni a sé.
-final assistenteConfiguratoProvider = FutureProvider<bool>((ref) {
+final assistenteConfiguratoProvider = FutureProvider<bool>((ref) async {
+  if (!ref.watch(aiAbilitataProvider)) return false;
   return ref
       .watch(settingsRepositoryProvider)
       .configurato(RuoloProviderAi.testuale);
@@ -455,11 +479,13 @@ final identificazionePipelineProvider = Provider<IdentificazionePipeline>((
 final analisiCopertinaPipelineProvider = Provider<AnalisiCopertinaPipeline>((
   ref,
 ) {
+  final settings = ref.watch(settingsRepositoryProvider);
   return AnalisiCopertinaPipeline(
     repository: ref.watch(comicsRepositoryProvider),
     client: ref.watch(coverAnalysisClientProvider),
     identificazionePipeline: ref.watch(identificazionePipelineProvider),
     risolviImmagine: ref.watch(scansioneStorageProvider).risolvi,
+    aiAbilitata: () => settings.aiAbilitata,
   );
 });
 
@@ -494,11 +520,16 @@ final senzaReteProvider = Provider<bool>(
 
 /// I percorsi immagine delle Scansioni mandate al riconoscimento ma ancora
 /// da avviare ("In attesa di rete" nel riepilogo e in Dashboard, #210).
+///
+/// Con l'AI spenta è vuoto: quelle Scansioni non aspettano più la rete, si
+/// compilano a mano.
 final scansioniInAttesaProvider = StreamProvider<Set<String>>(
-  (ref) => ref
-      .watch(comicsRepositoryProvider)
-      .watchScansioniInAttesaDiAnalisi()
-      .map((righe) => {for (final r in righe) r.image}),
+  (ref) => !ref.watch(aiAbilitataProvider)
+      ? Stream.value(const <String>{})
+      : ref
+            .watch(comicsRepositoryProvider)
+            .watchScansioniInAttesaDiAnalisi()
+            .map((righe) => {for (final r in righe) r.image}),
 );
 
 /// Lo stato reale dell'Analisi Copertina di una Scansione, per percorso

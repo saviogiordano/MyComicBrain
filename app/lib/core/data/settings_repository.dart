@@ -29,6 +29,7 @@ class SettingsRepository {
   final Preferences _preferences;
   final SecureStorage _secureStorage;
 
+  static const _chiaveAiAbilitata = 'settings.ai.abilitata';
   static const _chiaveApiKeyComics = 'settings.comics.apiKey';
 
   static const _chiaveApiKeyValutazione = 'settings.valutazione.apiKey';
@@ -57,6 +58,16 @@ class SettingsRepository {
 
   String _chiaveUrlLocale(RuoloProviderAi ruolo) =>
       'settings.aiProvider.locale.url.${ruolo.name}';
+
+  // --- AI abilitata (non sensibile, di dispositivo) ---
+
+  /// Se l'app può fare chiamate AI (Analisi Copertina e Assistente). Spenta
+  /// finché l'utente non la accende: senza AI ogni Scansione si compila a
+  /// mano. Le configurazioni dei provider restano salvate anche da spenta.
+  bool get aiAbilitata => _preferences.getString(_chiaveAiAbilitata) == 'true';
+
+  Future<void> impostaAiAbilitata({required bool abilitata}) =>
+      _preferences.setString(_chiaveAiAbilitata, abilitata.toString());
 
   // --- Provider AI selezionato per ruolo (non sensibile) ---
 

@@ -95,11 +95,16 @@ class _ConfermaCandidatoPageState extends ConsumerState<ConfermaCandidatoPage> {
 
   void _chiudiTappaTutorial() => setState(() => _tappaTutorial = const []);
 
-  void _inserisciManualmente() {
-    context.push(
+  /// Salvata a mano, questa pagina si chiude: restando sullo stack con un
+  /// Candidato preselezionato, "Conferma" creerebbe una seconda Copia per la
+  /// stessa Scansione (bug osservato). Si torna al riepilogo del batch, come
+  /// dopo [_conferma].
+  Future<void> _inserisciManualmente() async {
+    final salvata = await context.push<bool>(
       '/scansione/inserisci-manualmente',
       extra: widget.scansioneId,
     );
+    if ((salvata ?? false) && mounted) context.pop();
   }
 
   Future<void> _conferma(Candidato candidato) async {

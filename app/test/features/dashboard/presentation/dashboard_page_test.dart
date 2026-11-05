@@ -19,6 +19,7 @@ import 'package:mycomicbrain/core/design_system/design_system.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/features/dashboard/presentation/dashboard_page.dart';
 import 'package:mycomicbrain/features/sincronizzazione/application/sincronizzazione_providers.dart';
+import '../../../core/data/ai_abilitata_fissa.dart';
 
 void main() {
   late AppDatabase db;
@@ -42,10 +43,12 @@ void main() {
     bool senzaRete = false,
     List<Override> sincronizzazione = const [],
     bool cloud = true,
+    bool ai = true,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          aiAbilitata(abilitata: ai),
           appDatabaseProvider.overrideWithValue(db),
           cloudAbilitatoProvider.overrideWithValue(cloud),
           statoAccountProvider.overrideWithValue(
@@ -235,6 +238,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            aiAbilitata(),
             appDatabaseProvider.overrideWithValue(db),
             statoAccountProvider.overrideWithValue(_modalitaLocale),
           ],
@@ -487,6 +491,18 @@ void main() {
         findsOneWidget,
       );
     });
+  });
+
+  testWidgets("con l'AI spenta la Dashboard parla di schede da compilare", (
+    tester,
+  ) async {
+    await repo.aggiungiScansione(image: 'scansione.jpg');
+
+    await pumpDashboard(tester, ai: false);
+
+    expect(find.text('Tocca per compilare le schede'), findsOneWidget);
+    expect(find.text('Fotografa → compila → salva'), findsOneWidget);
+    expect(find.textContaining('riconoscimento AI'), findsNothing);
   });
 }
 

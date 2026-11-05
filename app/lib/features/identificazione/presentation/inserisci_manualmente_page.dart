@@ -13,7 +13,8 @@ import 'package:mycomicbrain/core/domain/copia.dart';
 /// Schermo "Inserisci manualmente" (§6.3, deciso su #61 — Variante B, form
 /// unico; precompilato dall'AI su #63): raggiunto da `ConfermaCandidatoPage`
 /// quando nessun Candidato combacia (o non ce ne sono) — tipicamente perché
-/// ComicVine non copre l'edizione italiana della cover scansionata. Nessuno
+/// ComicVine non copre l'edizione italiana della cover scansionata — oppure
+/// direttamente dal riepilogo con l'AI spenta, e allora parte vuoto. Nessuno
 /// step di ricerca preliminare — la pipeline automatica ha già interrogato
 /// interno + ComicVine, quindi crea direttamente Opera/Serie/Edizione/Copia
 /// da zero, stessa superficie di scrittura usata da
@@ -206,19 +207,10 @@ class _InserisciManualmentePageState
     );
 
     if (!mounted) return;
-    // Un solo `context.pop()` tornerebbe a `ConfermaCandidatoPage`, ancora
-    // sullo stack sotto questa pagina con un Candidato preselezionato:
-    // l'utente poteva poi premere "Conferma" lì per sbaglio, creando una
-    // seconda Copia per la stessa Scansione (bug osservato). Due pop invece
-    // di un `go('/dashboard')` (comportamento precedente, richiesta utente):
-    // il primo chiude questa pagina, il secondo chiude anche
-    // `ConfermaCandidatoPage`, riportando al riepilogo del batch — stessa
-    // destinazione della conferma di un Candidato
-    // (`ConfermaCandidatoPage._conferma`) — dove la riga ormai risulta
-    // "Salvata" e non più selezionabile.
-    final router = GoRouter.of(context);
-    router.pop();
-    router.pop();
+    // `true` = Copia creata: `ConfermaCandidatoPage`, se è sotto, si chiude a
+    // sua volta. Il riepilogo, dove la riga ora risulta "Salvata", può essere
+    // subito sotto questa pagina (AI spenta), quindi qui si chiude solo lei.
+    context.pop(true);
   }
 
   @override

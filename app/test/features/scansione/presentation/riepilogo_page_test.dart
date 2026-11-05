@@ -22,6 +22,7 @@ import 'package:mycomicbrain/features/scansione/presentation/riepilogo_page.dart
 import 'package:path/path.dart' as p;
 
 import '../../../core/auth/fake_auth_gateway.dart';
+import '../../../core/data/ai_abilitata_fissa.dart';
 
 /// Sostituisce la pipeline reale (rete/DB) nei test: registra i batch
 /// ricevuti da "Fine" invece di chiamare Claude davvero.
@@ -151,6 +152,7 @@ void main() {
   Future<_RisultatoPop> pumpRiepilogo(
     WidgetTester tester,
     List<XFile> scansioni, {
+    bool ai = true,
     AnalisiCopertinaPipeline? pipeline,
     ComicsRepository? repository,
     bool ripresa = false,
@@ -207,6 +209,14 @@ void main() {
           ),
         ),
         GoRoute(
+          path: '/scansione/inserisci-manualmente',
+          builder: (context, state) => Scaffold(
+            body: Center(
+              child: Text('Inserisci manualmente · Scansione ${state.extra}'),
+            ),
+          ),
+        ),
+        GoRoute(
           path: '/impostazioni',
           builder: (context, state) =>
               const Scaffold(body: Center(child: Text('Impostazioni'))),
@@ -216,6 +226,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          aiAbilitata(abilitata: ai),
           if (pipeline != null)
             analisiCopertinaPipelineProvider.overrideWithValue(pipeline),
           if (repository != null)
@@ -1208,6 +1219,176 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(testo), findsNothing);
+    });
+  });
+
+  group('con l\'AI spenta', () {
+    late AppDatabase db;
+    late DriftComicsRepository repository;
+
+    setUp(() {
+      db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      repository = DriftComicsRepository(db);
+    });
+
+    tearDown(() => db.close());
+
+    testWidgets('le righe sono da compilare e "Fine" non serve', (
+      tester,
+    ) async {
+      final pipeline = _FakeAnalisiCopertinaPipeline();
+      await pumpRiepilogo(
+        tester,
+        scansioniFinte(2),
+        ai: false,
+        pipeline: pipeline,
+      );
+
+      expect(find.text('Da compilare'), findsNWidgets(2));
+      expect(find.text('Fine'), findsNothing);
+      expect(find.text('Vai alla Dashboard'), findsOneWidget);
+      expect(find.textContaining('riconoscimento AI'), findsNothing);
+      expect(pipeline.batchRicevuti, isEmpty);
+      expect(pipeline.accodati, isEmpty);
+    });
+
+    testWidgets('toccare una riga apre la scheda da compilare', (tester) async {
+      final scansioni = scansioniFinte(1);
+      final id = await repository.aggiungiScansione(image: scansioni[0].path);
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        ai: false,
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+        repository: repository,
+      );
+
+      await tester.tap(find.text('Scansione 1'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Inserisci manualmente · Scansione $id'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('una Scansione `completata` resta confermabile, senza retry', (
+      tester,
+    ) async {
+      final scansioni = scansioniFinte(1);
+      final id = await repository.aggiungiScansione(image: scansioni[0].path);
+      final analisi = await repository.avviaAnalisiCopertina(scansioneId: id);
+      await repository.completaAnalisiCopertina(id: analisi, rawResponse: '{}');
+      final pipeline = _FakeAnalisiCopertinaPipeline();
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        ai: false,
+        pipeline: pipeline,
+        repository: repository,
+      );
+
+      await tester.tap(find.text('Completata'));
+      await tester.pumpAndSettle();
+
+      expect(pipeline.riprovati, isEmpty);
+      expect(find.text('Conferma candidato · Scansione $id'), findsOneWidget);
+    });
+
+    testWidgets('una Scansione `fallita` si compila, senza retry', (
+      tester,
+    ) async {
+      final scansioni = scansioniFinte(1);
+      final id = await repository.aggiungiScansione(image: scansioni[0].path);
+      final analisi = await repository.avviaAnalisiCopertina(scansioneId: id);
+      await repository.fallisciAnalisiCopertina(
+        id: analisi,
+        errorMessage: 'errore',
+      );
+      final pipeline = _FakeAnalisiCopertinaPipeline();
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        ai: false,
+        pipeline: pipeline,
+        repository: repository,
+      );
+
+      await tester.tap(find.text('Da compilare'));
+      await tester.pumpAndSettle();
+
+      expect(pipeline.riprovati, isEmpty);
+      expect(
+        find.text('Inserisci manualmente · Scansione $id'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('una riga salvata non si elimina: è la cover della Copia', (
+      tester,
+    ) async {
+      final scansioni = scansioniFinte(2);
+      final salvata = await repository.aggiungiScansione(
+        image: scansioni[0].path,
+      );
+      await repository.aggiungiScansione(image: scansioni[1].path);
+      final opera = await repository.aggiungiOpera(title: 'Opera');
+      final edizione = await repository.aggiungiEdizione(operaId: opera);
+      await repository.aggiungiCopia(
+        edizioneId: edizione,
+        status: StatoCopia.posseduta,
+        scansioneId: salvata,
+      );
+      await pumpRiepilogo(
+        tester,
+        scansioni,
+        ai: false,
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+        repository: repository,
+      );
+
+      expect(find.text('Salvata'), findsOneWidget);
+      expect(find.byType(Dismissible), findsOneWidget);
+
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Elimina tutte'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Rimuovi tutte'));
+        await tester.pumpAndSettle();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await tester.pump();
+      });
+
+      expect(find.text('Salvata'), findsOneWidget);
+      expect(find.text('Da compilare'), findsNothing);
+      expect(await db.select(db.scansioni).get(), hasLength(1));
+    });
+
+    testWidgets('la tappa del tutorial parla della scheda e lo chiude', (
+      tester,
+    ) async {
+      final preferenze = PreferencesInMemoria()
+        ..valori['tutorial.inserimento.fase'] = 'inAttesaPrimaScansione';
+      await pumpRiepilogo(
+        tester,
+        scansioniFinte(1),
+        ai: false,
+        pipeline: _FakeAnalisiCopertinaPipeline(),
+        preferenze: preferenze,
+      );
+
+      expect(
+        find.text(
+          'Tocca una riga e compila la scheda: la foto resta collegata',
+        ),
+        findsOneWidget,
+      );
+      expect(preferenze.valori['tutorial.inserimento.fase'], 'visto');
     });
   });
 }

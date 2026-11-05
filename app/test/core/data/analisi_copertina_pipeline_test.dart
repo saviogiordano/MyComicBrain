@@ -343,7 +343,9 @@ void main() {
       // dal repository di produzione (che vive nell'UI), stesso identico
       // effetto sul DB.
       final scansioneId = await repo.idScansionePerImmagine(cancellata);
-      await (db.delete(db.scansioni)..where((s) => s.id.equals(scansioneId))).go();
+      await (db.delete(
+        db.scansioni,
+      )..where((s) => s.id.equals(scansioneId))).go();
 
       final pipeline = AnalisiCopertinaPipeline(
         repository: repo,
@@ -523,6 +525,54 @@ void main() {
         expect(await db.select(db.analisiCopertinaTable).get(), hasLength(2));
       },
     );
+  });
+
+  group("con l'AI spenta", () {
+    AnalisiCopertinaPipeline pipelineConAi({required bool Function() accesa}) =>
+        AnalisiCopertinaPipeline(
+          repository: repo,
+          client: _FakeCoverAnalysisClient(risultato: _risultatoCompleto),
+          identificazionePipeline: IdentificazionePipeline(
+            repository: repo,
+            comicVineClient: _FakeComicVineClient(),
+          ),
+          aiAbilitata: accesa,
+        );
+
+    test('un batch non crea righe di Analisi Copertina', () async {
+      final path = await scansioneConImmagine('cover.jpg');
+
+      await pipelineConAi(accesa: () => false).avviaBatch([path]);
+
+      expect(await db.select(db.analisiCopertinaTable).get(), isEmpty);
+    });
+
+    test('le righe `pending` restano ferme finché non si riaccende', () async {
+      final path = await scansioneConImmagine('cover.jpg');
+      var accesa = true;
+      final pipeline = pipelineConAi(accesa: () => accesa);
+      await pipeline.accoda([path]);
+      accesa = false;
+
+      await pipeline.avviaInAttesa();
+      expect((await unicaAnalisi()).status, StatoAnalisiCopertina.pending);
+
+      accesa = true;
+      await pipeline.avviaInAttesa();
+      expect((await unicaAnalisi()).status, StatoAnalisiCopertina.completata);
+    });
+
+    test('riprova non rifà la chiamata', () async {
+      final path = await scansioneConImmagine('cover.jpg');
+      var accesa = true;
+      final pipeline = pipelineConAi(accesa: () => accesa);
+      await pipeline.accoda([path]);
+      accesa = false;
+
+      await pipeline.riprova(path);
+
+      expect((await unicaAnalisi()).status, StatoAnalisiCopertina.pending);
+    });
   });
 }
 

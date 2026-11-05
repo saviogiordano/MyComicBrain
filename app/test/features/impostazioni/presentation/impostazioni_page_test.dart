@@ -23,6 +23,7 @@ import 'package:mycomicbrain/features/impostazioni/application/esportazione_serv
 import 'package:mycomicbrain/features/impostazioni/presentation/impostazioni_page.dart';
 
 import '../../../core/auth/fake_auth_gateway.dart';
+import '../../../core/data/ai_abilitata_fissa.dart';
 
 /// [EsportazioneService] finto che fallisce sempre (§16, deciso su #140):
 /// verifica il percorso di errore di "Importa/Esporta dati" senza dipendere
@@ -140,6 +141,7 @@ void main() {
     EsportazioneService? esportazioneService,
     PreferencesInMemoria? preferenze,
     bool cloud = true,
+    bool ai = true,
   }) async {
     // Viewport ingrandita (§12, dopo #111): con le 4 card provider AI sempre
     // espanse il contenuto eccede gli 800x600 di default e lo `SliverList`
@@ -155,6 +157,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          aiAbilitata(abilitata: ai),
           settingsRepositoryProvider.overrideWithValue(repo),
           cloudAbilitatoProvider.overrideWithValue(cloud),
           authGatewayProvider.overrideWithValue(FakeAuthGateway()),
@@ -774,5 +777,23 @@ void main() {
     await pumpImpostazioni(tester);
 
     expect(find.text('Crea account o accedi'), findsOneWidget);
+  });
+
+  testWidgets("l'interruttore AI mostra e nasconde i Provider AI", (
+    tester,
+  ) async {
+    await pumpImpostazioni(tester, ai: false);
+
+    final visivo = find.byKey(const ValueKey('sezione-provider-ai-visivo'));
+    final testuale = find.byKey(const ValueKey('sezione-provider-ai-testuale'));
+    expect(visivo, findsNothing);
+    expect(testuale, findsNothing);
+    expect(find.text('PROVIDER FUMETTI'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('interruttore-ai')));
+    await tester.pumpAndSettle();
+
+    expect(visivo, findsOneWidget);
+    expect(testuale, findsOneWidget);
   });
 }

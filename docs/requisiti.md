@@ -508,6 +508,17 @@ L'app deve poter calcolare automaticamente:
 
 L'app deve fornire una schermata di impostazioni personalizzate che permetta all'utente di configurare i provider esterni usati dall'AI e dal recupero metadati, senza dover modificare la build dell'app.
 
+## AI abilitata
+
+Un interruttore abilita o disabilita tutta l'AI dell'app (Analisi Copertina e Assistente). È una preferenza del dispositivo ed è **disabilitato di default**. Da disabilitato:
+
+- le sezioni Provider AI non sono visibili; le configurazioni restano salvate e tornano attive riabilitando l'AI;
+- la Scansione non passa dal riconoscimento (§6): nel riepilogo ogni riga è "Da compilare" e apre l'inserimento manuale (§6.3), con la foto come cover;
+- le Scansioni con un'Analisi Copertina già completata restano confermabili, senza poterla rieseguire;
+- le Scansioni in attesa di riconoscimento restano ferme e si possono compilare a mano; riabilitando l'AI riprendono;
+- la voce Cerca resta visibile, ma l'Assistente (§10) è bloccato e rimanda alle Impostazioni: l'app non offre altre ricerche;
+- il Tutorial di inserimento (§5.2) descrive la compilazione a mano e si chiude sulla tappa del riepilogo.
+
 ## Provider AI
 
 Il Provider AI **non è un'unica selezione**: l'app distingue due ruoli indipendenti, ciascuno configurabile separatamente, per ottimizzare costo e latenza delle chiamate in base al tipo di richiesta (vedi [ADR-0001](../docs/adr/0001-provider-ai-visivo-testuale-separati.md)):

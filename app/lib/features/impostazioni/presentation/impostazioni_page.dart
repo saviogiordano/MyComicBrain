@@ -592,6 +592,7 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
 
   @override
   Widget build(BuildContext context) {
+    final aiAbilitata = ref.watch(aiAbilitataProvider);
     return Scaffold(
       backgroundColor: AppColors.surfaceDeepest,
       appBar: AppBar(
@@ -616,28 +617,62 @@ class _ImpostazioniPageState extends ConsumerState<ImpostazioniPage> {
                     const SizedBox(height: AppSpacing.lg),
                   ],
                   const SezioneSincronizzazione(),
-                  const SectionHeader(label: 'Provider AI Visivo'),
+                  const SectionHeader(label: 'Intelligenza artificiale'),
                   const SizedBox(height: AppSpacing.sm),
-                  Column(
-                    key: const ValueKey('sezione-provider-ai-visivo'),
-                    children: _cardsProviderAi(
-                      RuoloProviderAi.visivo,
-                      verificaState: _verificaAi,
-                      onVerifica: _verificaConnessioneAi,
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: SwitchListTile(
+                        key: const ValueKey('interruttore-ai'),
+                        value: aiAbilitata,
+                        activeTrackColor: AppColors.accent,
+                        title: Text(
+                          'Abilita AI',
+                          style: AppTypography.titleMedium.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Riconosce le cover e attiva l'Assistente. Spenta, "
+                          'compili tu la scheda di ogni scansione.',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        onChanged: (abilitata) => unawaited(
+                          ref
+                              .read(aiAbilitataProvider.notifier)
+                              .imposta(abilitata: abilitata),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  const SectionHeader(label: 'Provider AI Testuale'),
-                  const SizedBox(height: AppSpacing.sm),
-                  Column(
-                    key: const ValueKey('sezione-provider-ai-testuale'),
-                    children: _cardsProviderAi(
-                      RuoloProviderAi.testuale,
-                      verificaState: _verificaAssistente,
-                      onVerifica: _verificaConnessioneAssistente,
+                  if (aiAbilitata) ...[
+                    const SectionHeader(label: 'Provider AI Visivo'),
+                    const SizedBox(height: AppSpacing.sm),
+                    Column(
+                      key: const ValueKey('sezione-provider-ai-visivo'),
+                      children: _cardsProviderAi(
+                        RuoloProviderAi.visivo,
+                        verificaState: _verificaAi,
+                        onVerifica: _verificaConnessioneAi,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: AppSpacing.lg),
+                    const SectionHeader(label: 'Provider AI Testuale'),
+                    const SizedBox(height: AppSpacing.sm),
+                    Column(
+                      key: const ValueKey('sezione-provider-ai-testuale'),
+                      children: _cardsProviderAi(
+                        RuoloProviderAi.testuale,
+                        verificaState: _verificaAssistente,
+                        onVerifica: _verificaConnessioneAssistente,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
                   const SectionHeader(label: 'Provider fumetti'),
                   const SizedBox(height: AppSpacing.sm),
                   AppCard(

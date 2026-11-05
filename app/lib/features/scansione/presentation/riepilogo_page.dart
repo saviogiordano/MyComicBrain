@@ -69,17 +69,34 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
   @override
   void initState() {
     super.initState();
-    // Un batch ripreso ha il riconoscimento già avviato.
-    if (widget.ripresa) unawaited(_valutaTappaTutorial());
+    // Un batch ripreso ha il riconoscimento già avviato. Con l'AI spenta non
+    // c'è un "Fine" da aspettare: le righe sono subito da compilare.
+    if (!ref.read(aiAbilitataProvider)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_valutaTappaTutorial());
+      });
+    } else if (widget.ripresa) {
+      unawaited(_valutaTappaTutorial());
+    }
   }
 
   /// Tappa Riepilogo del Tutorial di inserimento (PRD #242): alla prima
   /// apertura con il riconoscimento avviato, solo se il Provider AI Visivo
   /// è configurato — altrimenti "Sto riconoscendo" sarebbe falso e si
   /// rimanda alla volta successiva. La mancanza di rete non si controlla.
+  /// Con l'AI spenta è l'ultima tappa: la pagina dei Candidati non arriva.
   Future<void> _valutaTappaTutorial() async {
     if (_scansioni.isEmpty) return;
     if (!ref.read(tutorialInserimentoProvider).mostraTappaRiepilogo) return;
+    if (!ref.read(aiAbilitataProvider)) {
+      setState(() => _tappaTutorial = true);
+      unawaited(
+        ref
+            .read(tutorialInserimentoProvider.notifier)
+            .avviaTappaRiepilogoSenzaAi(),
+      );
+      return;
+    }
     final configurato = await ref
         .read(settingsRepositoryProvider)
         .configurato(RuoloProviderAi.visivo);
@@ -144,13 +161,20 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
       ..go('/dashboard');
   }
 
+  /// Una riga "Salvata" non si elimina: il suo file è la cover della Copia.
+  bool _salvata(XFile scansione) =>
+      ref.watch(scansioneConfermataProvider(scansione.path)).valueOrNull ??
+      false;
+
   Future<bool> _confermaEliminazione(BuildContext context) async {
     final conferma = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Rimuovere questa scansione?'),
-        content: const Text(
-          'La foto verrà eliminata e non entrerà nel riconoscimento AI.',
+        content: Text(
+          ref.read(aiAbilitataProvider)
+              ? 'La foto verrà eliminata e non entrerà nel riconoscimento AI.'
+              : 'La foto verrà eliminata.',
         ),
         actions: [
           TextButton(
@@ -176,14 +200,19 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
     setState(() => _scansioni.remove(scansione));
   }
 
-  Future<bool> _confermaEliminazioneTutte(BuildContext context) async {
+  Future<bool> _confermaEliminazioneTutte(
+    BuildContext context,
+    int quante,
+  ) async {
     final conferma = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Rimuovere tutte le scansioni?'),
         content: Text(
-          'Le ${_scansioni.length} foto verranno eliminate e non entreranno '
-          'nel riconoscimento AI.',
+          ref.read(aiAbilitataProvider)
+              ? 'Le $quante foto verranno eliminate e non entreranno '
+                    'nel riconoscimento AI.'
+              : 'Le $quante foto verranno eliminate.',
         ),
         actions: [
           TextButton(
@@ -200,11 +229,14 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
     return conferma ?? false;
   }
 
-  Future<void> _eliminaTutte() async {
-    if (!await _confermaEliminazioneTutte(context) || !mounted) return;
+  Future<void> _eliminaTutte(List<XFile> daEliminare) async {
+    final conferma = await _confermaEliminazioneTutte(
+      context,
+      daEliminare.length,
+    );
+    if (!conferma || !mounted) return;
     final repository = ref.read(comicsRepositoryProvider);
     final storage = ref.read(scansioneStorageProvider);
-    final daEliminare = List<XFile>.of(_scansioni);
     for (final scansione in daEliminare) {
       final scansioneId = await repository.idScansionePerImmagine(
         scansione.path,
@@ -218,11 +250,17 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
 
   @override
   Widget build(BuildContext context) {
-    final avviato = _avviato;
+    final aiAbilitata = ref.watch(aiAbilitataProvider);
+    // Con l'AI spenta non c'è nulla da avviare: "Fine" non serve.
+    final avviato = _avviato || !aiAbilitata;
     // Su un batch ripreso lo swipe e "Elimina tutte" restano disponibili
     // anche a pipeline già avviata (richiesta utente) — vedi
     // `RiepilogoPage.ripresa`.
-    final eliminabile = widget.ripresa || !avviato;
+    final eliminabile = widget.ripresa || !_avviato;
+    final nonSalvate = [
+      for (final s in _scansioni)
+        if (!_salvata(s)) s,
+    ];
     final inAttesa =
         ref.watch(scansioniInAttesaProvider).valueOrNull ?? const <String>{};
     final notaSenzaRete =
@@ -253,17 +291,19 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                           ),
                         ),
                       ),
-                      if (eliminabile && _scansioni.isNotEmpty)
+                      if (eliminabile && nonSalvate.isNotEmpty)
                         TextButton(
-                          onPressed: _eliminaTutte,
+                          onPressed: () => _eliminaTutte(nonSalvate),
                           child: const Text('Elimina tutte'),
                         ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
-                    '${_scansioni.length} ${_scansioni.length == 1 ? 'scansione pronta' : 'scansioni pronte'} '
-                    'per il riconoscimento AI',
+                    aiAbilitata
+                        ? '${_scansioni.length} ${_scansioni.length == 1 ? 'scansione pronta' : 'scansioni pronte'} '
+                              'per il riconoscimento AI'
+                        : 'Tocca una riga per compilare la scheda',
                     style: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -287,7 +327,9 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
                 itemBuilder: (context, i) {
                   final scansione = _scansioni[i];
                   final riga = _RigaScansione(indice: i, scansione: scansione);
-                  if (!eliminabile) return riga;
+                  if (!eliminabile || !nonSalvate.contains(scansione)) {
+                    return riga;
+                  }
                   return Dismissible(
                     key: ValueKey(scansione.path),
                     direction: DismissDirection.endToStart,
@@ -342,9 +384,11 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
             passi: [
               PassoSpotlight(
                 bersaglio: TutorialInserimentoKeys.chipRiepilogo,
-                testo:
-                    'Sto riconoscendo le tue cover. Quando una riga è '
-                    'Completata, toccala',
+                testo: aiAbilitata
+                    ? 'Sto riconoscendo le tue cover. Quando una riga è '
+                          'Completata, toccala'
+                    : 'Tocca una riga e compila la scheda: la foto resta '
+                          'collegata',
               ),
             ],
             onSalta: () {
@@ -359,6 +403,19 @@ class _RiepilogoPageState extends ConsumerState<RiepilogoPage> {
     );
   }
 }
+
+/// Con l'AI spenta una Scansione si compila a mano, a meno che abbia già un
+/// risultato (`completata`, i suoi Candidati restano confermabili) o una
+/// chiamata partita prima dello spegnimento (`inCorso`).
+bool _daCompilare({
+  required StatoAnalisiCopertina? stato,
+  required bool confermata,
+  required bool aiAbilitata,
+}) =>
+    !aiAbilitata &&
+    !confermata &&
+    stato != StatoAnalisiCopertina.completata &&
+    stato != StatoAnalisiCopertina.inCorso;
 
 /// La nota del riepilogo quando qualche Scansione aspetta la rete
 /// (prototipo #201): le immagini delle Scansioni non vanno sugli altri
@@ -424,18 +481,26 @@ class _RigaScansione extends ConsumerWidget {
   /// (l'Identificazione, agganciata in automatico su #58, è quindi già
   /// stata avviata; lo schermo gestisce da sé l'attesa se non è ancora
   /// `completata`).
-  Future<void> _apriConfermaCandidato(
+  Future<void> _apri(
     BuildContext context,
     WidgetRef ref,
+    String percorso,
   ) async {
     final scansioneId = await ref
         .read(comicsRepositoryProvider)
         .idScansionePerImmagine(scansione.path);
     if (!context.mounted) return;
-    unawaited(
-      context.push('/scansione/conferma-candidato', extra: scansioneId),
-    );
+    unawaited(context.push(percorso, extra: scansioneId));
   }
+
+  Future<void> _apriConfermaCandidato(
+    BuildContext context,
+    WidgetRef ref,
+  ) => _apri(context, ref, '/scansione/conferma-candidato');
+
+  /// Con l'AI spenta la scheda si compila a mano, senza passare dai Candidati.
+  Future<void> _apriInserimentoManuale(BuildContext context, WidgetRef ref) =>
+      _apri(context, ref, '/scansione/inserisci-manualmente');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -451,11 +516,21 @@ class _RigaScansione extends ConsumerWidget {
             .valueOrNull
             ?.contains(scansione.path) ??
         false;
+    final aiAbilitata = ref.watch(aiAbilitataProvider);
     final pronta =
         stato?.stato == StatoAnalisiCopertina.completata && !confermata;
+    final compilabile = _daCompilare(
+      stato: stato?.stato,
+      confermata: confermata,
+      aiAbilitata: aiAbilitata,
+    );
 
     return AppCard(
-      onTap: pronta ? () => _apriConfermaCandidato(context, ref) : null,
+      onTap: pronta
+          ? () => _apriConfermaCandidato(context, ref)
+          : compilabile
+          ? () => _apriInserimentoManuale(context, ref)
+          : null,
       child: Row(
         children: [
           ClipRRect(
@@ -499,6 +574,7 @@ class _RigaScansione extends ConsumerWidget {
             stato: stato?.stato,
             inAttesa: inAttesa,
             confermata: confermata,
+            aiAbilitata: aiAbilitata,
             errorMessage: stato?.errorMessage,
             onRiprova: () => ref
                 .read(analisiCopertinaPipelineProvider)
@@ -555,6 +631,7 @@ class _ChipStatoAnalisi extends StatelessWidget {
     required this.stato,
     required this.inAttesa,
     required this.confermata,
+    required this.aiAbilitata,
     required this.errorMessage,
     required this.onRiprova,
     required this.onConfiguraProvider,
@@ -567,6 +644,7 @@ class _ChipStatoAnalisi extends StatelessWidget {
   /// scattata su un altro device del Profilo (#210).
   final bool inAttesa;
   final bool confermata;
+  final bool aiAbilitata;
   final String? errorMessage;
   final VoidCallback onRiprova;
   final VoidCallback onConfiguraProvider;
@@ -577,10 +655,16 @@ class _ChipStatoAnalisi extends StatelessWidget {
         stato == StatoAnalisiCopertina.fallita &&
         erroreConfigurazioneMancante(errorMessage);
     final riesguibile =
-        stato == StatoAnalisiCopertina.completata && !confermata;
+        aiAbilitata && stato == StatoAnalisiCopertina.completata && !confermata;
+    final daCompilare = _daCompilare(
+      stato: stato,
+      confermata: confermata,
+      aiAbilitata: aiAbilitata,
+    );
 
     final (String label, Color colore) = switch (stato) {
       _ when confermata => ('Salvata', AppColors.accent),
+      _ when daCompilare => ('Da compilare', AppColors.amber),
       StatoAnalisiCopertina.pending when inAttesa => (
         'In attesa di rete',
         AppColors.textMuted,
@@ -623,6 +707,7 @@ class _ChipStatoAnalisi extends StatelessWidget {
       ),
     );
 
+    if (daCompilare) return chip;
     if (stato != StatoAnalisiCopertina.fallita && !riesguibile) return chip;
 
     return Tooltip(

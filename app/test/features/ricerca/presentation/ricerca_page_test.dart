@@ -16,6 +16,7 @@ import 'package:mycomicbrain/core/domain/ai_provider.dart';
 import 'package:mycomicbrain/core/domain/conversazione.dart';
 import 'package:mycomicbrain/core/domain/copia.dart';
 import 'package:mycomicbrain/features/ricerca/presentation/ricerca_page.dart';
+import '../../../core/data/ai_abilitata_fissa.dart';
 
 typedef _EseguiTool =
     Future<Map<String, Object?>> Function(
@@ -105,6 +106,7 @@ void main() {
     WidgetTester tester, {
     AssistenteClient? client,
     SpeechToTextService? speechToTextService,
+    bool ai = true,
   }) async {
     final router = GoRouter(
       initialLocation: '/ricerca',
@@ -129,6 +131,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          aiAbilitata(abilitata: ai),
           comicsRepositoryProvider.overrideWithValue(repository),
           settingsRepositoryProvider.overrideWithValue(settingsRepository),
           if (client != null)
@@ -366,4 +369,21 @@ void main() {
       expect(indiceTranscript, greaterThan(indiceFallback));
     },
   );
+
+  testWidgets("con l'AI spenta l'Assistente è bloccato anche se configurato", (
+    tester,
+  ) async {
+    await configuraProviderTestuale();
+    await pumpCerca(tester, ai: false);
+
+    expect(
+      find.text("Abilita l'AI nelle Impostazioni per usare l'Assistente."),
+      findsOneWidget,
+    );
+    expect(find.text("Abilita l'AI per continuare"), findsOneWidget);
+    expect(
+      find.text("Configura il Provider AI Testuale per usare l'Assistente."),
+      findsNothing,
+    );
+  });
 }
